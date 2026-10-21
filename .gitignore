@@ -37,7 +37,7 @@ out
 #/src/main/resources/application-prod.yml
 /src/main/resources/application-default.yml
 
-/src/main/resources/web
+#/src/main/resources/web
 /storage*
 /logs
 /bin
