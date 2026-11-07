@@ -154,7 +154,7 @@
                 <el-tag
                   size="mini"
                   type="danger"
-                  v-if="scope.row.is_admin"
+                  v-if="scope.row.is_admin || scope.row.isAdmin || scope.row.username === 'admin'"
                   style="margin-left: 6px;"
                   >管理员</el-tag
                 >

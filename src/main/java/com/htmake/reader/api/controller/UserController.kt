@@ -91,22 +91,18 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (password.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入密码")
         }
-        var userMap = mutableMapOf<String, Map<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-        if (userMapJson != null) {
-            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
-        }
+        val userMap = getUserMap()
         var existedUser = userMap.getOrDefault(username, null)
         if (existedUser == null) {
             if (isLogin) {
                 // 登录返回用户不存在
                 return returnData.setErrorMsg("用户不存在")
             }
-            if (username.length < 5) {
-                return returnData.setErrorMsg("用户名不能低于5位")
+            if (username.length < 3) {
+                return returnData.setErrorMsg("用户名不能低于3位")
             }
-            if (password.length < 8) {
-                return returnData.setErrorMsg("密码不能低于8位")
+            if (password.length < 4) {
+                return returnData.setErrorMsg("密码不能低于4位")
             }
             if (username.equals("default")) {
                 return returnData.setErrorMsg("用户名不能为非法字符")
@@ -130,12 +126,20 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
                 return returnData.setErrorMsg("超过用户数上限")
             }
 
-            // 自动注册
+            // 自动注册：如果系统初建或只有默认admin，首个自定义用户自动绑定管理员身份
+            val isFirstUser = userMap.isEmpty() || (userMap.size == 1 && userMap.containsKey("admin"))
             var salt = getRandomString(8)
             var passwordEncrypted = genEncryptedPassword(password, salt)
-            var newUser = User(username, passwordEncrypted, salt)
+            var newUser = User(
+                username = username,
+                password = passwordEncrypted,
+                salt = salt,
+                enable_webdav = true,
+                enable_local_store = true,
+                is_admin = isFirstUser
+            )
 
-            val loginData = saveUserSession(context, userMap, newUser)
+            val loginData = saveUserSession(context, userMap as MutableMap<String, Map<String, Any>>, newUser)
             return returnData.setData(loginData)
         } else {
             if (!isLogin) {
@@ -151,7 +155,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             if (passwordEncrypted != userInfo.password) {
                 return returnData.setErrorMsg("密码错误")
             }
-            val loginData = saveUserSession(context, userMap, userInfo)
+            val loginData = saveUserSession(context, userMap as MutableMap<String, Map<String, Any>>, userInfo)
             return returnData.setData(loginData)
         }
     }
@@ -159,10 +163,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
     suspend fun logout(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
-            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
-        }
-        if (!appConfig.secure) {
-            return returnData.setErrorMsg("不支持的操作")
+            return returnData.setData("NEED_LOGIN")
         }
         var username = context.session().get("username") as String? ?: ""
         context.session().destroy()
@@ -174,32 +175,27 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             if (tmp.size >= 2) {
                 accessToken = tmp[1]
 
-                var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-                var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-                if (userMapJson != null) {
-                    userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
-                }
+                var userMap = getUserMap()
                 var currentUser = userMap.getOrDefault(username, null)
-                if (currentUser == null) {
-                    return returnData.setErrorMsg("系统错误")
-                }
-                var tokenMapVal = currentUser.getOrDefault("token_map", null)
-                if (tokenMapVal != null) {
-                    var tokenMap: MutableMap<String, Long>? = tokenMapVal as MutableMap<String, Long>?
-                    if (tokenMap != null) {
-                        tokenMap.remove(accessToken)
-                        currentUser.put("token_map", tokenMap)
+                if (currentUser != null) {
+                    var tokenMapVal = currentUser.getOrDefault("token_map", null)
+                    if (tokenMapVal != null) {
+                        var tokenMap: MutableMap<String, Long>? = tokenMapVal as? MutableMap<String, Long>
+                        if (tokenMap != null) {
+                            tokenMap.remove(accessToken)
+                            currentUser.put("token_map", tokenMap)
+                        }
                     }
-                }
-                if (currentUser.getOrDefault("token", "").equals(accessToken)) {
-                    currentUser.put("token", "")
-                }
+                    if (currentUser.getOrDefault("token", "").equals(accessToken)) {
+                        currentUser.put("token", "")
+                    }
 
-                userMap.put(username, currentUser)
-                saveStorage("data", "users", value = userMap)
+                    userMap.put(username, currentUser)
+                    saveStorage("data", "users", value = userMap)
+                }
             }
         }
-        return returnData.setErrorMsg("请重新登录").setData("NEED_LOGIN")
+        return returnData.setData("NEED_LOGIN")
     }
 
     suspend fun getUserList(context: RoutingContext): ReturnData {
@@ -207,17 +203,10 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
-            return returnData.setErrorMsg("不支持的操作")
-        }
         if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
         }
-        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-        if (userMapJson != null) {
-            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
-        }
+        var userMap = getUserMap()
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
             userList.add(formatUser(it.value))
@@ -230,38 +219,32 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
-            return returnData.setErrorMsg("不支持的操作")
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
         }
         val username = context.bodyAsJson.getString("username") ?: ""
         val password = context.bodyAsJson.getString("password") ?: ""
+        val isAdmin = context.bodyAsJson.getBoolean("isAdmin", false) ?: false
         if (username.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入用户名")
         }
         if (password.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入密码")
         }
-        if (username.length < 5) {
-            return returnData.setErrorMsg("用户名不能低于5位")
+        if (username.length < 3) {
+            return returnData.setErrorMsg("用户名不能低于3位")
         }
-        if (password.length < 8) {
-            return returnData.setErrorMsg("密码不能低于8位")
+        if (password.length < 4) {
+            return returnData.setErrorMsg("密码不能低于4位")
         }
         if (username.equals("default")) {
             return returnData.setErrorMsg("用户名不能为非法字符")
-        }
-        if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
         val usernameReg = Regex("[a-z0-9]+", RegexOption.IGNORE_CASE)    //忽略大小写
         if (!usernameReg.matches(username)) {
             return returnData.setErrorMsg("用户名只能由字母和数字组成")
         }
-        var userMap = mutableMapOf<String, Map<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-        if (userMapJson != null) {
-            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
-        }
+        var userMap = getUserMap()
         var existedUser = userMap.getOrDefault(username, null)
         if (existedUser != null) {
             return returnData.setErrorMsg("用户已存在")
@@ -275,8 +258,15 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         // 自动注册
         var salt = getRandomString(8)
         var passwordEncrypted = genEncryptedPassword(password, salt)
-        var newUser = User(username, passwordEncrypted, salt)
-        userMap.put(newUser.username, newUser.toMap())
+        var newUser = User(
+            username = username,
+            password = passwordEncrypted,
+            salt = salt,
+            enable_webdav = true,
+            enable_local_store = true,
+            is_admin = isAdmin
+        )
+        userMap.put(newUser.username, newUser.toMap() as MutableMap<String, Any>)
         saveStorage("data", "users", value = userMap)
 
         var userList = arrayListOf<Map<String, Any>>()
@@ -291,9 +281,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
-            return returnData.setErrorMsg("不支持的操作")
-        }
+        val currentUsername = context.get("username") as String? ?: context.session().get("username") as String? ?: ""
         val username = context.bodyAsJson.getString("username") ?: ""
         val password = context.bodyAsJson.getString("password") ?: ""
         if (username.isNullOrEmpty()) {
@@ -302,21 +290,17 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (password.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入密码")
         }
-        if (password.length < 8) {
-            return returnData.setErrorMsg("密码不能低于8位")
+        if (password.length < 4) {
+            return returnData.setErrorMsg("密码不能低于4位")
         }
         if (username.equals("default")) {
             return returnData.setErrorMsg("用户不存在")
         }
-        if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        // 非本人操作且非管理员时拦截
+        if (!currentUsername.equals(username, ignoreCase = true) && !checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("没有权限修改其他用户密码")
         }
-        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-        if (userMapJson != null) {
-            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
-        }
-
+        var userMap = getUserMap()
         var existedUser = userMap.getOrDefault(username, null)
         if (existedUser == null) {
             return returnData.setErrorMsg("用户不存在")
@@ -327,7 +311,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         existedUser.put("salt", salt)
         existedUser.put("password", passwordEncrypted)
         userMap.put(username, existedUser)
-        saveStorage("data", "users", value = userMap as MutableMap<String, Map<String, Any>>)
+        saveStorage("data", "users", value = userMap)
 
         return returnData.setData("")
     }
@@ -337,22 +321,17 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
-            return returnData.setErrorMsg("不支持的操作")
-        }
         if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
         }
-        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-
-        if (userMapJson != null) {
-            val userJsonArray = context.bodyAsJsonArray
+        var userMap = getUserMap()
+        val userJsonArray = context.bodyAsJsonArray
+        if (userJsonArray != null) {
             for (i in 0 until userJsonArray.size()) {
                 var username = userJsonArray.getString(i)
-                if (username != null && userMapJson.containsKey(username)) {
+                if (username != null && userMap.containsKey(username)) {
                     // 删除用户信息
-                    userMapJson.remove(username)
+                    userMap.remove(username)
                     // 移除用户目录
                     var userHome = File(getWorkDir("storage", "data", username))
                     logger.info("delete userHome: {}", userHome)
@@ -361,7 +340,6 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
                     }
                 }
             }
-            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
             saveStorage("data", "users", value = userMap)
         }
 
@@ -377,37 +355,33 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
-            return returnData.setErrorMsg("不支持的操作")
-        }
         if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
         }
         val username = context.bodyAsJson.getString("username") ?: ""
         val enableWebdav = context.bodyAsJson.getBoolean("enableWebdav")
         val enableLocalStore = context.bodyAsJson.getBoolean("enableLocalStore")
+        val isAdmin = context.bodyAsJson.getBoolean("isAdmin")
         if (username.isEmpty()) {
             return returnData.setErrorMsg("参数错误")
         }
 
-        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-
-        if (userMapJson != null) {
-            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
-            var existedUser = userMap.getOrDefault(username, null)
-            if (existedUser == null) {
-                return returnData.setErrorMsg("用户不存在")
-            }
-            if (enableWebdav != null) {
-                existedUser.put("enable_webdav", enableWebdav)
-            }
-            if (enableLocalStore != null) {
-                existedUser.put("enable_local_store", enableLocalStore)
-            }
-            userMap.put(username, existedUser)
-            saveStorage("data", "users", value = userMap)
+        var userMap = getUserMap()
+        var existedUser = userMap.getOrDefault(username, null)
+        if (existedUser == null) {
+            return returnData.setErrorMsg("用户不存在")
         }
+        if (enableWebdav != null) {
+            existedUser.put("enable_webdav", enableWebdav)
+        }
+        if (enableLocalStore != null) {
+            existedUser.put("enable_local_store", enableLocalStore)
+        }
+        if (isAdmin != null) {
+            existedUser.put("is_admin", isAdmin)
+        }
+        userMap.put(username, existedUser)
+        saveStorage("data", "users", value = userMap)
 
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
@@ -419,8 +393,8 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
     suspend fun getUserInfo(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         checkAuth(context)
-        var username = context.session().get("username") as String?
-        var secure = env.getProperty("reader.app.secure", Boolean::class.java)
+        var username = context.session().get("username") as String? ?: context.get("username") as String?
+        var secure = env.getProperty("reader.app.secure", Boolean::class.java) ?: false
         var secureKey = env.getProperty("reader.app.secureKey")
 
         var userInfo: Any? = null
@@ -428,13 +402,17 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             var user = getUserInfoClass(username)
             if (user != null) {
                 userInfo = formatUser(user)
+                if (user.is_admin || user.username.equals("admin", ignoreCase = true)) {
+                    // 管理员用户自动解锁管理面板
+                    secure = true
+                }
             }
         }
 
         return returnData.setData(mapOf(
             "userInfo" to userInfo,
             "secure" to secure,
-            "secureKey" to secureKey?.isNotEmpty()
+            "secureKey" to (secureKey?.isNotEmpty() == true || (userInfo as? Map<*, *>)?.get("isAdmin") == true)
         ))
     }
 

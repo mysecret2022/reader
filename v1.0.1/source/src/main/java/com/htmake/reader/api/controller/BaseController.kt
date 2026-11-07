@@ -114,11 +114,8 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
     }
 
     suspend fun checkAuth(context: RoutingContext): Boolean {
-        if (!appConfig.secure) {
-            return true
-        }
         var username = context.session().get("username") as String? ?: ""
-        var userInfo = getUserInfoClass(username)
+        var userInfo = if (username.isNotEmpty()) getUserInfoClass(username) else null
         if (userInfo != null) {
             context.put("username", userInfo.username)
             context.put("userInfo", userInfo)
@@ -127,11 +124,7 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         // 自动登录
         var accessToken = context.queryParam("accessToken").firstOrNull() ?: ""
         if (accessToken.isNotEmpty()) {
-            var userMap = mutableMapOf<String, Map<String, Any>>()
-            var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-            if (userMapJson != null) {
-                userMap = userMapJson.map as? MutableMap<String, Map<String, Any>> ?: mutableMapOf<String, Map<String, Any>>()
-            }
+            var userMap = getUserMap()
             var tmp = accessToken.split(":", limit=2)
             if (tmp.size >= 2) {
                 var _username = tmp[0]
@@ -160,19 +153,35 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
                     }
                     if (isLogin) {
                         // 保存用户session
-                        saveUserSession(context, userMap, existedUser, false)
+                        saveUserSession(context, userMap as MutableMap<String, Map<String, Any>>, existedUser, false)
                         context.put("username", existedUser.username)
                         context.put("userInfo", existedUser)
+                        return true
                     }
-                    return isLogin
                 }
             }
+        }
+
+        if (!appConfig.secure) {
+            return true
         }
 
         return false
     }
 
     fun checkManagerAuth(context: RoutingContext): Boolean {
+        // 当前已登录用户若是管理员或admin账号，直接拥有管理权限
+        val currentUsername = context.get("username") as String? ?: context.session().get("username") as String?
+        if (!currentUsername.isNullOrEmpty()) {
+            val user = getUserInfoClass(currentUsername)
+            if (user != null && (user.is_admin || user.username.equals("admin", ignoreCase = true))) {
+                val userNS = context.queryParam("userNS").firstOrNull()
+                if (userNS != null && userNS.isNotEmpty()) {
+                    context.put("userNameSpace", userNS)
+                }
+                return true
+            }
+        }
         if (!appConfig.secure) {
             return true
         }
@@ -192,18 +201,15 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
     }
 
     fun getUserNameSpace(context: RoutingContext): String {
-        if (!appConfig.secure) {
-            return "default"
-        }
-        // 管理权限，可以修改 userNameSpace 来获取任意用户信息
+        // 管理权限，可以修改 userNameSpace 来获取指定命名空间信息
         checkManagerAuth(context)
         var userNS = context.get("userNameSpace") as String?
         if (userNS != null && userNS.isNotEmpty()) {
             return userNS
         }
-        var username = context.get("username") as String?
-        if (username != null) {
-            return username;
+        var username = context.get("username") as String? ?: context.session().get("username") as String?
+        if (!username.isNullOrEmpty()) {
+            return username
         }
         return "default"
     }
@@ -232,6 +238,30 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         return saveStorage("data", userNameSpace, path, value = value)
     }
 
+    fun getUserMap(): MutableMap<String, MutableMap<String, Any>> {
+        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+        if (userMapJson != null) {
+            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
+        }
+        if (userMap.isEmpty()) {
+            // 系统初次运行自动创建默认管理员：账号 admin，密码 admin
+            val salt = getRandomString(8)
+            val passwordEncrypted = genEncryptedPassword("admin", salt)
+            val defaultAdmin = User(
+                username = "admin",
+                password = passwordEncrypted,
+                salt = salt,
+                enable_webdav = true,
+                enable_local_store = true,
+                is_admin = true
+            )
+            userMap.put("admin", defaultAdmin.toMap() as MutableMap<String, Any>)
+            saveStorage("data", "users", value = userMap)
+        }
+        return userMap
+    }
+
     fun getUserInfoClass(username: String): User? {
         var user: User? = getUserInfoMap(username)?.toDataClass()
         return user
@@ -241,11 +271,7 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         if (username.isEmpty()) {
             return null
         }
-        var userMap = mutableMapOf<String, Map<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-        if (userMapJson != null) {
-            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
-        }
+        val userMap = getUserMap()
         return userMap.getOrDefault(username, null)
     }
 
@@ -268,6 +294,7 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
             "accessToken" to user.username + ":" + user.token,
             "enableWebdav" to user.enable_webdav,
             "enableLocalStore" to user.enable_local_store,
+            "isAdmin" to user.is_admin,
             "createdAt" to user.created_at
         )
     }

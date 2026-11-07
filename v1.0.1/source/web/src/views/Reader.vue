@@ -2319,7 +2319,7 @@ export default {
           this.edgeAudio.pause();
         }
         const text = paragraph.innerText.trim();
-        const url = `${this.api}/reader3/tts?text=${encodeURIComponent(
+        const url = `${this.api}/tts?text=${encodeURIComponent(
           text
         )}&voice=${encodeURIComponent(voice.id)}&rate=${
           this.speechRate
@@ -2347,7 +2347,7 @@ export default {
         const nextP = this.getNextParagraph();
         if (nextP && nextP.innerText) {
           const nextText = nextP.innerText.trim();
-          const nextUrl = `${this.api}/reader3/tts?text=${encodeURIComponent(
+          const nextUrl = `${this.api}/tts?text=${encodeURIComponent(
             nextText
           )}&voice=${encodeURIComponent(voice.id)}&rate=${
             this.speechRate

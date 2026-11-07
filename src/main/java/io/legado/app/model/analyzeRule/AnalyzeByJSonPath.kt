@@ -49,7 +49,7 @@ class AnalyzeByJSonPath(json: Any) {
                     }
 
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    // 可选字段缺失时不打印无意义的完整堆栈
                 }
 
             }
@@ -97,7 +97,7 @@ class AnalyzeByJSonPath(json: Any) {
                         result.add(obj.toString())
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    // 可选字段缺失时不打印无意义的完整堆栈
                 }
             } else {
                 result.add(st)
@@ -147,7 +147,7 @@ class AnalyzeByJSonPath(json: Any) {
                 try {
                     return it.read<ArrayList<Any>>(rules[0])
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    // 可选字段缺失时不打印无意义的完整堆栈
                 }
             }
         } else {

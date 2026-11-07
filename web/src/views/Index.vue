@@ -298,7 +298,7 @@
             <span
               class="right-text"
               v-if="$store.state.isSecureMode && $store.state.userInfo.username"
-              @click="logout()"
+              @click="logoutConfirm()"
               >注销</span
             >
             <span
@@ -484,25 +484,42 @@
           v-if="
             $store.getters.isNormalPage &&
               ($store.state.showManagerMode ||
-                ($store.state.userInfo && $store.state.userInfo.is_admin))
+                ($store.state.userInfo && ($store.state.userInfo.isAdmin || $store.state.userInfo.is_admin || $store.state.userInfo.username === 'admin')))
           "
           @click="$router.push('/admin')"
           style="color: #409EFF; font-weight: bold;"
         >
           <i class="el-icon-s-operation"></i> 管理
         </div>
-        <div
-          class="title-btn"
+        <el-dropdown
           v-if="
             $store.getters.isNormalPage &&
               $store.state.userInfo &&
               $store.state.userInfo.username
           "
-          @click="logout"
-          title="点击注销"
+          @command="handleUserMenuCommand"
+          trigger="click"
         >
-          <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
-        </div>
+          <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: 500;">
+            <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
+            <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+          </div>
+          <el-dropdown-menu slot="dropdown">
+            <el-dropdown-item
+              v-if="$store.state.showManagerMode || ($store.state.userInfo && ($store.state.userInfo.isAdmin || $store.state.userInfo.is_admin || $store.state.userInfo.username === 'admin'))"
+              command="admin"
+              icon="el-icon-s-tools"
+            >
+              管理后台
+            </el-dropdown-item>
+            <el-dropdown-item command="changePassword" icon="el-icon-key">
+              修改密码
+            </el-dropdown-item>
+            <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
+              退出登录
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </el-dropdown>
         <div
           class="title-btn"
           v-else-if="$store.getters.isNormalPage"
@@ -2739,18 +2756,58 @@ export default {
     getBookCoverUrl(book) {
       return book.customCoverUrl || book.coverUrl;
     },
-    logout() {
-      Axios.post(this.api + "/logout").then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$store.commit("setToken", "");
+    handleUserMenuCommand(command) {
+      if (command === "admin") {
+        this.$router.push("/admin");
+      } else if (command === "changePassword") {
+        this.promptChangePassword();
+      } else if (command === "logout") {
+        this.logoutConfirm();
+      }
+    },
+    promptChangePassword() {
+      this.$prompt("请输入新密码 (不少于4位):", "修改当前用户密码", {
+        confirmButtonText: "确定修改",
+        cancelButtonText: "取消",
+        inputType: "password",
+        inputPattern: /^.{4,}$/,
+        inputErrorMessage: "密码不能少于4位"
+      })
+        .then(({ value }) => {
+          Axios.post(this.api + "/resetPassword", {
+            username: this.$store.state.userInfo.username,
+            password: value
+          }).then(res => {
+            if (res.data.isSuccess) {
+              this.$message.success("密码修改成功，请重新登录");
+              this.logout(true);
+            } else {
+              this.$message.error(res.data.errorMsg || "密码修改失败");
+            }
+          });
+        })
+        .catch(() => {});
+    },
+    logoutConfirm() {
+      this.$confirm("确定要退出登录吗？", "提示", {
+        confirmButtonText: "确定退出",
+        cancelButtonText: "取消",
+        type: "warning"
+      })
+        .then(() => {
+          this.logout(true);
+        })
+        .catch(() => {});
+    },
+    logout(reload = true) {
+      Axios.post(this.api + "/logout")
+        .finally(() => {
+          this.$store.commit("setToken", "");
+          this.$store.commit("setUserInfo", {});
+          if (reload) {
             window.location.reload(true);
           }
-        },
-        error => {
-          this.$message.error("注销失败 " + (error && error.toString()));
-        }
-      );
+        });
     },
     getChapterListByRule() {
       return Axios.post("/getChapterListByRule", this.importBookInfo).then(

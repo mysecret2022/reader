@@ -874,7 +874,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("请输入书籍链接")
         }
         if (lastIndex >= userBookSourceList.size - 1) {
-            return returnData.setErrorMsg("没有更多了")
+            lastIndex = -1
         }
         var book = getShelfBookByURL(bookUrl, userNameSpace)
         if (book == null) {
@@ -882,16 +882,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         if (book == null) {
             return returnData.setErrorMsg("书籍信息错误")
-        }
-        // 校正 lastIndex
-        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
-        if (bookSourceList != null && bookSourceList.size() > 0) {
-            try {
-                val lastBookSourceUrl = bookSourceList.getJsonObject(bookSourceList.size() - 1).getString("origin")
-                lastIndex = Math.max(lastIndex, getBookSourceBySourceURL(lastBookSourceUrl, userNameSpace, userBookSourceList).second)
-            } catch(e: Exception) {
-                e.printStackTrace()
-            }
         }
 
         logger.info("searchBookSource from lastIndex: {}", lastIndex)
@@ -1005,22 +995,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             response.end("data: " + jsonEncode(returnData.setErrorMsg("书籍信息错误"), false) + "\n\n")
             return
         }
-        // 校正 lastIndex
-        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
-        // refresh > 0 校验书源最后一个书源作为lastIndex的可选项
-        if (refresh <= 0 && bookSourceList != null && bookSourceList.size() > 0) {
-            try {
-                val lastBookSourceUrl = bookSourceList.getJsonObject(bookSourceList.size() - 1).getString("origin")
-                lastIndex = Math.max(lastIndex, getBookSourceBySourceURL(lastBookSourceUrl, userNameSpace, userBookSourceList).second)
-            } catch(e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        if (lastIndex >= userBookSourceList.size - 1) {
-            response.write("event: error\n")
-            response.end("data: " + jsonEncode(returnData.setData(mapOf("lastIndex" to lastIndex)).setErrorMsg("没有更多了"), false) + "\n\n")
-            return
+        if (refresh > 0 || lastIndex >= userBookSourceList.size - 1) {
+            lastIndex = -1
         }
 
         searchSize = if(searchSize > 0) searchSize else 30

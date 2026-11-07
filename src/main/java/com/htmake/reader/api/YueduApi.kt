@@ -273,7 +273,7 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
 
         // 微软 Edge TTS 神经语音库接口
-        router.get("/reader3/tts/voices").coroutineHandler { context ->
+        val voicesHandler: suspend (io.vertx.ext.web.RoutingContext) -> ReturnData = { _ ->
             val returnData = ReturnData()
             val voices = listOf(
                 mapOf("id" to "zh-CN-XiaoxiaoNeural", "name" to "晓晓 (女声·小说优选)", "gender" to "Female", "locale" to "zh-CN"),
@@ -287,8 +287,11 @@ class YueduApi : RestVerticle() {
             )
             returnData.setData(voices)
         }
+        router.get("/reader3/tts/voices").coroutineHandler(voicesHandler)
+        router.get("/reader3/reader3/tts/voices").coroutineHandler(voicesHandler)
+        router.get("/tts/voices").coroutineHandler(voicesHandler)
 
-        router.get("/reader3/tts").coroutineHandlerWithoutRes { context ->
+        val ttsHandler: suspend (io.vertx.ext.web.RoutingContext) -> Unit = { context ->
             val query = context.request().query() ?: ""
             try {
                 val url = java.net.URL("http://127.0.0.1:8089/tts?" + query)
@@ -312,6 +315,9 @@ class YueduApi : RestVerticle() {
                 context.response().setStatusCode(503).end("TTS service unavailable: ${e.message}")
             }
         }
+        router.get("/reader3/tts").coroutineHandlerWithoutRes(ttsHandler)
+        router.get("/reader3/reader3/tts").coroutineHandlerWithoutRes(ttsHandler)
+        router.get("/tts").coroutineHandlerWithoutRes(ttsHandler)
 
         // 系统日志读取接口 (供诊断自查)
         router.get("/reader3/getSystemLogs").coroutineHandler { context ->

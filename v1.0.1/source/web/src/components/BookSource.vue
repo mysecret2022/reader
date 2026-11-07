@@ -244,6 +244,7 @@ export default {
     },
     refresh() {
       if (this.loadingMore) return;
+      this.bookSourceGroupIndexMap = {};
       this.loading = true;
       this.getBookSource(true);
     },
@@ -344,7 +345,7 @@ export default {
             }
           }
           if (this.bookSource.length === oldBookSourceLength) {
-            this.$message.error("没有更多啦");
+            this.$message.info("暂未检索到更多新书源");
           }
         } catch (error) {
           //

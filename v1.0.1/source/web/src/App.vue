@@ -546,6 +546,12 @@ export default {
             }
             if (res.data.data.userInfo) {
               this.$store.commit("setUserInfo", res.data.data.userInfo);
+              if (
+                res.data.data.userInfo.isAdmin ||
+                res.data.data.userInfo.username === "admin"
+              ) {
+                this.$store.commit("setShowManagerMode", true);
+              }
             } else {
               // 若未登录且未选择游客模式，默认展示全新登录门面
               const isGuest =
