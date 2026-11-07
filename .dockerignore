@@ -1,6 +1,13 @@
 HELP.md
 .gradle
-build/
+.git
+**/node_modules
+build/classes
+build/reports
+build/test-results
+build/tmp
+build/kotlin
+build/resources
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**
 !**/src/test/**
@@ -21,27 +28,12 @@ build/
 *.ipr
 out/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
 ### VS Code ###
 .vscode/
 
-
 .vertx
-out
-
-#/src/main/resources/application-prod.yml
-/src/main/resources/application-default.yml
-
-/src/main/resources/web
 /storage*
 /logs
 /bin
 /file-uploads
-node_modules
 /reader-assets

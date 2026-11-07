@@ -17,8 +17,32 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Build Web Frontend (Custom Fullpage Login)
+        run: |
+          cd web
+          yarn --ignore-engines
+          export NODE_OPTIONS=--openssl-legacy-provider
+          yarn sync
+
+      - name: Set up Java 11 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Compile and Package Fat JAR
+        run: |
+          chmod +x ./gradlew ./build.sh
+          ./build.sh cli assemble
+          ls -lh build/libs/
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -42,7 +66,7 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=
 
-      - name: Build and push Docker image
+      - name: Build and push multi-arch Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
