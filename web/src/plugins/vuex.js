@@ -563,7 +563,11 @@ export default new Vuex.Store({
       state.bookSourceList.forEach(v => {
         const raw = JSON.stringify(v);
         const lowerRaw = raw.toLowerCase();
-        const isJs = raw.includes("@js:") || raw.includes("<js>") || raw.includes("<+js>") || lowerRaw.includes("javascript");
+        const isJs =
+          raw.includes("@js:") ||
+          raw.includes("<js>") ||
+          raw.includes("<+js>") ||
+          lowerRaw.includes("javascript");
         const isWebView = lowerRaw.includes("webview");
         if (isJs) {
           jsCount++;

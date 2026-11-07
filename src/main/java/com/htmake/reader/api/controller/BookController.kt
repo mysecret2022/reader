@@ -2490,16 +2490,24 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             path = "/"
         }
         var home = getWorkDir("storage", "localStore")
+        val homeFile = File(home)
+        if (!homeFile.exists()) {
+            homeFile.mkdirs()
+        }
         var file = File(home + path)
         logger.info("file: {} {}", path, file)
         if (!file.exists()) {
-            return returnData.setErrorMsg("路径不存在")
+            if (path == "/" || path.isEmpty()) {
+                file.mkdirs()
+            } else {
+                return returnData.setErrorMsg("路径不存在")
+            }
         }
         if (!file.isDirectory()) {
             return returnData.setErrorMsg("路径不是目录")
         }
         var fileList = arrayListOf<Map<String, Any>>()
-        file.listFiles().forEach{
+        file.listFiles()?.forEach {
             if (!it.name.startsWith(".")) {
                 fileList.add(mapOf(
                     "name" to it.name,

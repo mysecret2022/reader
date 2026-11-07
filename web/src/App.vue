@@ -55,13 +55,6 @@
 
     <BookGroup v-model="showBookGroupDialog" :isSet="isSetBookGroup" />
 
-    <RssSourceList v-model="showRssSourceListDialog" />
-    <RssArticleList v-model="showRssArticleListDialog" :rssSource="rssSource" />
-    <RssArticle
-      v-model="showRssArticleDialog"
-      :rssArticleInfo="rssArticleInfo"
-    />
-
     <SearchBookContent
       v-model="showSearchBookContentDialog"
       :book="searchBook"
@@ -89,9 +82,6 @@ import BookInfo from "./components/BookInfo.vue";
 import UserManage from "./components/UserManage.vue";
 import AddUser from "./components/AddUser.vue";
 import BookGroup from "./components/BookGroup.vue";
-import RssSourceList from "./components/RssSourceList.vue";
-import RssArticleList from "./components/RssArticleList.vue";
-import RssArticle from "./components/RssArticle.vue";
 import SearchBookContent from "./components/SearchBookContent.vue";
 import Bookmark from "./components/Bookmark.vue";
 import BookmarkForm from "./components/BookmarkForm.vue";
@@ -169,9 +159,6 @@ export default {
     UserManage,
     AddUser,
     BookGroup,
-    RssSourceList,
-    RssArticleList,
-    RssArticle,
     SearchBookContent,
     Bookmark,
     BookmarkForm,
@@ -206,12 +193,6 @@ export default {
 
       showBookGroupDialog: false,
       isSetBookGroup: false,
-
-      showRssSourceListDialog: false,
-      showRssArticleListDialog: false,
-      rssSource: {},
-      showRssArticleDialog: false,
-      rssArticleInfo: {},
 
       showSearchBookContentDialog: false,
       searchBook: {},
@@ -328,17 +309,6 @@ export default {
       this.showBookGroupDialog = true;
       this.isSetBookGroup = !!isSet;
     });
-    eventBus.$on("showRssArticleListDialog", rssSource => {
-      this.showRssArticleListDialog = true;
-      this.rssSource = rssSource;
-    });
-    eventBus.$on("showRssSourceListDialog", () => {
-      this.showRssSourceListDialog = true;
-    });
-    eventBus.$on("showRssArticleDialog", rssArticleInfo => {
-      this.showRssArticleDialog = true;
-      this.rssArticleInfo = rssArticleInfo;
-    });
     eventBus.$on("showSearchBookContentDialog", searchBook => {
       this.showSearchBookContentDialog = true;
       this.searchBook = searchBook;
@@ -383,8 +353,8 @@ export default {
       }
     },
     canCancelLogin() {
-      // 如果后端不是安全多用户模式，或者用户已经有有效身份，则允许返回
-      return !this.$store.state.isSecureMode || !!(this.$store.state.userInfo && this.$store.state.userInfo.username);
+      // 允许用户随时点击返回或游客模式
+      return true;
     },
     connected() {
       return this.$store.state.connected;
@@ -494,14 +464,21 @@ export default {
       this.cancelLogin();
     },
     cancelLogin() {
+      localStorage.setItem("reader_guest_mode", "true");
       this.showLogin = false;
     },
     onLoginSuccess(payload) {
+      localStorage.removeItem("reader_guest_mode");
       this.$store.commit("setShowLogin", false);
       this.$nextTick(() => {
         this.$store.commit("setLoginAuth", true);
       });
-      if (payload && payload.remember && payload.data && payload.data.accessToken) {
+      if (
+        payload &&
+        payload.remember &&
+        payload.data &&
+        payload.data.accessToken
+      ) {
         this.$store.commit("setToken", payload.data.accessToken);
       }
       this.getUserInfo().then(() => {
@@ -547,8 +524,6 @@ export default {
         this.loadBookSource(refresh),
         // 加载分组列表
         this.loadBookGroup(refresh),
-        // 加载RSS订阅列表
-        this.loadRssSources(refresh),
         // 加载替换规则
         this.loadReplaceRules(refresh),
         // 加载书签
@@ -571,9 +546,13 @@ export default {
             }
             if (res.data.data.userInfo) {
               this.$store.commit("setUserInfo", res.data.data.userInfo);
-            } else if (res.data.data.secure) {
-              // 安全多用户模式下若未登录，弹出全屏登录视图
-              this.$store.commit("setShowLogin", true);
+            } else {
+              // 若未登录且未选择游客模式，默认展示全新登录门面
+              const isGuest =
+                localStorage.getItem("reader_guest_mode") === "true";
+              if (!isGuest && !this.$store.state.userInfo.username) {
+                this.$store.commit("setShowLogin", true);
+              }
             }
           }
         },
@@ -651,27 +630,8 @@ export default {
         }
       );
     },
-    loadRssSources(refresh) {
-      return cacheFirstRequest(
-        () =>
-          Axios.get(this.api + "/getRssSources", {
-            params: {
-              simple: 1
-            }
-          }),
-        "rssSources@" + this.currentUserName,
-        refresh
-      ).then(
-        res => {
-          const data = res.data.data || [];
-          this.$store.commit("setRssSourceList", data);
-        },
-        error => {
-          this.$message.error(
-            "加载RSS订阅列表失败 " + (error && error.toString())
-          );
-        }
-      );
+    loadRssSources() {
+      return Promise.resolve([]);
     },
     loadBookSource(refresh) {
       return cacheFirstRequest(
@@ -735,12 +695,20 @@ export default {
         this.$message.error("书籍信息错误");
         return false;
       }
-      if (!book.origin && this.$store.getters.readingBook && this.$store.getters.readingBook.origin) {
+      if (
+        !book.origin &&
+        this.$store.getters.readingBook &&
+        this.$store.getters.readingBook.origin
+      ) {
         book.origin = this.$store.getters.readingBook.origin;
       }
       // 判断是否加入了书架 (根据 bookUrl 或者 书名+作者 匹配)
       const isInShelf = this.$store.getters.shelfBooks.find(
-        v => (book.bookUrl && v.bookUrl === book.bookUrl) || (book.name && v.name === book.name && (!book.author || v.author === book.author))
+        v =>
+          (book.bookUrl && v.bookUrl === book.bookUrl) ||
+          (book.name &&
+            v.name === book.name &&
+            (!book.author || v.author === book.author))
       );
       if (isInShelf) {
         if (!book.origin && isInShelf.origin) {

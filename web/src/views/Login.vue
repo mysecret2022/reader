@@ -1,5 +1,8 @@
 <template>
-  <div class="lx-login-container" :class="isDark ? 'theme-dark' : 'theme-light'">
+  <div
+    class="lx-login-container"
+    :class="isDark ? 'theme-dark' : 'theme-light'"
+  >
     <!-- 动态极光渐变背景与微网格 -->
     <div class="ambient-canvas">
       <div class="aurora-blob aurora-1"></div>
@@ -41,7 +44,11 @@
         </div>
         <h1 class="card-title">Reader 阅 读</h1>
         <p class="mode-desc">
-          {{ isLogin ? "登录您的专属阅读空间，同步书架与书源" : "创建新账号开启纯净阅读体验" }}
+          {{
+            isLogin
+              ? "登录您的专属阅读空间，同步书架与书源"
+              : "创建新账号开启纯净阅读体验"
+          }}
         </p>
       </div>
 
@@ -136,16 +143,25 @@
           <span>{{ errorMsg }}</span>
         </div>
 
-        <!-- 提交按钮 -->
-        <button
-          type="submit"
-          class="btn-gradient-submit"
-          :disabled="loading"
-        >
-          <i class="el-icon-loading" v-if="loading"></i>
-          <i class="el-icon-right" v-else></i>
-          <span>{{ loading ? "正在提交..." : (isLogin ? "立即登录" : "注册账号") }}</span>
-        </button>
+        <!-- 提交按钮与游客快速通道 -->
+        <div class="submit-actions">
+          <button type="submit" class="btn-gradient-submit" :disabled="loading">
+            <i class="el-icon-loading" v-if="loading"></i>
+            <i class="el-icon-right" v-else></i>
+            <span>{{
+              loading ? "正在提交..." : isLogin ? "立即登录" : "注册账号"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="btn-guest"
+            @click="cancel"
+            title="暂不登录，以访客身份直接体验书架"
+          >
+            <i class="el-icon-coffee-cup"></i>
+            <span>游客体验 / 直接进入书架</span>
+          </button>
+        </div>
       </form>
 
       <!-- 底部辅助信息 -->
@@ -172,7 +188,7 @@ export default {
   props: {
     canCancel: {
       type: Boolean,
-      default: false
+      default: true
     }
   },
   data() {
@@ -292,11 +308,7 @@ export default {
       rgba(255, 255, 255, 0.03) 1px,
       transparent 1px
     ),
-    linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.03) 1px,
-      transparent 1px
-    );
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 }
 
 .lx-login-container.theme-dark .glass-card {
@@ -358,19 +370,14 @@ export default {
       rgba(16, 185, 129, 0.08) 1px,
       transparent 1px
     ),
-    linear-gradient(
-      to bottom,
-      rgba(16, 185, 129, 0.08) 1px,
-      transparent 1px
-    );
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.08) 1px, transparent 1px);
 }
 
 .lx-login-container.theme-light .glass-card {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 30px 60px -12px rgba(16, 185, 129, 0.18),
-    0 18px 36px -18px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 18px 36px -18px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1),
     inset 0 0 20px rgba(16, 185, 129, 0.06);
 }
 
@@ -870,6 +877,37 @@ export default {
 
 .footer-link-btn:hover {
   color: #10b981;
+}
+
+.submit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-guest {
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px dashed rgba(64, 158, 255, 0.45);
+  background: rgba(64, 158, 255, 0.08);
+  color: #409eff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.25s ease;
+  outline: none;
+}
+
+.btn-guest:hover {
+  background: rgba(64, 158, 255, 0.16);
+  border-color: #409eff;
+  transform: translateY(-1px);
 }
 
 /* 错误震动动画 */

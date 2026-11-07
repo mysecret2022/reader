@@ -105,7 +105,9 @@ export default {
       return this.bookSource.filter(item => {
         const sourceUrl = item.origin || item.bookUrl;
         const matchedSource = this.$store.state.bookSourceList.find(
-          s => s.bookSourceUrl === sourceUrl || s.bookSourceName === item.originName
+          s =>
+            s.bookSourceUrl === sourceUrl ||
+            s.bookSourceName === item.originName
         );
         const raw = matchedSource
           ? JSON.stringify(matchedSource)

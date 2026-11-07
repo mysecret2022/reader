@@ -421,15 +421,6 @@
               type="info"
               :effect="$store.getters.isNight ? 'dark' : 'light'"
               class="setting-btn"
-              @click="clearCache('rssSources')"
-            >
-              清空RSS源缓存
-              <span>{{ localCacheStats.rssSources }}</span>
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
               @click="clearCache('chapterList')"
             >
               清空章节列表缓存
@@ -490,10 +481,35 @@
         </div>
         <div
           class="title-btn"
-          v-if="$store.getters.isNormalPage && !isSearchResult"
-          @click="showRssDialog"
+          v-if="
+            $store.getters.isNormalPage &&
+              ($store.state.showManagerMode ||
+                ($store.state.userInfo && $store.state.userInfo.is_admin))
+          "
+          @click="$router.push('/admin')"
+          style="color: #409EFF; font-weight: bold;"
         >
-          RSS
+          <i class="el-icon-s-operation"></i> 管理
+        </div>
+        <div
+          class="title-btn"
+          v-if="
+            $store.getters.isNormalPage &&
+              $store.state.userInfo &&
+              $store.state.userInfo.username
+          "
+          @click="logout"
+          title="点击注销"
+        >
+          <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
+        </div>
+        <div
+          class="title-btn"
+          v-else-if="$store.getters.isNormalPage"
+          @click="$store.commit('setShowLogin', true)"
+          style="color: #409EFF; font-weight: bold;"
+        >
+          <i class="el-icon-user-solid"></i> 登录
         </div>
         <div
           class="title-btn"
@@ -613,7 +629,7 @@
       </div>
     </div>
     <el-dialog
-      :title="isImportRssSource ? '导入RSS源' : '导入书源'"
+      title="导入书源"
       :visible.sync="showImportSourceDialog"
       :width="dialogWidth"
       :top="this.collapseMenu ? '0' : '15vh'"
@@ -623,11 +639,14 @@
     >
       <div
         class="import-filter-bar"
-        v-if="!isImportRssSource"
         style="margin-bottom: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.04); border-radius: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;"
       >
-        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <span style="font-size: 13px; font-weight: bold;">书源类型支持选项：</span>
+        <div
+          style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;"
+        >
+          <span style="font-size: 13px; font-weight: bold;"
+            >书源类型支持选项：</span
+          >
           <el-checkbox
             v-model="allowImportJs"
             @change="onImportTypeToggle"
@@ -660,9 +679,11 @@
             :key="index"
             :disabled="isSourceDisabled(source)"
             class="source-checkbox"
-            >{{ isImportRssSource ? source.sourceName : source.bookSourceName }}
-            {{ isImportRssSource ? source.sourceUrl : source.bookSourceUrl }}
-            <span style="color: #409EFF; font-weight: bold;">{{ getSourceTag(source) }}</span></el-checkbox
+            >{{ source.bookSourceName }}
+            {{ source.bookSourceUrl }}
+            <span style="color: #409EFF; font-weight: bold;">{{
+              getSourceTag(source)
+            }}</span></el-checkbox
           >
         </el-checkbox-group>
       </div>
@@ -1028,7 +1049,6 @@ export default {
 
       importSourceList: [],
       showImportSourceDialog: false,
-      isImportRssSource: false,
       checkAll: false,
       isIndeterminate: false,
       checkedSourceIndex: [],
@@ -1074,14 +1094,11 @@ export default {
 
       importMultiBookTip: "",
 
-      rssSource: {},
-
       concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60],
 
       localCacheStats: {
         total: "0 Bytes",
         bookSourceList: "0 Bytes",
-        rssSources: "0 Bytes",
         chapterList: "0 Bytes",
         chapterContent: "0 Bytes"
       },
@@ -1166,11 +1183,11 @@ export default {
       this.collapseMenu && !this.showNavigation ? "navigation-hidden" : "";
     window.shelfPage = this;
     this.init();
-    eventBus.$on("onSourceFileChange", (event, isRssSource) => {
+    eventBus.$on("onSourceFileChange", event => {
       if (this._inactive) {
         return;
       }
-      this.onSourceFileChange(event, isRssSource);
+      this.onSourceFileChange(event);
     });
     eventBus.$on("editBook", (book, isAdd, onSuccess) => {
       if (this._inactive) {
@@ -1674,11 +1691,10 @@ export default {
     uploadBookSource() {
       this.$refs.fileRef.dispatchEvent(new MouseEvent("click"));
     },
-    onSourceFileChange(event, isRssSource) {
+    onSourceFileChange(event) {
       const rawFile = event.target.files && event.target.files[0];
-      // console.log("rawFile", rawFile);
       const reader = new FileReader();
-      const sourceTypeName = isRssSource ? "RSS源" : "书源";
+      const sourceTypeName = "书源";
       reader.onload = e => {
         const data = e.target.result;
         try {
@@ -1701,7 +1717,6 @@ export default {
             this.checkedSourceIndex = [];
             this.checkAll = false;
             this.showImportSourceDialog = true;
-            this.isImportRssSource = !!isRssSource;
           } else {
             this.$message.error(sourceTypeName + "文件错误");
           }
@@ -1710,7 +1725,6 @@ export default {
         }
       };
       reader.onerror = () => {
-        // console.log("FileReader error", e);
         // FileReader 读取出错，只能上传读取了
         let param = new FormData();
         param.append("file", rawFile);
@@ -1719,7 +1733,6 @@ export default {
         }).then(
           res => {
             if (res.data.isSuccess) {
-              //
               let sourceList = [];
               res.data.data.forEach(v => {
                 try {
@@ -1749,7 +1762,6 @@ export default {
                 this.checkedSourceIndex = [];
                 this.checkAll = false;
                 this.showImportSourceDialog = true;
-                this.isImportRssSource = !!isRssSource;
               } else {
                 this.$message.error(sourceTypeName + "文件错误");
               }
@@ -1766,11 +1778,7 @@ export default {
         );
       };
       reader.readAsText(rawFile);
-      if (this.isRssSource) {
-        this.$refs.rssInputRef.value = null;
-      } else {
-        this.$refs.fileRef.value = null;
-      }
+      this.$refs.fileRef.value = null;
     },
     async loadRemoteBookSource() {
       const lastRemoteSourceUrl = getCache(
@@ -1812,7 +1820,6 @@ export default {
               this.checkedSourceIndex = [];
               this.checkAll = false;
               this.showImportSourceDialog = true;
-              this.isImportRssSource = false;
             } else {
               this.$message.error("远程书源文件错误");
             }
@@ -1842,7 +1849,6 @@ export default {
       return raw.toLowerCase().indexOf("webview") !== -1;
     },
     isSourceDisabled(source) {
-      if (this.isImportRssSource) return false;
       const isJs = this.isSourceJs(source);
       const isWv = this.isSourceWebview(source);
       if (isJs && !this.allowImportJs) return true;
@@ -1897,8 +1903,7 @@ export default {
         v => !this.isSourceDisabled(v)
       ).length;
       this.checkAll = availableCount > 0 && checkedCount === availableCount;
-      this.isIndeterminate =
-        checkedCount > 0 && checkedCount < availableCount;
+      this.isIndeterminate = checkedCount > 0 && checkedCount < availableCount;
     },
     getSourceTag(source) {
       const tags = [];
@@ -1922,32 +1927,17 @@ export default {
       const sourceList = this.checkedSourceIndex.map(
         v => this.importSourceList[v]
       );
-      Axios.post(
-        this.api +
-          (this.isImportRssSource ? "/saveRssSources" : "/saveBookSources"),
-        sourceList
-      ).then(
+      Axios.post(this.api + "/saveBookSources", sourceList).then(
         res => {
           if (res.data.isSuccess) {
-            //
-            this.$message.success(
-              this.isImportRssSource ? "导入RSS源成功" : "导入书源成功"
-            );
-            if (this.isImportRssSource) {
-              this.loadRssSources(true);
-            } else {
-              this.loadBookSource(true);
-            }
+            this.$message.success("导入书源成功");
+            this.loadBookSource(true);
             this.showImportSourceDialog = false;
-            this.isImportRssSource = false;
             this.checkedSourceIndex = [];
           }
         },
         error => {
-          this.$message.error(
-            (this.isImportRssSource ? "导入RSS源失败 " : "导入书源失败 ") +
-              (error && error.toString())
-          );
+          this.$message.error("导入书源失败 " + (error && error.toString()));
         }
       );
     },
@@ -2181,7 +2171,7 @@ export default {
     },
     async backupToWebdav() {
       const res = await this.$confirm(
-        `确认要用当前书源和书架信息覆盖备份文件中的书源、书架、分组和RSS订阅数据吗?`,
+        `确认要用当前书源和书架信息覆盖备份文件中的书源、书架和分组数据吗?`,
         "提示",
         {
           confirmButtonText: "确定",
@@ -2497,15 +2487,6 @@ export default {
         bookGroup === 0 ? true : v.group & bookGroup
       );
     },
-    loadRssSources(refresh) {
-      return this.$root.$children[0].loadRssSources(refresh);
-    },
-    showRssDialog() {
-      eventBus.$emit("showRssSourceListDialog");
-    },
-    showRssArticleListDialog(source) {
-      eventBus.$emit("showRssArticleListDialog", source);
-    },
     noop() {},
     exportBookSource() {
       Axios.get(this.api + "/getBookSources").then(
@@ -2701,7 +2682,6 @@ export default {
         total: (await this.analyseLocalStorage()).totalBytes,
         bookSourceList: (await this.analyseLocalStorage("bookSourceList"))
           .totalBytes,
-        rssSources: (await this.analyseLocalStorage("rssSources")).totalBytes,
         chapterList: (await this.analyseLocalStorage("chapterList")).totalBytes,
         chapterContent: (await this.analyseLocalStorage("chapterContent"))
           .totalBytes
@@ -2946,7 +2926,11 @@ export default {
         return this.bookSourceShowList.filter(v => {
           const raw = JSON.stringify(v);
           const lowerRaw = raw.toLowerCase();
-          const isJs = raw.includes("@js:") || raw.includes("<js>") || raw.includes("<+js>") || lowerRaw.includes("javascript");
+          const isJs =
+            raw.includes("@js:") ||
+            raw.includes("<js>") ||
+            raw.includes("<+js>") ||
+            lowerRaw.includes("javascript");
           const isWebView = lowerRaw.includes("webview");
           if (this.showSourceGroup === "@javascript") {
             return isJs;

@@ -105,6 +105,17 @@ class YueduApi : RestVerticle() {
         }
         router.route("/assets/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(assetsDir).setDefaultContentEncoding("UTF-8"));
 
+        // localStore 目录自初始化
+        val localStoreDir = File(getWorkDir("storage", "localStore"))
+        if (!localStoreDir.exists()) {
+            localStoreDir.mkdirs()
+        }
+        // TTS 缓存目录初始化
+        val ttsCacheDir = File(getWorkDir("storage", "cache", "tts"))
+        if (!ttsCacheDir.exists()) {
+            ttsCacheDir.mkdirs()
+        }
+
         // epub资源
         var dataDir = getWorkDir("storage", "data");
         router.route("/epub/*").handler {
@@ -260,6 +271,47 @@ class YueduApi : RestVerticle() {
         // 全文搜索
         router.get("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
         router.post("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
+
+        // 微软 Edge TTS 神经语音库接口
+        router.get("/reader3/tts/voices").coroutineHandler { context ->
+            val returnData = ReturnData()
+            val voices = listOf(
+                mapOf("id" to "zh-CN-XiaoxiaoNeural", "name" to "晓晓 (女声·小说优选)", "gender" to "Female", "locale" to "zh-CN"),
+                mapOf("id" to "zh-CN-YunxiNeural", "name" to "云希 (男声·生动多情)", "gender" to "Male", "locale" to "zh-CN"),
+                mapOf("id" to "zh-CN-YunjianNeural", "name" to "云健 (男声·热血沉稳)", "gender" to "Male", "locale" to "zh-CN"),
+                mapOf("id" to "zh-CN-XiaoyiNeural", "name" to "晓伊 (女声·灵动甜美)", "gender" to "Female", "locale" to "zh-CN"),
+                mapOf("id" to "zh-CN-YunyangNeural", "name" to "云扬 (男声·专业播音)", "gender" to "Male", "locale" to "zh-CN"),
+                mapOf("id" to "zh-CN-liaoning-XiaobeiNeural", "name" to "晓北 (东北女声·幽默)", "gender" to "Female", "locale" to "zh-CN"),
+                mapOf("id" to "zh-HK-HiuMaanNeural", "name" to "晓曼 (粤语女声·标准)", "gender" to "Female", "locale" to "zh-HK"),
+                mapOf("id" to "zh-TW-HsiaoChenNeural", "name" to "晓臻 (国语女声·台湾)", "gender" to "Female", "locale" to "zh-TW")
+            )
+            returnData.setData(voices)
+        }
+
+        router.get("/reader3/tts").coroutineHandlerWithoutRes { context ->
+            val query = context.request().query() ?: ""
+            try {
+                val url = java.net.URL("http://127.0.0.1:8089/tts?" + query)
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 15000
+                conn.readTimeout = 40000
+                conn.requestMethod = "GET"
+                val responseCode = conn.responseCode
+                if (responseCode == 200) {
+                    val response = context.response()
+                    response.putHeader("Content-Type", "audio/mpeg")
+                    response.putHeader("Cache-Control", "public, max-age=604800")
+                    val buffer = io.vertx.core.buffer.Buffer.buffer(conn.inputStream.readBytes())
+                    response.end(buffer)
+                } else {
+                    val errBytes = conn.errorStream?.readBytes() ?: conn.inputStream?.readBytes() ?: ByteArray(0)
+                    context.response().setStatusCode(responseCode).end(String(errBytes))
+                }
+            } catch (e: Exception) {
+                logger.error("TTS proxy error: ${e.message}")
+                context.response().setStatusCode(503).end("TTS service unavailable: ${e.message}")
+            }
+        }
 
         // 系统日志读取接口 (供诊断自查)
         router.get("/reader3/getSystemLogs").coroutineHandler { context ->
