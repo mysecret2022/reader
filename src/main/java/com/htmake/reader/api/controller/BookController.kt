@@ -1359,6 +1359,32 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var userNameSpace = getUserNameSpace(context)
         var book = getShelfBookByURL(bookUrl, userNameSpace)
         if (book == null) {
+            val name = if (context.request().method() == HttpMethod.POST) {
+                context.bodyAsJson.getString("name", "")
+            } else {
+                context.queryParam("name").firstOrNull() ?: ""
+            }
+            val author = if (context.request().method() == HttpMethod.POST) {
+                context.bodyAsJson.getString("author", "")
+            } else {
+                context.queryParam("author").firstOrNull() ?: ""
+            }
+            if (name.isNotEmpty()) {
+                book = getShelfBookByNameAndAuthor(name, author, userNameSpace)
+            }
+        }
+        if (book == null) {
+            book = getShelfBookByURL(newBookUrl, userNameSpace)
+        }
+        if (book == null) {
+            val cacheInfo: Book? = bookInfoCache.getAsString(bookUrl)?.toMap()?.toDataClass()
+            if (cacheInfo != null) {
+                cacheInfo.setRootDir(getWorkDir())
+                cacheInfo.setUserNameSpace(userNameSpace)
+                book = cacheInfo
+            }
+        }
+        if (book == null) {
             return returnData.setErrorMsg("书籍信息错误")
         }
         // 查找是否存在该书源
@@ -1901,6 +1927,20 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         for (i in 0 until bookshelf.size()) {
             var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
             if (_book.bookUrl.equals(url)) {
+                _book.setRootDir(getWorkDir())
+                _book.setUserNameSpace(userNameSpace)
+                return _book
+            }
+        }
+        return null
+    }
+
+    fun getShelfBookByNameAndAuthor(name: String, author: String, userNameSpace: String): Book? {
+        if (name.isEmpty()) return null
+        val bookshelf: JsonArray = asJsonArray(getUserStorage(userNameSpace, "bookshelf")) ?: return null
+        for (i in 0 until bookshelf.size()) {
+            val _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
+            if (_book.name == name && (author.isEmpty() || _book.author == author)) {
                 _book.setRootDir(getWorkDir())
                 _book.setUserNameSpace(userNameSpace)
                 return _book

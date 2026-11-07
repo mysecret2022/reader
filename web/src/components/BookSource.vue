@@ -156,13 +156,18 @@ export default {
       Axios.post(this.api + `/setBookSource`, {
         bookUrl: this.$store.getters.readingBook.bookUrl,
         newUrl: searchBook.bookUrl,
-        bookSourceUrl: searchBook.origin
+        bookSourceUrl: searchBook.origin,
+        name: this.$store.getters.readingBook.name,
+        author: this.$store.getters.readingBook.author
       }).then(
         res => {
           if (res.data.isSuccess) {
             this.$message.info("换源成功");
             var book = Object.assign({}, this.$store.getters.readingBook);
             book.bookUrl = searchBook.bookUrl;
+            book.origin = searchBook.origin;
+            book.originName = searchBook.originName;
+            book.tocUrl = searchBook.tocUrl;
             book.type =
               typeof searchBook.type !== "undefined"
                 ? searchBook.type
@@ -171,6 +176,9 @@ export default {
               typeof searchBook.coverUrl !== "undefined"
                 ? searchBook.coverUrl
                 : book.coverUrl;
+            if (res.data.data) {
+              book = Object.assign(book, res.data.data);
+            }
             this.$store.commit("setReadingBook", book);
             this.$emit("changeBookSource");
 

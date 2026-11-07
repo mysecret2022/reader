@@ -731,14 +731,29 @@ export default {
       );
     },
     async isInShelf(book, addTip) {
-      if (!book || !book.bookUrl || !book.origin) {
+      if (!book) {
         this.$message.error("书籍信息错误");
         return false;
       }
-      // 判断是否加入了书架
+      if (!book.origin && this.$store.getters.readingBook && this.$store.getters.readingBook.origin) {
+        book.origin = this.$store.getters.readingBook.origin;
+      }
+      // 判断是否加入了书架 (根据 bookUrl 或者 书名+作者 匹配)
       const isInShelf = this.$store.getters.shelfBooks.find(
-        v => v.bookUrl === book.bookUrl
+        v => (book.bookUrl && v.bookUrl === book.bookUrl) || (book.name && v.name === book.name && (!book.author || v.author === book.author))
       );
+      if (isInShelf) {
+        if (!book.origin && isInShelf.origin) {
+          book.origin = isInShelf.origin;
+        }
+        if (!book.bookUrl && isInShelf.bookUrl) {
+          book.bookUrl = isInShelf.bookUrl;
+        }
+      }
+      if (!book.bookUrl) {
+        this.$message.error("书籍信息错误");
+        return false;
+      }
       if (!isInShelf) {
         if (addTip) {
           const res = await this.$confirm(addTip, "提示", {

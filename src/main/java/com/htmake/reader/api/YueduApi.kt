@@ -261,6 +261,36 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
         router.post("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
 
+        // 系统日志读取接口 (供诊断自查)
+        router.get("/reader3/getSystemLogs").coroutineHandler { context ->
+            val returnData = ReturnData()
+            val linesParam = context.queryParam("lines").firstOrNull()?.toIntOrNull() ?: 200
+            val errorOnly = context.queryParam("error").firstOrNull()?.toBoolean() ?: false
+
+            val candidateDirs = listOf(
+                java.io.File("./logs"),
+                java.io.File(getWorkDir("logs")),
+                java.io.File("/logs"),
+                java.io.File(System.getProperty("user.dir", ".") + "/logs")
+            )
+            val logFiles = candidateDirs
+                .filter { it.exists() && it.isDirectory }
+                .flatMap { it.listFiles { f -> f.isFile && f.name.endsWith(".log") }?.toList() ?: emptyList() }
+            val latestLog = logFiles.maxByOrNull { it.lastModified() }
+
+            if (latestLog == null || !latestLog.exists()) {
+                return@coroutineHandler returnData.setData(listOf("暂无日志文件或日志目录未初始化"))
+            }
+
+            val allLines = latestLog.readLines(Charsets.UTF_8)
+            val filtered = if (errorOnly) {
+                allLines.filter { it.contains("ERROR") || it.contains("Exception") || it.contains("WARN") }
+            } else {
+                allLines
+            }
+            returnData.setData(filtered.takeLast(linesParam))
+        }
+
         /** 用户模块 */
         // 上传文件
         router.post("/reader3/uploadFile").coroutineHandler { userController.uploadFile(it) }

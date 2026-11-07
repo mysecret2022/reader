@@ -39,6 +39,7 @@
 
     <springProfile name="prod">
         <root level="INFO">
+            <appender-ref ref="STDOUT"/>
             <appender-ref ref="ASYNC_ROLLING_FILE"/>
         </root>
     </springProfile>
