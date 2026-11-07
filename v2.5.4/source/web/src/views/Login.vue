@@ -165,7 +165,7 @@
 </template>
 
 <script>
-import Axios from "axios";
+import Axios from "../plugins/axios";
 
 export default {
   name: "LoginView",
@@ -226,22 +226,29 @@ export default {
       this.loading = true;
       this.errorMsg = "";
       try {
-        const res = await Axios.post("/login", {
-          ...this.loginForm,
-          isLogin: this.isLogin
-        });
-        if (res.data && res.data.isSuccess) {
+        const res = await Axios.post(
+          "/login",
+          {
+            ...this.loginForm,
+            isLogin: this.isLogin
+          },
+          { alert: false }
+        );
+        if (res && res.data && res.data.isSuccess) {
           this.$message.success(this.isLogin ? "登录成功" : "注册成功");
           this.$emit("success", {
             data: res.data.data,
             remember: this.remember
           });
         } else {
-          const err = (res.data && res.data.errorMsg) || "操作失败，请重试";
+          const err =
+            (res && res.data && res.data.errorMsg) || "操作失败，请重试";
           this.triggerShake(err);
         }
       } catch (err) {
-        const msg = (err && err.message) || "网络连接异常，请检查服务状态";
+        const msg =
+          (err && (err.errorMsg || err.message)) ||
+          "网络连接异常，请检查服务状态";
         this.triggerShake(msg);
       } finally {
         this.loading = false;

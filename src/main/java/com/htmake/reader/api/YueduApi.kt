@@ -268,13 +268,16 @@ class YueduApi : RestVerticle() {
         // 删除文件
         router.post("/reader3/deleteFile").coroutineHandler { userController.deleteFile(it) }
 
-        // 登录
+        // 登录 (支持 /reader3 前缀及根路径)
         router.post("/reader3/login").coroutineHandler { userController.login(it) }
+        router.post("/login").coroutineHandler { userController.login(it) }
         // 注销登录
         router.post("/reader3/logout").coroutineHandler { userController.logout(it) }
+        router.post("/logout").coroutineHandler { userController.logout(it) }
 
         // 获取用户信息
         router.get("/reader3/getUserInfo").coroutineHandler { userController.getUserInfo(it) }
+        router.get("/getUserInfo").coroutineHandler { userController.getUserInfo(it) }
 
         // 用户备份本地配置
         router.post("/reader3/saveUserConfig").coroutineHandler { userController.saveUserConfig(it) }
