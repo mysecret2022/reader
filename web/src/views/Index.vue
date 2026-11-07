@@ -470,10 +470,12 @@
         </div>
         <div
           class="title-btn"
-          v-if="$store.getters.isNormalPage && !isSearchResult"
-          @click="showBookEditButton = !showBookEditButton"
+          @click="showExplorePop"
+          v-if="
+            $store.getters.isNormalPage && !(isSearchResult && !isExploreResult)
+          "
         >
-          {{ showBookEditButton ? "取消" : "编辑" }}
+          书海
         </div>
         <div class="title-btn" v-if="!isSearchResult" @click="refreshShelf">
           <i class="el-icon-loading" v-if="refreshLoading"></i>
@@ -481,18 +483,41 @@
         </div>
         <div
           class="title-btn"
+          v-if="$store.getters.isNormalPage && !isSearchResult"
+          @click="showBookEditButton = !showBookEditButton"
+        >
+          {{ showBookEditButton ? "取消" : "编辑" }}
+        </div>
+        <el-dropdown
           v-if="
             $store.getters.isNormalPage &&
               ($store.state.showManagerMode ||
                 ($store.state.userInfo && ($store.state.userInfo.isAdmin || $store.state.userInfo.is_admin || $store.state.userInfo.username === 'admin')))
           "
-          @click="$router.push('/admin')"
-          style="color: #409EFF; font-weight: bold;"
+          @command="handleAdminMenuCommand"
+          trigger="click"
         >
-          <i class="el-icon-s-operation"></i> 管理
-        </div>
+          <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: bold;">
+            <i class="el-icon-s-operation"></i> 管理
+            <span v-if="$store.state.userInfo && $store.state.userInfo.username" style="font-weight: normal; margin-left: 2px;">
+              ({{ $store.state.userInfo.username }})
+            </span>
+            <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+          </div>
+          <el-dropdown-menu slot="dropdown">
+            <el-dropdown-item command="admin" icon="el-icon-s-tools">
+              控制台与管理后台
+            </el-dropdown-item>
+            <el-dropdown-item command="changePassword" icon="el-icon-key">
+              修改账户密码
+            </el-dropdown-item>
+            <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
+              退出当前账号
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </el-dropdown>
         <el-dropdown
-          v-if="
+          v-else-if="
             $store.getters.isNormalPage &&
               $store.state.userInfo &&
               $store.state.userInfo.username
@@ -505,13 +530,6 @@
             <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
           </div>
           <el-dropdown-menu slot="dropdown">
-            <el-dropdown-item
-              v-if="$store.state.showManagerMode || ($store.state.userInfo && ($store.state.userInfo.isAdmin || $store.state.userInfo.is_admin || $store.state.userInfo.username === 'admin'))"
-              command="admin"
-              icon="el-icon-s-tools"
-            >
-              管理后台
-            </el-dropdown-item>
             <el-dropdown-item command="changePassword" icon="el-icon-key">
               修改密码
             </el-dropdown-item>
@@ -527,15 +545,6 @@
           style="color: #409EFF; font-weight: bold;"
         >
           <i class="el-icon-user-solid"></i> 登录
-        </div>
-        <div
-          class="title-btn"
-          @click="showExplorePop"
-          v-if="
-            $store.getters.isNormalPage && !(isSearchResult && !isExploreResult)
-          "
-        >
-          书海
         </div>
       </div>
       <div class="book-group-wrapper" v-if="!isSearchResult">
@@ -1539,6 +1548,8 @@ export default {
             );
             if (!isEdit) {
               this.loadBookshelf();
+              // 用户加入书架后，后台低并发(2线程)无感检索备用书源，至多保留10个备用源
+              this.triggerBackgroundSourceSearch(res.data.data || book);
             } else {
               this.$store.commit("updateShelfBook", res.data.data);
             }
@@ -1555,6 +1566,31 @@ export default {
           );
         }
       );
+    },
+    triggerBackgroundSourceSearch(book) {
+      if (!book || !book.bookUrl || book.origin === "loc_book") return;
+      const params = {
+        url: book.bookUrl,
+        name: book.name,
+        author: book.author,
+        searchSize: 10,
+        background: true
+      };
+      if (this.$store.state.token) {
+        params.accessToken = this.$store.state.token;
+      }
+      const sseUrl = buildURL(this.api + "/searchBookSourceSSE", params);
+      try {
+        const es = new EventSource(sseUrl);
+        es.addEventListener("end", () => {
+          es.close();
+        });
+        es.addEventListener("error", () => {
+          es.close();
+        });
+      } catch (e) {
+        // 后台静默处理，无感运行
+      }
     },
     async deleteBook(book) {
       if (!book || (!book.name && !book.bookUrl)) {
@@ -2755,6 +2791,15 @@ export default {
     },
     getBookCoverUrl(book) {
       return book.customCoverUrl || book.coverUrl;
+    },
+    handleAdminMenuCommand(command) {
+      if (command === "admin") {
+        this.$router.push("/admin");
+      } else if (command === "changePassword") {
+        this.promptChangePassword();
+      } else if (command === "logout") {
+        this.logoutConfirm();
+      }
     },
     handleUserMenuCommand(command) {
       if (command === "admin") {

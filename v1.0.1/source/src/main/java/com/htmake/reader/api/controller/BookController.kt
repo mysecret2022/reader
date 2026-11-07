@@ -2239,67 +2239,72 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return true;
     }
 
-    suspend fun saveToWebdav(latestZipFilePath: String, userNameSpace: String): Boolean {
+    suspend fun saveToWebdav(latestZipFilePath: String?, userNameSpace: String): Boolean {
         var descDir = getWorkDir("storage", "data", userNameSpace, "tmp")
         var descDirFile = File(descDir)
         descDirFile.deleteRecursively()
+        descDirFile.mkdirs()
         try {
             val userHome = getUserWebdavHome(userNameSpace)
             var legadoHome = userHome
-            if (latestZipFilePath.indexOf("legado") > 0) {
+            if (latestZipFilePath != null && latestZipFilePath.indexOf("legado") > 0) {
                 legadoHome = userHome + File.separator + "legado"
             }
-            var zipFile = File(latestZipFilePath)
-            if (zipFile.unzip(descDir)) {
-                // 同步 书源
-                val userBookSourceFile = File(getWorkDir("storage", "data", userNameSpace, "bookSource.json"))
-                if (userBookSourceFile.exists()) {
-                    val bookSourceFile = File(descDir + File.separator + "bookSource.json")
-                    bookSourceFile.deleteRecursively()
-                    userBookSourceFile.copyRecursively(bookSourceFile)
-                }
-                // 同步 书架
-                val userBookshelfFile = File(getWorkDir("storage", "data", userNameSpace, "bookshelf.json"))
-                if (userBookshelfFile.exists()) {
-                    val bookshelfFile = File(descDir + File.separator + "bookshelf.json")
-                    bookshelfFile.deleteRecursively()
-                    userBookshelfFile.copyRecursively(bookshelfFile)
-                }
-                // 同步 书籍分组
-                val userBookGroupFile = File(getWorkDir("storage", "data", userNameSpace, "bookGroup.json"))
-                if (userBookGroupFile.exists()) {
-                    val bookGroupFile = File(descDir + File.separator + "bookGroup.json")
-                    bookGroupFile.deleteRecursively()
-                    userBookGroupFile.renameTo(bookGroupFile)
-                }
-                // 同步 RSS订阅
-                val userRssSourcesFile = File(getWorkDir("storage", "data", userNameSpace, "rssSources.json"))
-                if (userRssSourcesFile.exists()) {
-                    val rssSourcesFile = File(descDir + File.separator + "rssSources.json")
-                    rssSourcesFile.deleteRecursively()
-                    userRssSourcesFile.renameTo(rssSourcesFile)
-                }
-                // 同步 替换规则
-                val userReplaceRuleFile = File(getWorkDir("storage", "data", userNameSpace, "replaceRule.json"))
-                if (userReplaceRuleFile.exists()) {
-                    val replaceRuleFile = File(descDir + File.separator + "replaceRule.json")
-                    replaceRuleFile.deleteRecursively()
-                    userReplaceRuleFile.renameTo(replaceRuleFile)
-                }
-                // 同步 书签
-                val userBookmarkFile = File(getWorkDir("storage", "data", userNameSpace, "bookmark.json"))
-                if (userBookmarkFile.exists()) {
-                    val bookmarkFile = File(descDir + File.separator + "bookmark.json")
-                    bookmarkFile.deleteRecursively()
-                    userBookmarkFile.renameTo(bookmarkFile)
-                }
-                // 压缩
-                val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
-                return descDirFile.zip(legadoHome + File.separator + "backup" + today + ".zip")
+            if (latestZipFilePath != null && File(latestZipFilePath).exists()) {
+                File(latestZipFilePath).unzip(descDir)
             }
+            // 同步 书源
+            val userBookSourceFile = File(getWorkDir("storage", "data", userNameSpace, "bookSource.json"))
+            if (userBookSourceFile.exists()) {
+                val bookSourceFile = File(descDir + File.separator + "bookSource.json")
+                bookSourceFile.deleteRecursively()
+                userBookSourceFile.copyRecursively(bookSourceFile)
+            }
+            // 同步 书架
+            val userBookshelfFile = File(getWorkDir("storage", "data", userNameSpace, "bookshelf.json"))
+            if (userBookshelfFile.exists()) {
+                val bookshelfFile = File(descDir + File.separator + "bookshelf.json")
+                bookshelfFile.deleteRecursively()
+                userBookshelfFile.copyRecursively(bookshelfFile)
+            }
+            // 同步 书籍分组
+            val userBookGroupFile = File(getWorkDir("storage", "data", userNameSpace, "bookGroup.json"))
+            if (userBookGroupFile.exists()) {
+                val bookGroupFile = File(descDir + File.separator + "bookGroup.json")
+                bookGroupFile.deleteRecursively()
+                userBookGroupFile.copyRecursively(bookGroupFile)
+            }
+            // 同步 RSS订阅
+            val userRssSourcesFile = File(getWorkDir("storage", "data", userNameSpace, "rssSources.json"))
+            if (userRssSourcesFile.exists()) {
+                val rssSourcesFile = File(descDir + File.separator + "rssSources.json")
+                rssSourcesFile.deleteRecursively()
+                userRssSourcesFile.copyRecursively(rssSourcesFile)
+            }
+            // 同步 替换规则
+            val userReplaceRuleFile = File(getWorkDir("storage", "data", userNameSpace, "replaceRule.json"))
+            if (userReplaceRuleFile.exists()) {
+                val replaceRuleFile = File(descDir + File.separator + "replaceRule.json")
+                replaceRuleFile.deleteRecursively()
+                userReplaceRuleFile.copyRecursively(replaceRuleFile)
+            }
+            // 同步 书签
+            val userBookmarkFile = File(getWorkDir("storage", "data", userNameSpace, "bookmark.json"))
+            if (userBookmarkFile.exists()) {
+                val bookmarkFile = File(descDir + File.separator + "bookmark.json")
+                bookmarkFile.deleteRecursively()
+                userBookmarkFile.copyRecursively(bookmarkFile)
+            }
+            // 压缩打包
+            val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
+            val targetZip = File(legadoHome + File.separator + "backup" + today + ".zip")
+            if (!targetZip.parentFile.exists()) {
+                targetZip.parentFile.mkdirs()
+            }
+            return descDirFile.zip(targetZip.toString())
         } catch(e: Exception) {
             e.printStackTrace()
-        }  finally {
+        } finally {
             descDirFile.deleteRecursively()
         }
         return false;
@@ -2345,9 +2350,10 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (webdav && !userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (webdav && !userInfo.enable_webdav && !isAdmin) {
                 return returnData.setErrorMsg("未开启 Webdav 功能")
-            } else if (!userInfo.enable_local_store) {
+            } else if (!userInfo.enable_local_store && !isAdmin) {
                 return returnData.setErrorMsg("未开启本地书仓功能")
             }
         }
@@ -2397,7 +2403,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_local_store) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_local_store && !isAdmin) {
                 return returnData.setErrorMsg("未开启本地书仓功能")
             }
         }
@@ -2450,7 +2457,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_local_store) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_local_store && !isAdmin) {
                 return returnData.setErrorMsg("未开启本地书仓功能")
             }
         }
@@ -2464,6 +2472,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         if (path.isEmpty()) {
             path = "/"
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path
         }
         var home = getWorkDir("storage", "localStore")
         val homeFile = File(home)
@@ -2509,7 +2520,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 context.success(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"))
                 return
             }
-            if (!userInfo.enable_local_store) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_local_store && !isAdmin) {
                 context.success(returnData.setErrorMsg("未开启本地书仓功能"))
                 return
             }
@@ -2548,7 +2560,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_local_store) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_local_store && !isAdmin) {
                 return returnData.setErrorMsg("未开启本地书仓功能")
             }
         }
@@ -2586,7 +2599,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_local_store) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_local_store && !isAdmin) {
                 return returnData.setErrorMsg("未开启本地书仓功能")
             }
         }

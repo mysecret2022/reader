@@ -243,6 +243,9 @@ export default {
             this.showBookInfo = res.data.data;
             if (isAdd) {
               this.$root.$children[0].loadBookShelf(true);
+              if (this.$root.$children[0].triggerBackgroundSourceSearch) {
+                this.$root.$children[0].triggerBackgroundSourceSearch(res.data.data || book);
+              }
             } else {
               this.$store.commit("updateShelfBook", res.data.data);
             }

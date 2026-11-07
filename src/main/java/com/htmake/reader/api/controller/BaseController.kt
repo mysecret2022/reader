@@ -288,13 +288,14 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         if (user == null) {
             return mutableMapOf()
         }
+        val isAdminUser = user.is_admin || user.username.equals("admin", ignoreCase = true)
         return mutableMapOf(
             "username" to user.username,
             "lastLoginAt" to user.last_login_at,
             "accessToken" to user.username + ":" + user.token,
-            "enableWebdav" to user.enable_webdav,
-            "enableLocalStore" to user.enable_local_store,
-            "isAdmin" to user.is_admin,
+            "enableWebdav" to (user.enable_webdav || isAdminUser),
+            "enableLocalStore" to (user.enable_local_store || isAdminUser),
+            "isAdmin" to isAdminUser,
             "createdAt" to user.created_at
         )
     }

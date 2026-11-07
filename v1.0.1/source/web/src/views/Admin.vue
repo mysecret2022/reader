@@ -542,7 +542,223 @@
           </div>
         </section>
 
-        <!-- 5. 本地书仓维护 -->
+        <!-- 5. 云同步与定时备份 (参考 Firefly-Panel 架构) -->
+        <section v-if="activeTab === 'cloudSync'" class="tab-pane">
+          <div class="pane-header-group">
+            <div>
+              <h2 class="pane-title" style="margin-bottom: 4px;">
+                <i class="el-icon-cloudy"></i> 云同步与数据备份治理
+              </h2>
+              <span class="pane-subtitle"
+                >支持将书源、书架、替换规则及全站数据自动增量同步与全量打包备份至 GitHub 仓库与 WebDAV 云盘</span
+              >
+            </div>
+            <div class="pane-actions">
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-check"
+                :loading="savingCloudSync"
+                @click="submitCloudSyncConfig"
+              >
+                保存云同步配置
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 同步运行状态与立即执行操作面板 -->
+          <div class="dashboard-box" style="margin-bottom: 20px;">
+            <div class="box-header">
+              <div class="box-title-group">
+                <h3 class="box-title">
+                  <i class="el-icon-odometer"></i> 同步状态与快速调度
+                </h3>
+              </div>
+              <div class="header-tools">
+                <el-button
+                  size="small"
+                  type="success"
+                  icon="el-icon-refresh"
+                  :loading="triggeringSync"
+                  @click="manualTriggerSync"
+                >
+                  立即执行增量同步
+                </el-button>
+                <el-button
+                  size="small"
+                  type="warning"
+                  icon="el-icon-box"
+                  :loading="triggeringBackup"
+                  @click="manualTriggerBackup"
+                >
+                  立即执行全量备份
+                </el-button>
+              </div>
+            </div>
+
+            <div class="cloud-status-grid">
+              <div class="cloud-status-card">
+                <div class="status-meta-title">增量同步状态</div>
+                <div class="status-meta-time">
+                  上次执行：{{ cloudSyncConfig.lastIncrementalSyncTime || "尚未执行" }}
+                </div>
+                <div class="status-meta-detail">
+                  <i class="el-icon-info"></i> {{ cloudSyncConfig.lastIncrementalStatus || "无状态记录" }}
+                </div>
+              </div>
+              <div class="cloud-status-card">
+                <div class="status-meta-title">全量备份状态</div>
+                <div class="status-meta-time">
+                  上次执行：{{ cloudSyncConfig.lastFullBackupTime || "尚未执行" }}
+                </div>
+                <div class="status-meta-detail">
+                  <i class="el-icon-info"></i> {{ cloudSyncConfig.lastFullStatus || "无状态记录" }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 云同步与定时策略配置表单 -->
+          <div class="dashboard-box config-box">
+            <el-form :model="cloudSyncConfig" label-width="140px" size="small">
+              <h4 class="form-section-title"><i class="el-icon-timer"></i> 自动化策略与定时调度</h4>
+              <el-row :gutter="20">
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="开启云端自动同步">
+                    <el-switch
+                      v-model="cloudSyncConfig.enabled"
+                      active-text="启用调度"
+                      inactive-text="关闭"
+                    ></el-switch>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="备份存储目标渠道">
+                    <el-select v-model="cloudSyncConfig.target" style="width: 100%;">
+                      <el-option label="同时备份到 GitHub 与 WebDAV" value="both"></el-option>
+                      <el-option label="仅备份到 GitHub 仓库" value="github"></el-option>
+                      <el-option label="仅备份到 WebDAV 云盘" value="webdav"></el-option>
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="增量同步间隔">
+                    <el-select v-model="cloudSyncConfig.incrementalIntervalMinutes" style="width: 100%;">
+                      <el-option label="每 15 分钟" :value="15"></el-option>
+                      <el-option label="每 30 分钟 (推荐)" :value="30"></el-option>
+                      <el-option label="每 1 小时" :value="60"></el-option>
+                      <el-option label="每 6 小时" :value="360"></el-option>
+                      <el-option label="每 12 小时" :value="720"></el-option>
+                      <el-option label="关闭增量定时 (仅手动)" :value="0"></el-option>
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="全量备份间隔">
+                    <el-select v-model="cloudSyncConfig.fullBackupIntervalHours" style="width: 100%;">
+                      <el-option label="每天打包全量备份 (推荐)" :value="24"></el-option>
+                      <el-option label="每 3 天打包一次" :value="72"></el-option>
+                      <el-option label="每周打包一次" :value="168"></el-option>
+                      <el-option label="关闭全量定时 (仅手动)" :value="0"></el-option>
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-divider></el-divider>
+
+              <!-- GitHub 配置 -->
+              <h4 class="form-section-title"><i class="el-icon-link"></i> GitHub 仓库存储配置</h4>
+              <el-row :gutter="20">
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="仓库所有者 (Owner)">
+                    <el-input
+                      v-model="cloudSyncConfig.githubOwner"
+                      placeholder="例如: username 或 org"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="仓库名称 (Repo)">
+                    <el-input
+                      v-model="cloudSyncConfig.githubRepo"
+                      placeholder="例如: reader-backup"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="备份分支 (Branch)">
+                    <el-input
+                      v-model="cloudSyncConfig.githubBranch"
+                      placeholder="默认: main"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="远端存放目录">
+                    <el-input
+                      v-model="cloudSyncConfig.githubPath"
+                      placeholder="默认: reader-backup"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="GitHub 访问令牌 (Token)">
+                    <el-input
+                      v-model="cloudSyncConfig.githubToken"
+                      type="password"
+                      show-password
+                      placeholder="填入具备 repo 读写权限的 Personal Access Token (ghp_...)"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-divider></el-divider>
+
+              <!-- WebDAV 配置 -->
+              <h4 class="form-section-title"><i class="el-icon-folder-opened"></i> WebDAV 云盘存储配置</h4>
+              <el-row :gutter="20">
+                <el-col :xs="24">
+                  <el-form-item label="WebDAV 服务器地址">
+                    <el-input
+                      v-model="cloudSyncConfig.webdavUrl"
+                      placeholder="例如: https://dav.example.com 或 坚果云地址"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="WebDAV 账号">
+                    <el-input
+                      v-model="cloudSyncConfig.webdavUsername"
+                      placeholder="请输入 WebDAV 登录账号"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item label="WebDAV 密码 / 授权码">
+                    <el-input
+                      v-model="cloudSyncConfig.webdavPassword"
+                      type="password"
+                      show-password
+                      placeholder="请输入应用密码或登录密码"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="远端备份根路径">
+                    <el-input
+                      v-model="cloudSyncConfig.webdavRemotePath"
+                      placeholder="例如: /reader-backup"
+                    ></el-input>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
+          </div>
+        </section>
+
+        <!-- 6. 本地书仓维护 -->
         <section v-if="activeTab === 'storage'" class="tab-pane">
           <h2 class="pane-title">本地书仓维护</h2>
           <div class="storage-card">
@@ -707,6 +923,7 @@ export default {
         { index: "overview", title: "系统状态总览", icon: "el-icon-data-analysis" },
         { index: "users", title: "用户权限治理", icon: "el-icon-user-solid" },
         { index: "sources", title: "书源健康管理", icon: "el-icon-collection" },
+        { index: "cloudSync", title: "云同步与备份", icon: "el-icon-cloudy" },
         { index: "logs", title: "诊断运行日志", icon: "el-icon-document" },
         { index: "storage", title: "本地书仓维护", icon: "el-icon-folder" }
       ],
@@ -745,6 +962,28 @@ export default {
         defaultVoice: "zh-CN-XiaoxiaoNeural",
         concurrentSearchCount: 24,
         version: "1.0.1"
+      },
+      savingCloudSync: false,
+      triggeringSync: false,
+      triggeringBackup: false,
+      cloudSyncConfig: {
+        enabled: false,
+        target: "both",
+        incrementalIntervalMinutes: 30,
+        fullBackupIntervalHours: 24,
+        githubOwner: "",
+        githubRepo: "",
+        githubBranch: "main",
+        githubPath: "reader-backup",
+        githubToken: "",
+        webdavUrl: "",
+        webdavUsername: "",
+        webdavPassword: "",
+        webdavRemotePath: "/reader-backup",
+        lastIncrementalSyncTime: "",
+        lastIncrementalStatus: "",
+        lastFullBackupTime: "",
+        lastFullStatus: ""
       }
     };
   },
@@ -806,12 +1045,15 @@ export default {
         this.fetchSources();
       } else if (index === "overview") {
         this.fetchSystemConfig();
+      } else if (index === "cloudSync") {
+        this.fetchCloudSyncConfig();
       }
     },
     refreshAllData() {
       this.fetchUsers();
       this.fetchSources();
       this.fetchSystemConfig();
+      this.fetchCloudSyncConfig();
       this.$message.success("数据与系统状态已全部刷新");
     },
     async fetchSystemConfig() {
@@ -822,6 +1064,64 @@ export default {
         }
       } catch (err) {
         //
+      }
+    },
+    async fetchCloudSyncConfig() {
+      try {
+        const res = await Axios.get("/getCloudSyncConfig");
+        if (res.data.isSuccess && res.data.data) {
+          this.cloudSyncConfig = Object.assign({}, this.cloudSyncConfig, res.data.data);
+        }
+      } catch (err) {
+        //
+      }
+    },
+    async submitCloudSyncConfig() {
+      this.savingCloudSync = true;
+      try {
+        const res = await Axios.post("/saveCloudSyncConfig", this.cloudSyncConfig);
+        if (res.data.isSuccess) {
+          this.$message.success("云同步配置保存成功！");
+          this.cloudSyncConfig = Object.assign({}, this.cloudSyncConfig, res.data.data);
+        } else {
+          this.$message.error(res.data.errorMsg || "保存云同步配置失败");
+        }
+      } catch (err) {
+        this.$message.error("保存云同步配置发生异常");
+      } finally {
+        this.savingCloudSync = false;
+      }
+    },
+    async manualTriggerSync() {
+      this.triggeringSync = true;
+      try {
+        const res = await Axios.post("/triggerCloudSync");
+        if (res.data.isSuccess) {
+          this.$message.success(`增量同步执行完成：${res.data.data}`);
+          this.fetchCloudSyncConfig();
+        } else {
+          this.$message.error(res.data.errorMsg || "增量同步失败");
+        }
+      } catch (err) {
+        this.$message.error("触发增量同步发生网络异常");
+      } finally {
+        this.triggeringSync = false;
+      }
+    },
+    async manualTriggerBackup() {
+      this.triggeringBackup = true;
+      try {
+        const res = await Axios.post("/triggerCloudBackup");
+        if (res.data.isSuccess) {
+          this.$message.success(`全量备份打包上传成功：${res.data.data}`);
+          this.fetchCloudSyncConfig();
+        } else {
+          this.$message.error(res.data.errorMsg || "全量备份失败");
+        }
+      } catch (err) {
+        this.$message.error("触发全量备份发生网络异常");
+      } finally {
+        this.triggeringBackup = false;
       }
     },
     async submitSystemConfig() {
@@ -1496,6 +1796,48 @@ export default {
 .storage-header i {
   font-size: 36px;
   color: #10b981;
+}
+
+/* 云同步与备份专属样式 */
+.cloud-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.cloud-status-card {
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.theme-dark .cloud-status-card {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.status-meta-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.theme-dark .status-meta-title {
+  color: #f1f5f9;
+}
+
+.status-meta-time {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.status-meta-detail {
+  font-size: 13px;
+  color: #0284c7;
+  word-break: break-all;
 }
 
 /* 移动端与自适应优化 */

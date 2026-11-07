@@ -40,7 +40,7 @@
         <div
           class="source-item"
           v-for="(searchBook, index) in displayedBookSource"
-          :class="{ selected: isSelected(searchBook) }"
+          :class="{ selected: isSelected(searchBook), 'switching': switchingSourceUrl === searchBook.bookUrl }"
           :key="index"
           @click="changeBookSource(searchBook)"
           ref="source"
@@ -48,9 +48,14 @@
           <div class="source-title">
             <div class="source-name">
               {{ searchBook.originName }}
+              <span v-if="isSelected(searchBook)" class="source-badge current-badge">【当前】</span>
+              <span v-else-if="isHistoricalSource(searchBook)" class="source-badge used-badge">【已使用】</span>
             </div>
             <div class="source-time">
-              {{ searchBook.time ? "⏱ " + searchBook.time + "ms" : "" }}
+              <span v-if="switchingSourceUrl === searchBook.bookUrl" style="color: #409EFF; font-weight: bold;">
+                <i class="el-icon-loading"></i> 正在换源...
+              </span>
+              <span v-else>{{ searchBook.time ? "⏱ " + searchBook.time + "ms" : "" }}</span>
             </div>
           </div>
           <div class="source-latest-chapter">
@@ -76,7 +81,8 @@ export default {
       bookSourceGroup: "",
       bookSourceGroupIndexMap: {},
       loading: false,
-      loadingMore: false
+      loadingMore: false,
+      switchingSourceUrl: ""
     };
   },
   props: ["visible"],
@@ -157,6 +163,13 @@ export default {
     isSelected(searchBook) {
       return searchBook.bookUrl == this.$store.getters.readingBook.bookUrl;
     },
+    isHistoricalSource(searchBook) {
+      const book = this.$store.getters.readingBook;
+      if (!book || !book.historicalSources || !Array.isArray(book.historicalSources)) {
+        return false;
+      }
+      return book.historicalSources.includes(searchBook.origin);
+    },
     getBookSource(refresh) {
       Axios.post(this.api + `/getAvailableBookSource`, {
         url: this.$store.getters.readingBook.bookUrl,
@@ -187,6 +200,10 @@ export default {
       );
     },
     async changeBookSource(searchBook) {
+      if (this.isSelected(searchBook)) {
+        this.$message.info("当前已在使用该书源");
+        return;
+      }
       const isInShelf = await this.$root.$children[0].isInShelf(
         this.$store.getters.readingBook,
         "加入书架之后才能切换书源, 是否加入书架?"
@@ -194,6 +211,12 @@ export default {
       if (!isInShelf) {
         return;
       }
+      this.switchingSourceUrl = searchBook.bookUrl;
+      const loadingNotice = this.$message({
+        message: `正在切换至【${searchBook.originName}】并校准最新目录...`,
+        type: "info",
+        duration: 0
+      });
       Axios.post(this.api + `/setBookSource`, {
         bookUrl: this.$store.getters.readingBook.bookUrl,
         newUrl: searchBook.bookUrl,
@@ -202,8 +225,10 @@ export default {
         author: this.$store.getters.readingBook.author
       }).then(
         res => {
+          this.switchingSourceUrl = "";
+          loadingNotice.close();
           if (res.data.isSuccess) {
-            this.$message.info("换源成功");
+            this.$message.success(`换源成功！已切至【${searchBook.originName}】`);
             var book = Object.assign({}, this.$store.getters.readingBook);
             book.bookUrl = searchBook.bookUrl;
             book.origin = searchBook.origin;
@@ -234,9 +259,13 @@ export default {
                 //
               }
             );
+          } else {
+            this.$message.error(res.data.errorMsg || "换源失败");
           }
         },
         error => {
+          this.switchingSourceUrl = "";
+          loadingNotice.close();
           this.$message.error("换源失败 " + (error && error.toString()));
           throw error;
         }
@@ -469,7 +498,26 @@ export default {
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
 
+            .source-badge {
+              font-size: 11px;
+              padding: 1px 4px;
+              border-radius: 4px;
+              margin-left: 6px;
+              line-height: 14px;
+            }
+            .current-badge {
+              color: #EB4259;
+              background: rgba(235, 66, 89, 0.12);
+              font-weight: bold;
+            }
+            .used-badge {
+              color: #e6a23c;
+              background: rgba(230, 162, 60, 0.15);
+              font-weight: bold;
+            }
           }
           .source-time {
             float: right;

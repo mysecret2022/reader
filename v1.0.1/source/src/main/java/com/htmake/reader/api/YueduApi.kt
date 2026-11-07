@@ -22,6 +22,7 @@ import com.htmake.reader.api.controller.UserController
 import com.htmake.reader.api.controller.WebdavController
 import com.htmake.reader.api.controller.ReplaceRuleController
 import com.htmake.reader.api.controller.BookmarkController
+import com.htmake.reader.api.controller.CloudSyncController
 import com.htmake.reader.utils.error
 import com.htmake.reader.utils.success
 import com.htmake.reader.utils.getStorage
@@ -146,6 +147,13 @@ class YueduApi : RestVerticle() {
         }
         val replaceRuleController = ReplaceRuleController(coroutineContext)
         val bookmarkController = BookmarkController(coroutineContext)
+        val cloudSyncController = CloudSyncController(coroutineContext)
+
+        /** 云同步与备份模块 */
+        router.get("/reader3/getCloudSyncConfig").coroutineHandler { cloudSyncController.getCloudSyncConfig(it) }
+        router.post("/reader3/saveCloudSyncConfig").coroutineHandler { cloudSyncController.saveCloudSyncConfig(it) }
+        router.post("/reader3/triggerCloudSync").coroutineHandler { cloudSyncController.triggerCloudSync(it) }
+        router.post("/reader3/triggerCloudBackup").coroutineHandler { cloudSyncController.triggerCloudBackup(it) }
 
         /** 书源模块 */
         router.post("/reader3/saveBookSource").coroutineHandler { bookSourceController.saveBookSource(it) }
@@ -596,6 +604,53 @@ class YueduApi : RestVerticle() {
                 logger.info("不活跃用户自动清理结束")
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    private var lastIncrementalSyncTimestamp: Long = 0L
+    private var lastFullBackupTimestamp: Long = 0L
+
+    /**
+     * 云同步与定时备份轮询调度任务 (每 5 分钟检查一次配置的定时策略)
+     */
+    @Scheduled(cron = "0 0/5 * * * ?")
+    fun cloudSyncSchedulerJob() {
+        launch(Dispatchers.IO) {
+            try {
+                val configJson = asJsonObject(getStorage("data", "cloudSyncConfig")) ?: return@launch
+                val enabled = configJson.getBoolean("enabled") ?: false
+                if (!enabled) return@launch
+
+                val now = System.currentTimeMillis()
+                val incrementalMinutes = configJson.getInteger("incrementalIntervalMinutes") ?: 30
+                val fullHours = configJson.getInteger("fullBackupIntervalHours") ?: 24
+
+                val controller = CloudSyncController(coroutineContext)
+
+                // 检查增量同步间隔 (大于 0 且到达时间)
+                if (incrementalMinutes > 0) {
+                    val intervalMillis = incrementalMinutes * 60L * 1000L
+                    if (now - lastIncrementalSyncTimestamp >= intervalMillis) {
+                        logger.info("触发自动云端增量同步...")
+                        val res = controller.executeIncrementalSync()
+                        lastIncrementalSyncTimestamp = now
+                        logger.info("自动云端增量同步结果: {}", res)
+                    }
+                }
+
+                // 检查全量备份间隔 (大于 0 且到达时间)
+                if (fullHours > 0) {
+                    val intervalMillis = fullHours * 3600L * 1000L
+                    if (now - lastFullBackupTimestamp >= intervalMillis) {
+                        logger.info("触发自动云端全量打包备份...")
+                        val res = controller.executeFullBackup()
+                        lastFullBackupTimestamp = now
+                        logger.info("自动云端全量打包备份结果: {}", res)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error("cloudSyncSchedulerJob error", e)
             }
         }
     }

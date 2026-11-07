@@ -50,6 +50,7 @@ data class Book(
        var originOrder: Int = 0,                   //书源排序
         var useReplaceRule: Boolean = true,         // 正文使用净化替换规则
         var variable: String? = null,                // 自定义书籍变量信息(用于书源规则检索书籍信息)
+        var historicalSources: ArrayList<String>? = null, // 换源历史记录列表 (存放曾使用过的 bookSourceUrl)
         var readConfig: ReadConfig? = null
     ) : BaseBook {
 

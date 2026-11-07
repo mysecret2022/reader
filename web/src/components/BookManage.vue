@@ -65,7 +65,7 @@
             <span>浏览器缓存： {{ scope.row.localCacheCount }} 章</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100px">
+        <el-table-column label="操作" width="140px">
           <template slot-scope="scope">
             <el-button
               class="text-button"
@@ -73,6 +73,15 @@
               type="text"
               @click="editBook(scope.row)"
               >编辑</el-button
+            >
+            <el-button
+              class="text-button"
+              size="medium"
+              type="text"
+              style="margin-left: 0; color: #E6A23C;"
+              title="在线从各书源匹配并修改封面"
+              @click="openCoverPicker(scope.row)"
+              >封面</el-button
             >
             <el-button
               class="text-button"
@@ -160,6 +169,63 @@
       <span class="check-tip">已选择 {{ manageBookSelection.length }} 个</span>
       <el-button size="medium" @click="cancel">取消</el-button>
     </div>
+
+    <!-- 弹窗：从在线书源选择并替换书封面 -->
+    <el-dialog
+      title="修改书籍封面"
+      :visible.sync="showCoverPicker"
+      width="560px"
+      append-to-body
+      :before-close="() => (showCoverPicker = false)"
+    >
+      <div v-if="currentCoverBook">
+        <div style="margin-bottom: 12px; font-size: 14px;">
+          当前书籍：<strong style="color: #409EFF;">{{ currentCoverBook.name }}</strong> ({{ currentCoverBook.author }})
+        </div>
+        <div style="margin-bottom: 15px; display: flex; gap: 8px;">
+          <el-input
+            v-model="customCoverInput"
+            size="small"
+            placeholder="自定义图片链接 http(s)://... 或从下方书源选择"
+          ></el-input>
+          <el-button
+            type="primary"
+            size="small"
+            icon="el-icon-check"
+            @click="applyCover(customCoverInput)"
+          >
+            直接应用
+          </el-button>
+        </div>
+        <div style="font-size: 13px; color: #888; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <span>在线书源封面候选项 (点击即可设为新封面)：</span>
+          <el-button
+            type="text"
+            size="mini"
+            icon="el-icon-refresh"
+            :loading="loadingCovers"
+            @click="fetchBookCovers(currentCoverBook)"
+          >
+            重新拉取
+          </el-button>
+        </div>
+        <div class="cover-grid" v-loading="loadingCovers">
+          <div
+            v-for="(cover, idx) in candidateCovers"
+            :key="idx"
+            class="cover-card"
+            :class="{ active: currentCoverBook.customCoverUrl === cover.url || currentCoverBook.coverUrl === cover.url }"
+            @click="applyCover(cover.url)"
+          >
+            <img :src="cover.url" class="cover-img" @error="onCoverImgError(cover)" />
+            <div class="cover-source-tag" :title="cover.sourceName">{{ cover.sourceName }}</div>
+          </div>
+          <div v-if="!loadingCovers && candidateCovers.length === 0" style="grid-column: 1/-1; text-align: center; color: #999; padding: 20px;">
+            暂未从书源匹配到高清封面，您可以直接在上方输入图片链接
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </el-dialog>
 </template>
 
@@ -179,7 +245,12 @@ export default {
   data() {
     return {
       bookList: [],
-      manageBookSelection: []
+      manageBookSelection: [],
+      showCoverPicker: false,
+      currentCoverBook: null,
+      customCoverInput: "",
+      loadingCovers: false,
+      candidateCovers: []
     };
   },
   props: ["show"],
@@ -339,6 +410,80 @@ export default {
       eventBus.$emit("editBook", book, false, () => {
         this.loadBookCacheInfo();
       });
+    },
+    openCoverPicker(book) {
+      this.currentCoverBook = book;
+      this.customCoverInput = book.customCoverUrl || book.coverUrl || "";
+      this.candidateCovers = [];
+      this.showCoverPicker = true;
+      this.fetchBookCovers(book);
+    },
+    fetchBookCovers(book) {
+      this.loadingCovers = true;
+      Axios.post(this.api + "/getAvailableBookSource", {
+        url: book.bookUrl,
+        refresh: 0
+      })
+        .then(res => {
+          this.loadingCovers = false;
+          if (res.data.isSuccess && Array.isArray(res.data.data)) {
+            const covers = [];
+            const seen = new Set();
+            if (book.coverUrl && !seen.has(book.coverUrl)) {
+              seen.add(book.coverUrl);
+              covers.push({
+                url: book.coverUrl,
+                sourceName: book.originName || "当前书源"
+              });
+            }
+            res.data.data.forEach(item => {
+              if (item.coverUrl && item.coverUrl.startsWith("http") && !seen.has(item.coverUrl)) {
+                seen.add(item.coverUrl);
+                covers.push({
+                  url: item.coverUrl,
+                  sourceName: item.originName || "书源候选项"
+                });
+              }
+            });
+            this.candidateCovers = covers;
+          }
+        })
+        .catch(() => {
+          this.loadingCovers = false;
+        });
+    },
+    onCoverImgError(cover) {
+      const idx = this.candidateCovers.findIndex(c => c.url === cover.url);
+      if (idx >= 0) {
+        this.candidateCovers.splice(idx, 1);
+      }
+    },
+    applyCover(coverUrl) {
+      if (!coverUrl) {
+        this.$message.error("请选择或输入封面链接");
+        return;
+      }
+      const updatedBook = Object.assign({}, this.currentCoverBook, {
+        customCoverUrl: coverUrl,
+        coverUrl: coverUrl
+      });
+      Axios.post(this.api + "/saveBook", updatedBook).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("书籍封面已更新成功！");
+            this.showCoverPicker = false;
+            this.currentCoverBook.customCoverUrl = coverUrl;
+            this.currentCoverBook.coverUrl = coverUrl;
+            this.loadBookCacheInfo();
+            this.$root.$children[0].loadBookShelf();
+          } else {
+            this.$message.error(res.data.errorMsg || "保存封面失败");
+          }
+        },
+        err => {
+          this.$message.error("保存封面异常: " + err.toString());
+        }
+      );
     },
     setBookGroup(book) {
       this.$store.commit("setShowBookInfo", book);
@@ -626,6 +771,49 @@ export default {
 .source-container {
   .text-button {
     padding: 3px 5px;
+  }
+}
+.cover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.cover-card {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: center;
+  transition: all 0.2s ease;
+  background: #f8fafc;
+  padding: 4px;
+
+  &:hover {
+    border-color: #409EFF;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  }
+  &.active {
+    border-color: #67C23A;
+    background: rgba(103, 194, 58, 0.08);
+  }
+  .cover-img {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+  }
+  .cover-source-tag {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 </style>

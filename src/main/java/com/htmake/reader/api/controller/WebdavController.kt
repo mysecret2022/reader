@@ -217,7 +217,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             return false
         }
 
-        if (!userInfo.enable_webdav) {
+        val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+        if (!userInfo.enable_webdav && !isAdmin) {
             logger.info("user: {} enable_webdav: false", userInfo.username)
             return false
         }
@@ -522,7 +523,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_webdav && !isAdmin) {
                 return returnData.setErrorMsg("未开启webdav功能")
             }
         }
@@ -537,6 +539,9 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
         }
         if (path.isEmpty()) {
             path = "/"
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path
         }
         var home = getUserWebdavHome(context)
         var file = File(home + path)
@@ -574,7 +579,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
                 context.success(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"))
                 return
             }
-            if (!userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_webdav && !isAdmin) {
                 context.success(returnData.setErrorMsg("未开启webdav功能"))
                 return
             }
@@ -618,7 +624,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_webdav && !isAdmin) {
                 return returnData.setErrorMsg("未开启webdav功能")
             }
         }
@@ -668,7 +675,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_webdav && !isAdmin) {
                 return returnData.setErrorMsg("未开启webdav功能")
             }
         }
@@ -704,7 +712,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_webdav && !isAdmin) {
                 return returnData.setErrorMsg("未开启webdav功能")
             }
         }
@@ -733,7 +742,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_webdav && !isAdmin) {
                 return returnData.setErrorMsg("未开启webdav功能")
             }
         }
@@ -748,6 +758,9 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
         }
         if (path.isEmpty()) {
             path = "/"
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path
         }
         var ext = getFileExt(path)
         if (ext != "zip") {
@@ -776,7 +789,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_webdav) {
+            val isAdmin = userInfo.is_admin || userInfo.username.equals("admin", ignoreCase = true)
+            if (!userInfo.enable_webdav && !isAdmin) {
                 return returnData.setErrorMsg("未开启webdav功能")
             }
         }
@@ -784,9 +798,6 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
 
         val userNameSpace = getUserNameSpace(context)
         var latestZipFilePath = bookController.getLastBackFileFromWebdav(userNameSpace)
-        if (latestZipFilePath == null) {
-            return returnData.setErrorMsg("请先使用阅读App备份到webdav")
-        }
         if (!bookController.saveToWebdav(latestZipFilePath, userNameSpace)) {
             return returnData.setErrorMsg("备份失败")
         }
