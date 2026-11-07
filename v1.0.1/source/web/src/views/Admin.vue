@@ -6,7 +6,7 @@
         <div class="brand-logo" @click="$router.push('/')">
           <i class="el-icon-reading"></i>
           <span class="brand-title">Reader</span>
-          <span class="brand-badge">管理控制台</span>
+          <span class="brand-badge">控制台 v1.0.1</span>
         </div>
       </div>
       <div class="header-right">
@@ -35,78 +35,222 @@
     <!-- 主体区域：侧边菜单 + 内容视窗 -->
     <div class="admin-body">
       <aside class="admin-sidebar">
-        <el-menu
-          :default-active="activeTab"
-          @select="handleTabSelect"
-          class="admin-menu"
-          :background-color="isNight ? '#1e293b' : '#ffffff'"
-          :text-color="isNight ? '#cbd5e1' : '#475569'"
-          :active-text-color="'#3b82f6'"
-        >
-          <el-menu-item index="overview">
-            <i class="el-icon-data-analysis"></i>
-            <span slot="title">系统状态总览</span>
-          </el-menu-item>
-          <el-menu-item index="users">
-            <i class="el-icon-user-solid"></i>
-            <span slot="title">用户权限治理</span>
-          </el-menu-item>
-          <el-menu-item index="sources">
-            <i class="el-icon-collection"></i>
-            <span slot="title">书源健康管理</span>
-          </el-menu-item>
-          <el-menu-item index="logs">
-            <i class="el-icon-document"></i>
-            <span slot="title">诊断运行日志</span>
-          </el-menu-item>
-          <el-menu-item index="storage">
-            <i class="el-icon-folder"></i>
-            <span slot="title">本地书仓维护</span>
-          </el-menu-item>
-        </el-menu>
+        <div class="sidebar-nav-list">
+          <div
+            v-for="item in navMenuItems"
+            :key="item.index"
+            class="sidebar-nav-item"
+            :class="{ active: activeTab === item.index }"
+            @click="handleTabSelect(item.index)"
+          >
+            <i :class="item.icon" class="nav-icon"></i>
+            <span class="nav-title">{{ item.title }}</span>
+          </div>
+        </div>
       </aside>
 
       <main class="admin-main">
-        <!-- 1. 系统概览 -->
+        <!-- 1. 系统概览与配置管理 -->
         <section v-if="activeTab === 'overview'" class="tab-pane">
-          <h2 class="pane-title">系统状态总览</h2>
+          <h2 class="pane-title">系统状态总览与快速控制</h2>
+          
+          <!-- 4个核心指标卡片（支持点击互动与快捷修改） -->
           <div class="stat-cards">
-            <div class="stat-card">
-              <div class="stat-icon bg-blue"><i class="el-icon-user"></i></div>
+            <!-- 1. 用户总数与配额卡片 -->
+            <div
+              class="stat-card clickable-card"
+              @click="openQuotaDialog"
+              title="点击调整用户上限配额或快速加人"
+            >
+              <div class="stat-icon bg-blue"><i class="el-icon-user-solid"></i></div>
               <div class="stat-info">
-                <div class="stat-value">{{ userList.length }}</div>
-                <div class="stat-label">注册用户总数</div>
+                <div class="stat-value">
+                  {{ userList.length }}
+                  <span class="stat-unit">/ {{ systemConfig.userLimit }} 人</span>
+                </div>
+                <div class="stat-label">
+                  注册用户配额 <i class="el-icon-edit-outline"></i>
+                </div>
               </div>
+              <div class="card-action-tag">修改配额</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-icon bg-green">
-                <i class="el-icon-notebook-2"></i>
-              </div>
+
+            <!-- 2. 书源总数卡片 -->
+            <div
+              class="stat-card clickable-card"
+              @click="openSourceBatchDialog"
+              title="点击进行书源批量操作与健康治理"
+            >
+              <div class="stat-icon bg-green"><i class="el-icon-notebook-2"></i></div>
               <div class="stat-info">
-                <div class="stat-value">{{ bookSourceCount }}</div>
-                <div class="stat-label">已配置书源</div>
+                <div class="stat-value">
+                  {{ bookSourceCount }}
+                  <span class="stat-unit">个可用</span>
+                </div>
+                <div class="stat-label">
+                  已配置书源 <i class="el-icon-s-operation"></i>
+                </div>
               </div>
+              <div class="card-action-tag">书源批量治理</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-icon bg-purple">
-                <i class="el-icon-reading"></i>
-              </div>
+
+            <!-- 3. 书架总数卡片 -->
+            <div
+              class="stat-card clickable-card"
+              @click="openShelfDialog"
+              title="点击查看与清理全局书架图书"
+            >
+              <div class="stat-icon bg-purple"><i class="el-icon-reading"></i></div>
               <div class="stat-info">
-                <div class="stat-value">{{ shelfCount }}</div>
-                <div class="stat-label">书架书籍总数</div>
+                <div class="stat-value">
+                  {{ shelfCount }}
+                  <span class="stat-unit">本图书</span>
+                </div>
+                <div class="stat-label">
+                  书架书籍总数 <i class="el-icon-folder-opened"></i>
+                </div>
               </div>
+              <div class="card-action-tag">书架整理</div>
             </div>
-            <div class="stat-card">
+
+            <!-- 4. 注册准入与系统状态卡片 -->
+            <div
+              class="stat-card clickable-card"
+              @click="quickToggleRegister"
+              title="点击一键切换用户自主注册开关"
+            >
               <div class="stat-icon bg-orange"><i class="el-icon-cpu"></i></div>
               <div class="stat-info">
-                <div class="stat-value">正常运行</div>
-                <div class="stat-label">后端健康状态</div>
+                <div class="stat-value">
+                  {{ systemConfig.allowRegister ? "开放注册" : "暂停注册" }}
+                </div>
+                <div class="stat-label">
+                  注册准入策略 <i class="el-icon-switch-button"></i>
+                </div>
+              </div>
+              <div class="card-action-tag">
+                {{ systemConfig.allowRegister ? "点击暂停" : "点击开放" }}
               </div>
             </div>
           </div>
 
-          <div class="dashboard-box">
-            <h3 class="box-title">快速维护操作</h3>
+          <!-- 系统参数可编辑配置面板 (管理员可在线修改并保存) -->
+          <div class="dashboard-box config-box">
+            <div class="box-header">
+              <div class="box-title-group">
+                <h3 class="box-title">
+                  <i class="el-icon-s-tools"></i> 核心系统运行参数在线配置
+                </h3>
+                <span class="box-subtitle"
+                  >管理员可直接编辑以下业务策略，点击右侧按钮立即保存生效</span
+                >
+              </div>
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-check"
+                :loading="savingConfig"
+                @click="submitSystemConfig"
+              >
+                保存全局系统配置
+              </el-button>
+            </div>
+
+            <el-form
+              :model="systemConfig"
+              label-width="140px"
+              size="small"
+              class="config-form"
+            >
+              <div class="form-section-title">
+                <i class="el-icon-user"></i> 用户准入与配额策略
+              </div>
+              <div class="form-row-grid">
+                <el-form-item label="开放自主注册">
+                  <el-switch
+                    v-model="systemConfig.allowRegister"
+                    active-text="允许注册"
+                    inactive-text="关闭注册"
+                  ></el-switch>
+                </el-form-item>
+                <el-form-item label="注册专属邀请码">
+                  <el-input
+                    v-model="systemConfig.inviteCode"
+                    placeholder="留空表示注册无需邀请码"
+                    clearable
+                  ></el-input>
+                </el-form-item>
+                <el-form-item label="系统总用户上限">
+                  <el-input-number
+                    v-model="systemConfig.userLimit"
+                    :min="1"
+                    :max="500"
+                    style="width: 100%;"
+                  ></el-input-number>
+                </el-form-item>
+                <el-form-item label="单用户书籍上限">
+                  <el-input-number
+                    v-model="systemConfig.userBookLimit"
+                    :min="10"
+                    :max="1000"
+                    style="width: 100%;"
+                  ></el-input-number>
+                </el-form-item>
+              </div>
+
+              <div class="form-section-title" style="margin-top: 16px;">
+                <i class="el-icon-headset"></i> 阅读检索与微软听书参数
+              </div>
+              <div class="form-row-grid">
+                <el-form-item label="默认听书音色">
+                  <el-select
+                    v-model="systemConfig.defaultVoice"
+                    placeholder="请选择默认朗读音色"
+                    style="width: 100%;"
+                  >
+                    <el-option
+                      label="微软 晓晓 (女声 / 沉浸通用)"
+                      value="zh-CN-XiaoxiaoNeural"
+                    ></el-option>
+                    <el-option
+                      label="微软 云希 (男声 / 影视解说)"
+                      value="zh-CN-YunxiNeural"
+                    ></el-option>
+                    <el-option
+                      label="微软 云扬 (男声 / 专业播音)"
+                      value="zh-CN-YunjianNeural"
+                    ></el-option>
+                    <el-option
+                      label="微软 晓依 (女声 / 抒情轻柔)"
+                      value="zh-CN-XiaoyiNeural"
+                    ></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="多源并发搜索数">
+                  <el-slider
+                    v-model="systemConfig.concurrentSearchCount"
+                    :min="8"
+                    :max="48"
+                    :step="4"
+                    show-input
+                  ></el-slider>
+                </el-form-item>
+                <el-form-item label="章节内容缓存">
+                  <el-switch
+                    v-model="systemConfig.cacheChapterContent"
+                    active-text="开启缓存"
+                    inactive-text="实时拉取"
+                  ></el-switch>
+                </el-form-item>
+              </div>
+            </el-form>
+          </div>
+
+          <!-- 快速运维工具箱 -->
+          <div class="dashboard-box action-toolbox">
+            <h3 class="box-title">
+              <i class="el-icon-magic-stick"></i> 快捷维护运维工具箱
+            </h3>
             <div class="action-buttons">
               <el-button
                 type="warning"
@@ -114,15 +258,31 @@
                 icon="el-icon-refresh-left"
                 @click="refreshAllData"
               >
-                刷新全部数据
+                刷新全部运行指标
+              </el-button>
+              <el-button
+                type="danger"
+                size="small"
+                icon="el-icon-delete-solid"
+                @click="clearSystemCacheFiles"
+              >
+                一键清理音频与解析失效缓存
+              </el-button>
+              <el-button
+                type="success"
+                size="small"
+                icon="el-icon-document-add"
+                @click="openAddUserDialog"
+              >
+                快捷新增用户
               </el-button>
               <el-button
                 type="info"
                 size="small"
-                icon="el-icon-delete"
-                @click="clearBackendCache"
+                icon="el-icon-folder"
+                @click="openLocalStore"
               >
-                清空失效缓存
+                进入本地书仓目录
               </el-button>
             </div>
           </div>
@@ -154,7 +314,11 @@
                 <el-tag
                   size="mini"
                   type="danger"
-                  v-if="scope.row.is_admin || scope.row.isAdmin || scope.row.username === 'admin'"
+                  v-if="
+                    scope.row.is_admin ||
+                      scope.row.isAdmin ||
+                      scope.row.username === 'admin'
+                  "
                   style="margin-left: 6px;"
                   >管理员</el-tag
                 >
@@ -173,15 +337,6 @@
               <template slot-scope="scope">
                 <el-switch
                   v-model="scope.row.enable_webdav"
-                  @change="updateUserPerm(scope.row)"
-                  :disabled="scope.row.username === 'admin'"
-                ></el-switch>
-              </template>
-            </el-table-column>
-            <el-table-column label="允许删除" width="110" align="center">
-              <template slot-scope="scope">
-                <el-switch
-                  v-model="scope.row.enable_delete"
                   @change="updateUserPerm(scope.row)"
                   :disabled="scope.row.username === 'admin'"
                 ></el-switch>
@@ -223,13 +378,13 @@
                 size="small"
                 prefix-icon="el-icon-search"
                 clearable
-                style="width: 240px; margin-right: 10px;"
+                style="width: 220px; margin-right: 10px;"
               ></el-input>
               <el-select
                 v-model="sourceTypeFilter"
                 size="small"
                 placeholder="书源类型"
-                style="width: 140px; margin-right: 10px;"
+                style="width: 130px; margin-right: 10px;"
               >
                 <el-option label="全部类型" value="all"></el-option>
                 <el-option label="包含 @js" value="js"></el-option>
@@ -237,12 +392,20 @@
                 <el-option label="标准纯净源" value="normal"></el-option>
               </el-select>
               <el-button
-                type="danger"
+                type="success"
                 size="small"
-                icon="el-icon-delete"
-                @click="cleanupBrokenSources"
+                icon="el-icon-check"
+                @click="batchToggleSources(true)"
               >
-                清理失效书源
+                全部启用
+              </el-button>
+              <el-button
+                type="warning"
+                size="small"
+                icon="el-icon-close"
+                @click="batchToggleSources(false)"
+              >
+                全部禁用
               </el-button>
             </div>
           </div>
@@ -328,44 +491,53 @@
           <div class="pane-header">
             <h2 class="pane-title">诊断运行日志</h2>
             <div class="log-controls">
-              <el-checkbox v-model="logErrorOnly" @change="fetchLogs"
-                >仅看异常/报错</el-checkbox
-              >
+              <el-switch
+                v-model="logErrorOnly"
+                active-text="仅看异常"
+                @change="fetchLogs"
+                style="margin-right: 14px;"
+              ></el-switch>
               <el-select
                 v-model="logLines"
                 size="small"
                 @change="fetchLogs"
-                style="width: 110px; margin: 0 10px;"
+                style="width: 110px; margin-right: 14px;"
               >
-                <el-option label="100 行" :value="100"></el-option>
-                <el-option label="200 行" :value="200"></el-option>
-                <el-option label="500 行" :value="500"></el-option>
+                <el-option label="最新 50 行" :value="50"></el-option>
+                <el-option label="最新 100 行" :value="100"></el-option>
+                <el-option label="最新 200 行" :value="200"></el-option>
               </el-select>
-              <el-button size="small" icon="el-icon-refresh" @click="fetchLogs"
+              <el-button
+                size="small"
+                icon="el-icon-refresh"
+                @click="fetchLogs"
+                style="margin-right: 10px;"
                 >刷新日志</el-button
               >
               <el-button
                 size="small"
+                type="primary"
                 icon="el-icon-document-copy"
                 @click="copyLogs"
-                >复制</el-button
+                >复制日志</el-button
               >
             </div>
           </div>
 
-          <div class="log-terminal" ref="terminalRef">
-            <div v-if="logs.length === 0" class="log-empty">暂无日志内容</div>
+          <div class="terminal-box" ref="terminalRef">
             <div
               v-for="(line, idx) in logs"
               :key="idx"
               class="log-line"
               :class="{
-                'line-error':
-                  line.includes('ERROR') || line.includes('Exception'),
+                'line-error': line.includes('ERROR') || line.includes('Exception'),
                 'line-warn': line.includes('WARN')
               }"
             >
               {{ line }}
+            </div>
+            <div v-if="logs.length === 0" class="log-empty">
+              暂无运行日志输出
             </div>
           </div>
         </section>
@@ -375,23 +547,22 @@
           <h2 class="pane-title">本地书仓维护</h2>
           <div class="storage-card">
             <div class="storage-header">
-              <i class="el-icon-folder-checked text-green"></i>
+              <i class="el-icon-folder-opened"></i>
               <div>
-                <h3 style="margin: 0 0 6px 0;">书仓目录正常就绪</h3>
-                <p style="margin: 0; color: #64748b; font-size: 13px;">
-                  存储路径：/app/storage/localStore
-                  (已自动自检与修复“路径不存在”)
+                <h3 style="margin: 0 0 6px 0;">书仓自动挂载就绪</h3>
+                <p style="margin: 0; color: #64748b; font-size: 14px;">
+                  系统已自动创建 storage/localStore 目录，放书即读
                 </p>
               </div>
             </div>
-            <div style="margin-top: 18px;">
+            <div style="margin-top: 20px;">
               <el-button
                 type="primary"
                 size="small"
-                icon="el-icon-folder-opened"
+                icon="el-icon-folder"
                 @click="openLocalStore"
               >
-                立即打开书仓管理
+                打开本地书仓视图
               </el-button>
             </div>
           </div>
@@ -399,14 +570,82 @@
       </main>
     </div>
 
-    <!-- 新增用户对话框 -->
+    <!-- 弹窗 1：用户上限配额快速修改 -->
+    <el-dialog title="修改用户上限配额" :visible.sync="showQuotaDialog" width="400px">
+      <el-form label-width="110px" size="small">
+        <el-form-item label="当前用户数">
+          <span style="font-weight: bold; color: #3b82f6;">{{ userList.length }} 人</span>
+        </el-form-item>
+        <el-form-item label="系统用户配额">
+          <el-input-number
+            v-model="systemConfig.userLimit"
+            :min="1"
+            :max="500"
+            style="width: 100%;"
+          ></el-input-number>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="showQuotaDialog = false" size="small">取消</el-button>
+        <el-button type="primary" @click="saveQuotaAndClose" size="small">保存配额</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗 2：书源批量快捷控制 -->
+    <el-dialog title="书源批量快捷控制" :visible.sync="showSourceBatchDialog" width="460px">
+      <p style="margin-top: 0; color: #64748b;">
+        当前已配置 {{ bookSourceList.length }} 个书源，可执行一键批量操作：
+      </p>
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <el-button type="success" size="small" icon="el-icon-check" @click="batchToggleSources(true)">
+          一键启用全部书源
+        </el-button>
+        <el-button type="warning" size="small" icon="el-icon-close" @click="batchToggleSources(false)">
+          一键禁用全部书源
+        </el-button>
+      </div>
+      <el-button type="primary" size="small" icon="el-icon-d-arrow-right" @click="goToSourcesTab">
+        进入完整书源管理页面
+      </el-button>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="showSourceBatchDialog = false" size="small">关闭</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗 3：全局书架书籍管理 -->
+    <el-dialog title="书架书籍整理" :visible.sync="showShelfDialog" width="560px">
+      <p style="margin-top: 0; color: #64748b;">
+        当前共有 {{ shelfBooks.length }} 本书籍在书架上：
+      </p>
+      <el-table :data="shelfBooks" max-height="300" stripe size="small">
+        <el-table-column prop="name" label="书名" min-width="140"></el-table-column>
+        <el-table-column prop="author" label="作者" width="100"></el-table-column>
+        <el-table-column label="操作" width="80" align="center">
+          <template slot-scope="scope">
+            <el-button
+              type="text"
+              size="mini"
+              style="color: #F56C6C;"
+              @click="removeShelfBookItem(scope.row)"
+            >
+              移除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="showShelfDialog = false" size="small">完成</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗 4：新增用户对话框 -->
     <el-dialog title="新增用户" :visible.sync="showAddUser" width="420px">
       <el-form :model="newUserForm" label-width="100px" size="small">
         <el-form-item label="用户名">
           <el-input
             v-model="newUserForm.username"
             autocomplete="off"
-            placeholder="请输入新用户名"
+            placeholder="请输入新用户名 (≥3位)"
           ></el-input>
         </el-form-item>
         <el-form-item label="密码">
@@ -414,8 +653,11 @@
             v-model="newUserForm.password"
             type="password"
             autocomplete="off"
-            placeholder="请输入初始密码"
+            placeholder="请输入初始密码 (≥4位)"
           ></el-input>
+        </el-form-item>
+        <el-form-item label="管理员权限">
+          <el-switch v-model="newUserForm.isAdmin"></el-switch>
         </el-form-item>
         <el-form-item label="本地书仓">
           <el-switch v-model="newUserForm.enable_local_store"></el-switch>
@@ -426,13 +668,11 @@
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button @click="showAddUser = false" size="small">取消</el-button>
-        <el-button type="primary" @click="submitAddUser" size="small"
-          >确认添加</el-button
-        >
+        <el-button type="primary" @click="submitAddUser" size="small">确认添加</el-button>
       </div>
     </el-dialog>
 
-    <!-- 重置密码对话框 -->
+    <!-- 弹窗 5：重置用户密码对话框 -->
     <el-dialog title="重置用户密码" :visible.sync="showResetPwd" width="380px">
       <el-form label-width="90px" size="small">
         <el-form-item label="目标用户">
@@ -442,15 +682,13 @@
           <el-input
             v-model="newPassword"
             type="password"
-            placeholder="请输入新密码"
+            placeholder="请输入新密码 (不少于4位)"
           ></el-input>
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button @click="showResetPwd = false" size="small">取消</el-button>
-        <el-button type="primary" @click="submitResetPwd" size="small"
-          >确认修改</el-button
-        >
+        <el-button type="primary" @click="submitResetPwd" size="small">确认修改</el-button>
       </div>
     </el-dialog>
   </div>
@@ -465,6 +703,13 @@ export default {
   data() {
     return {
       activeTab: "overview",
+      navMenuItems: [
+        { index: "overview", title: "系统状态总览", icon: "el-icon-data-analysis" },
+        { index: "users", title: "用户权限治理", icon: "el-icon-user-solid" },
+        { index: "sources", title: "书源健康管理", icon: "el-icon-collection" },
+        { index: "logs", title: "诊断运行日志", icon: "el-icon-document" },
+        { index: "storage", title: "本地书仓维护", icon: "el-icon-folder" }
+      ],
       userList: [],
       bookSourceList: [],
       loadingUsers: false,
@@ -474,18 +719,32 @@ export default {
       sourcePage: 1,
       sourcePageSize: 15,
       logs: [],
+      logLines: 50,
       logErrorOnly: false,
-      logLines: 200,
       showAddUser: false,
       showResetPwd: false,
+      showQuotaDialog: false,
+      showSourceBatchDialog: false,
+      showShelfDialog: false,
+      savingConfig: false,
       currentEditUser: {},
       newPassword: "",
       newUserForm: {
         username: "",
         password: "",
+        isAdmin: false,
         enable_local_store: true,
-        enable_webdav: true,
-        enable_delete: true
+        enable_webdav: true
+      },
+      systemConfig: {
+        allowRegister: true,
+        inviteCode: "",
+        userLimit: 50,
+        userBookLimit: 200,
+        cacheChapterContent: false,
+        defaultVoice: "zh-CN-XiaoxiaoNeural",
+        concurrentSearchCount: 24,
+        version: "1.0.1"
       }
     };
   },
@@ -494,13 +753,16 @@ export default {
       return this.$store.getters.isNight;
     },
     currentUser() {
-      return this.$store.state.userInfo;
+      return this.$store.state.userInfo || {};
     },
     bookSourceCount() {
       return this.bookSourceList.length;
     },
     shelfCount() {
-      return (this.$store.state.shelfBooks || []).length;
+      return this.shelfBooks.length;
+    },
+    shelfBooks() {
+      return this.$store.state.shelfBooks || [];
     },
     filteredSources() {
       let list = this.bookSourceList;
@@ -528,6 +790,7 @@ export default {
   },
   created() {
     this.refreshAllData();
+    this.fetchSystemConfig();
   },
   methods: {
     toggleTheme() {
@@ -541,11 +804,98 @@ export default {
         this.fetchUsers();
       } else if (index === "sources") {
         this.fetchSources();
+      } else if (index === "overview") {
+        this.fetchSystemConfig();
       }
     },
     refreshAllData() {
       this.fetchUsers();
       this.fetchSources();
+      this.fetchSystemConfig();
+      this.$message.success("数据与系统状态已全部刷新");
+    },
+    async fetchSystemConfig() {
+      try {
+        const res = await Axios.get("/getSystemConfig");
+        if (res.data.isSuccess && res.data.data) {
+          this.systemConfig = Object.assign({}, this.systemConfig, res.data.data);
+        }
+      } catch (err) {
+        //
+      }
+    },
+    async submitSystemConfig() {
+      this.savingConfig = true;
+      try {
+        const res = await Axios.post("/saveSystemConfig", this.systemConfig);
+        if (res.data.isSuccess) {
+          this.$message.success("系统全局配置保存成功！");
+        } else {
+          this.$message.error(res.data.errorMsg || "保存失败");
+        }
+      } catch (err) {
+        this.$message.error("保存配置发生异常");
+      } finally {
+        this.savingConfig = false;
+      }
+    },
+    async quickToggleRegister() {
+      this.systemConfig.allowRegister = !this.systemConfig.allowRegister;
+      await this.submitSystemConfig();
+      const statusText = this.systemConfig.allowRegister ? "已开启自主注册" : "已暂停自主注册";
+      this.$message.info(`系统准入策略变更：${statusText}`);
+    },
+    openQuotaDialog() {
+      this.showQuotaDialog = true;
+    },
+    async saveQuotaAndClose() {
+      await this.submitSystemConfig();
+      this.showQuotaDialog = false;
+    },
+    openSourceBatchDialog() {
+      this.showSourceBatchDialog = true;
+    },
+    goToSourcesTab() {
+      this.showSourceBatchDialog = false;
+      this.activeTab = "sources";
+      this.fetchSources();
+    },
+    openShelfDialog() {
+      this.showShelfDialog = true;
+    },
+    async removeShelfBookItem(book) {
+      this.$confirm(`确认从书架移除书籍《${book.name}》吗？`, "确认移除", {
+        type: "warning"
+      }).then(async () => {
+        try {
+          await Axios.post("/deleteShelfBook", { url: book.bookUrl });
+          this.$message.success("书籍已移除");
+          const idx = this.shelfBooks.findIndex(b => b.bookUrl === book.bookUrl);
+          if (idx !== -1) {
+            this.shelfBooks.splice(idx, 1);
+          }
+        } catch (err) {
+          this.$message.error("移除书籍失败");
+        }
+      });
+    },
+    async batchToggleSources(enabled) {
+      const actionText = enabled ? "启用" : "禁用";
+      this.$confirm(`确定要一键${actionText}全部 ${this.bookSourceList.length} 个书源吗？`, "批量操作", {
+        type: "warning"
+      }).then(async () => {
+        try {
+          const updatedList = this.bookSourceList.map(s => {
+            s.enabled = enabled;
+            return s;
+          });
+          await Axios.post("/saveBookSources", updatedList);
+          this.$message.success(`已一键${actionText}全部书源`);
+          this.fetchSources();
+        } catch (err) {
+          this.$message.error(`批量${actionText}书源失败`);
+        }
+      });
     },
     async fetchUsers() {
       this.loadingUsers = true;
@@ -613,13 +963,6 @@ export default {
         }
       });
     },
-    cleanupBrokenSources() {
-      this.$confirm("确定要对失效的书源进行快速治理排查吗？", "提示", {
-        type: "info"
-      }).then(() => {
-        this.$message.info("正在执行书源自检与排查...");
-      });
-    },
     async fetchLogs() {
       try {
         const res = await Axios.get("/reader3/getSystemLogs", {
@@ -646,8 +989,17 @@ export default {
         this.$message.success("日志内容已复制到剪贴板");
       });
     },
-    clearBackendCache() {
-      this.$message.success("缓存已清理");
+    async clearSystemCacheFiles() {
+      try {
+        const res = await Axios.post("/clearSystemCache");
+        if (res.data.isSuccess) {
+          this.$message.success(res.data.data || "失效音频与解析缓存已全部清空");
+        } else {
+          this.$message.error(res.data.errorMsg || "清理缓存失败");
+        }
+      } catch (err) {
+        this.$message.error("清理缓存请求失败");
+      }
     },
     openLocalStore() {
       this.$router.push("/");
@@ -659,9 +1011,9 @@ export default {
       this.newUserForm = {
         username: "",
         password: "",
+        isAdmin: false,
         enable_local_store: true,
-        enable_webdav: true,
-        enable_delete: true
+        enable_webdav: true
       };
       this.showAddUser = true;
     },
@@ -723,7 +1075,7 @@ export default {
         try {
           const res = await Axios.post("/deleteUsers", [user.username]);
           if (res.data.isSuccess) {
-            this.$message.success("用户删除成功");
+            this.$message.success("删除用户成功");
             this.fetchUsers();
           } else {
             this.$message.error(res.data.errorMsg || "删除失败");
@@ -823,21 +1175,66 @@ export default {
   width: 220px;
   border-right: 1px solid rgba(0, 0, 0, 0.08);
   background: inherit;
+  box-sizing: border-box;
 }
 
 .theme-dark .admin-sidebar {
   border-right-color: rgba(255, 255, 255, 0.1);
 }
 
-.admin-menu {
-  height: 100%;
-  border-right: none;
+.sidebar-nav-list {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 10px;
+  gap: 6px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding: 0 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.theme-light .sidebar-nav-item {
+  color: #475569;
+}
+
+.theme-dark .sidebar-nav-item {
+  color: #94a3b8;
+}
+
+.sidebar-nav-item:hover {
+  background: rgba(59, 130, 246, 0.08);
+  color: #3b82f6;
+}
+
+.sidebar-nav-item.active {
+  background: #3b82f6;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.sidebar-nav-item .nav-icon {
+  font-size: 18px;
+}
+
+.sidebar-nav-item .nav-title {
+  white-space: nowrap;
 }
 
 .admin-main {
   flex: 1;
   overflow-y: auto;
-  padding: 28px 36px;
+  padding: 24px 32px;
 }
 
 .pane-title {
@@ -856,25 +1253,54 @@ export default {
 /* 统计卡片 */
 .stat-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 28px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
 }
 
 .stat-card {
-  padding: 20px;
+  padding: 18px 20px;
   border-radius: 14px;
   display: flex;
   align-items: center;
   gap: 16px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.06);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.clickable-card {
+  cursor: pointer;
+}
+
+.clickable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .theme-dark .stat-card {
   background: #1e293b;
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+.theme-dark .clickable-card:hover {
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.card-action-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  font-weight: 500;
 }
 
 .stat-icon {
@@ -886,6 +1312,7 @@ export default {
   justify-content: center;
   font-size: 22px;
   color: #fff;
+  flex-shrink: 0;
 }
 
 .bg-blue {
@@ -904,19 +1331,38 @@ export default {
 .stat-value {
   font-size: 22px;
   font-weight: 800;
+  line-height: 1.2;
+}
+
+.stat-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  margin-left: 2px;
 }
 
 .stat-label {
   font-size: 13px;
   color: #64748b;
-  margin-top: 2px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
+.theme-dark .stat-label,
+.theme-dark .stat-unit {
+  color: #94a3b8;
+}
+
+/* 控制台表单与盒子 */
 .dashboard-box {
-  padding: 22px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 24px;
+  margin-bottom: 24px;
 }
 
 .theme-dark .dashboard-box {
@@ -924,27 +1370,81 @@ export default {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
-.box-title {
-  margin: 0 0 16px 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.action-buttons {
+.box-header {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-/* 日志窗口终端样式 */
-.log-terminal {
-  height: 520px;
-  background: #0f172a;
+.theme-dark .box-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.box-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.box-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.box-subtitle {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.theme-dark .box-subtitle {
+  color: #94a3b8;
+}
+
+.form-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3b82f6;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px 24px;
+}
+
+.action-toolbox .action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* 终端日志视窗 */
+.log-controls {
+  display: flex;
+  align-items: center;
+}
+
+.terminal-box {
+  background: #090d16;
   color: #e2e8f0;
   border-radius: 12px;
-  padding: 16px;
-  font-family: "JetBrains Mono", Consolas, Menlo, monospace;
-  font-size: 12px;
+  padding: 16px 20px;
+  font-family: "SF Mono", Monaco, Menlo, Consolas, monospace;
+  font-size: 12.5px;
   line-height: 1.6;
+  height: 480px;
   overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -978,7 +1478,7 @@ export default {
 .storage-card {
   padding: 24px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
@@ -996,5 +1496,29 @@ export default {
 .storage-header i {
   font-size: 36px;
   color: #10b981;
+}
+
+/* 移动端与自适应优化 */
+@media (max-width: 768px) {
+  .admin-body {
+    flex-direction: column;
+  }
+  .admin-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .sidebar-nav-list {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+  }
+  .sidebar-nav-item {
+    height: 38px;
+    padding: 0 12px;
+  }
+  .admin-main {
+    padding: 16px;
+  }
 }
 </style>

@@ -35,7 +35,9 @@ import {
   TabPane,
   Dropdown,
   DropdownItem,
-  DropdownMenu
+  DropdownMenu,
+  Menu,
+  MenuItem
 } from "element-ui";
 
 Vue.use(Button);
@@ -72,6 +74,8 @@ Vue.use(TabPane);
 Vue.use(Dropdown);
 Vue.use(DropdownItem);
 Vue.use(DropdownMenu);
+Vue.use(Menu);
+Vue.use(MenuItem);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Object.assign({}, Message, {

@@ -12,7 +12,7 @@ ENV TZ=Asia/Shanghai
 WORKDIR /app
 
 # 拷贝包含可执行 JAR 包、微软 Edge TTS 语音服务与启动入口
-COPY build/libs/reader-2.5.4.jar /app/bin/reader.jar
+COPY build/libs/reader-*.jar /app/bin/reader.jar
 COPY server/bin/tts_server.py /app/bin/tts_server.py
 COPY entrypoint.sh /app/entrypoint.sh
 

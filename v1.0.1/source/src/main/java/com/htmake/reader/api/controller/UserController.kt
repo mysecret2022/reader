@@ -98,6 +98,11 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
                 // 登录返回用户不存在
                 return returnData.setErrorMsg("用户不存在")
             }
+            var configJson: JsonObject? = asJsonObject(getStorage("data", "systemConfig"))
+            val allowRegister = configJson?.getBoolean("allowRegister", true) ?: true
+            if (!allowRegister) {
+                return returnData.setErrorMsg("系统暂未开放自主注册，请联系管理员")
+            }
             if (username.length < 3) {
                 return returnData.setErrorMsg("用户名不能低于3位")
             }
@@ -506,5 +511,76 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         logger.info("delete file: {}", file)
         file.deleteRecursively()
         return returnData.setData("")
+    }
+
+    suspend fun getSystemConfig(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
+        }
+        var configJson: JsonObject? = asJsonObject(getStorage("data", "systemConfig"))
+        var configMap = configJson?.map ?: mutableMapOf<String, Any>()
+
+        return returnData.setData(mapOf(
+            "allowRegister" to configMap.getOrDefault("allowRegister", true),
+            "inviteCode" to configMap.getOrDefault("inviteCode", appConfig.inviteCode),
+            "userLimit" to configMap.getOrDefault("userLimit", appConfig.userLimit),
+            "userBookLimit" to configMap.getOrDefault("userBookLimit", appConfig.userBookLimit),
+            "cacheChapterContent" to configMap.getOrDefault("cacheChapterContent", appConfig.cacheChapterContent),
+            "defaultVoice" to configMap.getOrDefault("defaultVoice", "zh-CN-XiaoxiaoNeural"),
+            "concurrentSearchCount" to configMap.getOrDefault("concurrentSearchCount", 24),
+            "version" to "1.0.1"
+        ))
+    }
+
+    suspend fun saveSystemConfig(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
+        }
+        val body = context.bodyAsJson ?: return returnData.setErrorMsg("参数错误")
+
+        if (body.containsKey("inviteCode")) {
+            appConfig.inviteCode = body.getString("inviteCode") ?: ""
+        }
+        if (body.containsKey("userLimit")) {
+            appConfig.userLimit = body.getInteger("userLimit", 50)
+        }
+        if (body.containsKey("userBookLimit")) {
+            appConfig.userBookLimit = body.getInteger("userBookLimit", 200)
+        }
+        if (body.containsKey("cacheChapterContent")) {
+            appConfig.cacheChapterContent = body.getBoolean("cacheChapterContent", false)
+        }
+
+        saveStorage("data", "systemConfig", value = body.map)
+        return returnData.setData(body.map)
+    }
+
+    suspend fun clearSystemCache(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
+        }
+        var ttsCache = File(getWorkDir("storage", "cache", "tts"))
+        if (ttsCache.exists()) {
+            ttsCache.deleteRecursively()
+            ttsCache.mkdirs()
+        }
+        var bookCache = File(getWorkDir("storage", "cache", "bookInfoCache"))
+        if (bookCache.exists()) {
+            bookCache.deleteRecursively()
+            bookCache.mkdirs()
+        }
+        return returnData.setData("缓存清理完毕")
     }
 }

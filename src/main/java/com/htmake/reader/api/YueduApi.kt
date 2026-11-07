@@ -388,6 +388,14 @@ class YueduApi : RestVerticle() {
         // 更新用户
         router.post("/reader3/updateUser").coroutineHandler { userController.updateUser(it) }
 
+        // 系统全局配置与清理维护
+        router.get("/reader3/getSystemConfig").coroutineHandler { userController.getSystemConfig(it) }
+        router.get("/getSystemConfig").coroutineHandler { userController.getSystemConfig(it) }
+        router.post("/reader3/saveSystemConfig").coroutineHandler { userController.saveSystemConfig(it) }
+        router.post("/saveSystemConfig").coroutineHandler { userController.saveSystemConfig(it) }
+        router.post("/reader3/clearSystemCache").coroutineHandler { userController.clearSystemCache(it) }
+        router.post("/clearSystemCache").coroutineHandler { userController.clearSystemCache(it) }
+
 
         /** webdav模块 */
         // 获取webdav备份列表
