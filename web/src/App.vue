@@ -3,42 +3,13 @@
     <keep-alive>
       <router-view></router-view>
     </keep-alive>
-    <el-dialog :visible.sync="showLogin" :width="dialogWidth" :top="dialogTop">
-      <div class="custom-dialog-title" slot="title">
-        <span class="el-dialog__title"
-          >{{ isLogin ? "登录" : "注册" }}
-          <span class="float-right span-btn" @click="isLogin = !isLogin">{{
-            isLogin ? "注册" : "登录"
-          }}</span>
-        </span>
-      </div>
-      <el-form :model="loginForm">
-        <el-form-item label="用户名">
-          <el-input v-model="loginForm.username" autocomplete="on"></el-input>
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input
-            type="password"
-            v-model="loginForm.password"
-            autocomplete="on"
-            show-password
-            @keyup.enter.native="login"
-          ></el-input>
-        </el-form-item>
-        <el-form-item label="邀请码(没有则不填)" v-if="!isLogin">
-          <el-input
-            v-model="loginForm.code"
-            autocomplete="off"
-            @keyup.enter.native="login"
-          ></el-input>
-        </el-form-item>
-        <el-checkbox v-model="remember">记住登录信息</el-checkbox>
-      </el-form>
-      <div slot="footer" class="dialog-footer">
-        <el-button size="medium" @click="cancel">取 消</el-button>
-        <el-button size="medium" type="primary" @click="login">确 定</el-button>
-      </div>
-    </el-dialog>
+    <!-- 全屏高颜值独立登录/注册视图（无弹窗，沉浸式毛玻璃拟态） -->
+    <LoginView
+      v-if="showLogin"
+      :can-cancel="canCancelLogin"
+      @cancel="cancelLogin"
+      @success="onLoginSuccess"
+    />
 
     <el-dialog
       :title="editorTitle"
@@ -124,6 +95,7 @@ import RssArticle from "./components/RssArticle.vue";
 import SearchBookContent from "./components/SearchBookContent.vue";
 import Bookmark from "./components/Bookmark.vue";
 import BookmarkForm from "./components/BookmarkForm.vue";
+import LoginView from "./views/Login.vue";
 import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
@@ -202,7 +174,8 @@ export default {
     RssArticle,
     SearchBookContent,
     Bookmark,
-    BookmarkForm
+    BookmarkForm,
+    LoginView
   },
   data() {
     return {
@@ -409,6 +382,10 @@ export default {
         this.$store.commit("setShowLogin", value);
       }
     },
+    canCancelLogin() {
+      // 如果后端不是安全多用户模式，或者用户已经有有效身份，则允许返回
+      return !this.$store.state.isSecureMode || !!(this.$store.state.userInfo && this.$store.state.userInfo.username);
+    },
     connected() {
       return this.$store.state.connected;
     },
@@ -514,12 +491,23 @@ export default {
       }
     },
     cancel() {
+      this.cancelLogin();
+    },
+    cancelLogin() {
       this.showLogin = false;
-      this.loginForm = {
-        username: "",
-        password: "",
-        code: ""
-      };
+    },
+    onLoginSuccess(payload) {
+      this.$store.commit("setShowLogin", false);
+      this.$nextTick(() => {
+        this.$store.commit("setLoginAuth", true);
+      });
+      if (payload && payload.remember && payload.data && payload.data.accessToken) {
+        this.$store.commit("setToken", payload.data.accessToken);
+      }
+      this.getUserInfo().then(() => {
+        this.$store.dispatch("syncFromLocalStorage");
+        this.init(true);
+      });
     },
     async login() {
       const res = await Axios.post("/login", {
@@ -583,6 +571,9 @@ export default {
             }
             if (res.data.data.userInfo) {
               this.$store.commit("setUserInfo", res.data.data.userInfo);
+            } else if (res.data.data.secure) {
+              // 安全多用户模式下若未登录，弹出全屏登录视图
+              this.$store.commit("setShowLogin", true);
             }
           }
         },
