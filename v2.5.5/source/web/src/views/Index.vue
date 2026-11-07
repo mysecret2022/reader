@@ -621,6 +621,34 @@
       :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
       v-if="$store.getters.isNormalPage"
     >
+      <div
+        class="import-filter-bar"
+        v-if="!isImportRssSource"
+        style="margin-bottom: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.04); border-radius: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;"
+      >
+        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <span style="font-size: 13px; font-weight: bold;">书源类型支持选项：</span>
+          <el-checkbox
+            v-model="allowImportJs"
+            @change="onImportTypeToggle"
+            size="small"
+            border
+          >
+            @javascript ({{ importJsCount }})
+          </el-checkbox>
+          <el-checkbox
+            v-model="allowImportWebview"
+            @change="onImportTypeToggle"
+            size="small"
+            border
+          >
+            支持webview ({{ importWebviewCount }})
+          </el-checkbox>
+        </div>
+        <span style="font-size: 12px; color: #E6A23C;">
+          * 需勾选上方选项方可支持并导入对应类型书源
+        </span>
+      </div>
       <div class="source-container source-list-container">
         <el-checkbox-group
           v-model="checkedSourceIndex"
@@ -630,10 +658,11 @@
             v-for="(source, index) in importSourceList"
             :label="index"
             :key="index"
+            :disabled="isSourceDisabled(source)"
             class="source-checkbox"
             >{{ isImportRssSource ? source.sourceName : source.bookSourceName }}
             {{ isImportRssSource ? source.sourceUrl : source.bookSourceUrl }}
-            {{ getSourceTag(source) }}</el-checkbox
+            <span style="color: #409EFF; font-weight: bold;">{{ getSourceTag(source) }}</span></el-checkbox
           >
         </el-checkbox-group>
       </div>
@@ -1003,6 +1032,8 @@ export default {
       checkAll: false,
       isIndeterminate: false,
       checkedSourceIndex: [],
+      allowImportJs: false,
+      allowImportWebview: false,
 
       showBookSourceManageDialog: false,
       manageSourceSelection: [],
@@ -1665,6 +1696,10 @@ export default {
               }
               return v;
             });
+            this.allowImportJs = false;
+            this.allowImportWebview = false;
+            this.checkedSourceIndex = [];
+            this.checkAll = false;
             this.showImportSourceDialog = true;
             this.isImportRssSource = !!isRssSource;
           } else {
@@ -1709,6 +1744,10 @@ export default {
                   }
                   return v;
                 });
+                this.allowImportJs = false;
+                this.allowImportWebview = false;
+                this.checkedSourceIndex = [];
+                this.checkAll = false;
                 this.showImportSourceDialog = true;
                 this.isImportRssSource = !!isRssSource;
               } else {
@@ -1768,6 +1807,10 @@ export default {
             });
             if (sourceList.length) {
               this.importSourceList = sourceList;
+              this.allowImportJs = false;
+              this.allowImportWebview = false;
+              this.checkedSourceIndex = [];
+              this.checkAll = false;
               this.showImportSourceDialog = true;
               this.isImportRssSource = false;
             } else {
@@ -1782,47 +1825,90 @@ export default {
         }
       );
     },
+    isSourceJs(source) {
+      if (!source) return false;
+      const raw = typeof source === "string" ? source : JSON.stringify(source);
+      const lowerRaw = raw.toLowerCase();
+      return (
+        raw.indexOf("@js:") !== -1 ||
+        raw.indexOf("<js>") !== -1 ||
+        raw.indexOf("<+js>") !== -1 ||
+        lowerRaw.indexOf("javascript") !== -1
+      );
+    },
+    isSourceWebview(source) {
+      if (!source) return false;
+      const raw = typeof source === "string" ? source : JSON.stringify(source);
+      return raw.toLowerCase().indexOf("webview") !== -1;
+    },
+    isSourceDisabled(source) {
+      if (this.isImportRssSource) return false;
+      const isJs = this.isSourceJs(source);
+      const isWv = this.isSourceWebview(source);
+      if (isJs && !this.allowImportJs) return true;
+      if (isWv && !this.allowImportWebview) return true;
+      return false;
+    },
+    onImportTypeToggle() {
+      const currentSet = new Set(this.checkedSourceIndex);
+      this.importSourceList.forEach((v, i) => {
+        const isJs = this.isSourceJs(v);
+        const isWv = this.isSourceWebview(v);
+        if (isJs && !isWv) {
+          if (this.allowImportJs) currentSet.add(i);
+          else currentSet.delete(i);
+        } else if (isWv && !isJs) {
+          if (this.allowImportWebview) currentSet.add(i);
+          else currentSet.delete(i);
+        } else if (isJs && isWv) {
+          if (this.allowImportJs && this.allowImportWebview) currentSet.add(i);
+          else currentSet.delete(i);
+        }
+      });
+      this.checkedSourceIndex = Array.from(currentSet);
+      this.handleCheckedSourcesChange(this.checkedSourceIndex);
+    },
     handleCheckAllChange(val) {
-      let hasFilterd = false;
-      this.checkedSourceIndex = val
-        ? this.importSourceList
-            .map((v, i) => {
-              // 不勾选使用了 js，webview的书源
-              const source = JSON.stringify(v);
-              if (
-                source.indexOf("@js:") !== -1 ||
-                source.indexOf("webView:") !== -1
-              ) {
-                hasFilterd = true;
-                return false;
-              }
-              return i;
-            })
-            .filter(v => v)
-        : [];
-      if (val && hasFilterd) {
-        this.$message.info("部分使用了Javascript和Webview的书源未勾选");
+      if (!val) {
+        this.checkedSourceIndex = [];
+        this.isIndeterminate = false;
+        return;
+      }
+      const newChecked = [];
+      let skippedCount = 0;
+      this.importSourceList.forEach((v, i) => {
+        if (this.isSourceDisabled(v)) {
+          skippedCount++;
+        } else {
+          newChecked.push(i);
+        }
+      });
+      this.checkedSourceIndex = newChecked;
+      if (skippedCount > 0) {
+        this.$message.info(
+          `已自动跳过未勾选支持类型的 ${skippedCount} 个书源（勾选上方 @javascript 或 支持webview 选项即可支持）`
+        );
       }
       this.isIndeterminate = false;
     },
     handleCheckedSourcesChange(value) {
       let checkedCount = value.length;
-      this.checkAll = checkedCount === this.importSourceList.length;
+      let availableCount = this.importSourceList.filter(
+        v => !this.isSourceDisabled(v)
+      ).length;
+      this.checkAll = availableCount > 0 && checkedCount === availableCount;
       this.isIndeterminate =
-        checkedCount > 0 && checkedCount < this.importSourceList.length;
+        checkedCount > 0 && checkedCount < availableCount;
     },
     getSourceTag(source) {
-      const sourceStr = JSON.stringify(source);
       const tags = [];
-      if (sourceStr.indexOf("@js:") !== -1) {
-        tags.push("@Javascript");
+      if (this.isSourceJs(source)) {
+        tags.push("@javascript");
       }
-
-      if (sourceStr.indexOf("webView:") !== -1) {
-        tags.push("@WebView");
+      if (this.isSourceWebview(source)) {
+        tags.push("支持webview");
       }
-
-      return "   " + tags.join("  ");
+      return tags.length ? "   [" + tags.join(" / ") + "]" : "";
     },
     saveSourceList() {
       if (!this.$store.state.connected) {
@@ -2776,6 +2862,14 @@ export default {
     },
     connectType() {
       return this.$store.state.connected ? "success" : "danger";
+    },
+    importJsCount() {
+      if (!this.importSourceList) return 0;
+      return this.importSourceList.filter(v => this.isSourceJs(v)).length;
+    },
+    importWebviewCount() {
+      if (!this.importSourceList) return 0;
+      return this.importSourceList.filter(v => this.isSourceWebview(v)).length;
     },
     readingRecent() {
       return this.$store.getters.readingBook &&
