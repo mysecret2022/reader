@@ -972,11 +972,113 @@
       </el-tabs>
     </el-dialog>
 
-    <!-- 弹窗 7：失效书源检测结果面板 -->
-    <el-dialog title="失效书源诊断与清理" :visible.sync="showInvalidSourcesDialog" width="650px">
-      <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 13px; color: #64748b;">
-          共检测到 {{ invalidSourcesList.length }} 个近期响应超时或报错的书源
+    <!-- 弹窗 7：失效书源诊断与清理 -->
+    <el-dialog title="失效书源体检与批量治理" :visible.sync="showInvalidSourcesDialog" width="760px">
+      <el-alert
+        title="体检原理说明"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px;"
+      >
+        <div style="font-size: 12px; line-height: 1.6; color: #475569;">
+          <div><b>① 书名实测扫描（推荐）</b>：模拟读者使用测试书名（如《斗罗大陆》）向各大书源网站发送并发搜索请求，若网站倒闭、超时无响应或结构报错，即精准判定失效。</div>
+          <div><b>② 系统运行记录</b>：读取后端服务在日常阅读、转码和搜索中自动捕获并记录的历史异常书源。</div>
+        </div>
+      </el-alert>
+
+      <el-tabs v-model="invalidSourceMode">
+        <el-tab-pane label="① 书名实测扫描" name="keyword">
+          <div style="background: #f8fafc; padding: 14px 16px; border-radius: 6px; margin-bottom: 14px; border: 1px solid #e2e8f0;">
+            <el-row :gutter="12" type="flex" align="middle">
+              <el-col :span="8">
+                <el-input
+                  v-model="checkSourceKeyword"
+                  size="small"
+                  placeholder="测试搜索书名"
+                >
+                  <template slot="prepend">测试书名</template>
+                </el-input>
+              </el-col>
+              <el-col :span="6">
+                <el-input
+                  v-model.number="checkSourceTimeout"
+                  size="small"
+                  type="number"
+                  placeholder="超时(毫秒)"
+                >
+                  <template slot="prepend">超时</template>
+                  <template slot="append">ms</template>
+                </el-input>
+              </el-col>
+              <el-col :span="5">
+                <el-input
+                  v-model.number="checkSourceConcurrent"
+                  size="small"
+                  type="number"
+                  placeholder="并发数"
+                >
+                  <template slot="prepend">并发</template>
+                </el-input>
+              </el-col>
+              <el-col :span="5" style="text-align: right;">
+                <el-button
+                  v-if="!isScanningSources"
+                  type="primary"
+                  size="small"
+                  icon="el-icon-video-play"
+                  @click="startKeywordSourceScan"
+                >
+                  开始体检
+                </el-button>
+                <el-button
+                  v-else
+                  type="danger"
+                  size="small"
+                  icon="el-icon-video-pause"
+                  @click="stopKeywordSourceScan"
+                >
+                  停止检测
+                </el-button>
+              </el-col>
+            </el-row>
+            <div v-if="isScanningSources || scanSourceProgress > 0" style="margin-top: 10px;">
+              <el-progress
+                :percentage="scanSourcePercentage"
+                :status="isScanningSources ? undefined : (invalidSourcesList.length > 0 ? 'exception' : 'success')"
+              ></el-progress>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between;">
+                <span>正在扫描：{{ scanSourceProgress }} / {{ bookSourceList.length }} 个书源</span>
+                <span v-if="invalidSourcesList.length > 0" style="color: #ef4444; font-weight: bold;">
+                  已发现 {{ invalidSourcesList.length }} 个失效书源
+                </span>
+                <span v-else style="color: #10b981;">暂未发现异常书源</span>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="② 系统运行异常记录" name="runtime">
+          <div style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; color: #64748b;">
+              直接调取后端在运行过程中自动捕捉的超时或异常源记录
+            </span>
+            <el-button
+              type="primary"
+              size="small"
+              icon="el-icon-refresh"
+              :loading="checkingInvalidSources"
+              @click="loadRuntimeInvalidSources"
+            >
+              拉取后端故障记录
+            </el-button>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+
+      <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 13px; font-weight: bold; color: #334155;">
+          失效书源清单 ({{ invalidSourcesList.length }})
         </span>
         <el-button
           v-if="invalidSourcesList.length > 0"
@@ -988,9 +1090,14 @@
           一键清理所有失效源
         </el-button>
       </div>
-      <el-table :data="invalidSourcesList" max-height="360" stripe size="small">
+
+      <el-table :data="invalidSourcesList" max-height="340" stripe size="small">
         <el-table-column prop="bookSourceName" label="书源名称" min-width="140"></el-table-column>
-        <el-table-column prop="error" label="异常原因" min-width="200" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="error" label="失效具体原因" min-width="240" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <span style="color: #ef4444;">{{ scope.row.error }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="90" align="center">
           <template slot-scope="scope">
             <el-button
@@ -1013,6 +1120,7 @@
 
 <script>
 import Axios from "../plugins/axios";
+import { LimitResquest } from "../plugins/helper";
 import eventBus from "../plugins/eventBus";
 
 export default {
@@ -1094,10 +1202,22 @@ export default {
       importingSource: false,
       showInvalidSourcesDialog: false,
       checkingInvalidSources: false,
-      invalidSourcesList: []
+      invalidSourcesList: [],
+      invalidSourceMode: "keyword",
+      checkSourceKeyword: "斗罗大陆",
+      checkSourceTimeout: 5000,
+      checkSourceConcurrent: 16,
+      isScanningSources: false,
+      scanSourceProgress: 0,
+      scanSourceLimitHandler: null
     };
   },
   computed: {
+    scanSourcePercentage() {
+      if (!this.bookSourceList || this.bookSourceList.length === 0) return 0;
+      const pct = Math.round((this.scanSourceProgress / this.bookSourceList.length) * 100);
+      return Math.min(pct, 100);
+    },
     isNight() {
       return this.$store.getters.isNight;
     },
@@ -1425,7 +1545,88 @@ export default {
         this.$message.error(res.data.errorMsg || "保存书源失败");
       }
     },
-    async checkAndShowInvalidSources() {
+    checkAndShowInvalidSources() {
+      this.showInvalidSourcesDialog = true;
+    },
+    startKeywordSourceScan() {
+      if (!this.checkSourceKeyword) {
+        this.$message.error("请输入用于体检测试的书籍名称");
+        return;
+      }
+      if (!this.bookSourceList || this.bookSourceList.length === 0) {
+        this.$message.warning("当前系统暂无已配置的书源");
+        return;
+      }
+      this.isScanningSources = true;
+      this.scanSourceProgress = 0;
+      this.invalidSourcesList = [];
+
+      const concurrent = Math.max(1, this.checkSourceConcurrent || 16);
+      const timeout = Math.max(1000, this.checkSourceTimeout || 5000);
+      const total = this.bookSourceList.length;
+
+      const limitFunc = LimitResquest(concurrent, (handler) => {
+        this.scanSourceProgress = handler.requestCount;
+        if (handler.isEnd()) {
+          this.isScanningSources = false;
+          this.$message.success(`体检完成！共扫描 ${total} 个书源，发现 ${this.invalidSourcesList.length} 个失效书源`);
+        }
+      });
+      this.scanSourceLimitHandler = limitFunc;
+
+      this.bookSourceList.forEach((source) => {
+        limitFunc(async () => {
+          try {
+            const res = await Axios.post(
+              "/searchBook",
+              {
+                key: this.checkSourceKeyword,
+                bookSourceUrl: source.bookSourceUrl
+              },
+              {
+                timeout: timeout,
+                silent: true
+              }
+            );
+            if (!res.data.isSuccess) {
+              const errText = res.data.errorMsg || "解析失败或未返回有效内容";
+              this.invalidSourcesList.push({
+                bookSourceUrl: source.bookSourceUrl,
+                bookSourceName: source.bookSourceName || source.bookSourceUrl,
+                error: `[接口报错] ${errText}`
+              });
+            }
+          } catch (err) {
+            const errStr = (err && err.toString()) || "";
+            let reason = "网站无响应或访问故障";
+            if (errStr.includes("timeout")) {
+              reason = `响应超时 (> ${timeout}ms)`;
+            } else if (errStr.includes("Network Error")) {
+              reason = "网络中断或域名无法连接";
+            } else if (errStr.includes("404")) {
+              reason = "HTTP 404 (页面不存在或源失效)";
+            } else if (errStr.includes("500") || errStr.includes("502") || errStr.includes("503")) {
+              reason = "HTTP 5xx (目标源服务器内部崩溃)";
+            } else if (errStr) {
+              reason = errStr;
+            }
+            this.invalidSourcesList.push({
+              bookSourceUrl: source.bookSourceUrl,
+              bookSourceName: source.bookSourceName || source.bookSourceUrl,
+              error: reason
+            });
+          }
+        });
+      });
+    },
+    stopKeywordSourceScan() {
+      if (this.scanSourceLimitHandler && this.scanSourceLimitHandler.cancel) {
+        this.scanSourceLimitHandler.cancel();
+      }
+      this.isScanningSources = false;
+      this.$message.info("已停止书源体检");
+    },
+    async loadRuntimeInvalidSources() {
       this.checkingInvalidSources = true;
       try {
         const res = await Axios.post("/getInvalidBookSources");
@@ -1438,16 +1639,16 @@ export default {
             list.push({
               bookSourceUrl: url,
               bookSourceName: (matched && matched.bookSourceName) || url,
-              error: item.error || "请求超时或源不可用"
+              error: item.error || "运行异常: 超时或格式错误"
             });
           }
           this.invalidSourcesList = list;
-          this.showInvalidSourcesDialog = true;
+          this.$message.success(`已调取到 ${list.length} 个后端故障记录源`);
         } else {
-          this.$message.error(res.data.errorMsg || "检测失效书源失败");
+          this.$message.error(res.data.errorMsg || "获取后端故障源失败");
         }
       } catch (err) {
-        this.$message.error("检测失效书源异常: " + err.toString());
+        this.$message.error("读取后端故障源异常: " + err.toString());
       } finally {
         this.checkingInvalidSources = false;
       }
@@ -1481,7 +1682,7 @@ export default {
     },
     async fetchLogs() {
       try {
-        const res = await Axios.get("/reader3/getSystemLogs", {
+        const res = await Axios.get("/getSystemLogs", {
           params: {
             lines: this.logLines,
             error: this.logErrorOnly

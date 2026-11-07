@@ -1104,8 +1104,8 @@ export default {
       this.popBookSourceVisible = false;
       this.show = false;
       this.tryRefresh = false;
-      // TODO 使用相似度比较，校正章节index
-      this.loadCatalog(true, true);
+      // 换源已在后端完成目录校准并存库，无需重复网络全量重抓
+      this.loadCatalog(false, true);
     },
     loadCatalog(refresh, init) {
       if (!this.api) {

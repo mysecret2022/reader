@@ -74,7 +74,8 @@ object BookList {
             val ruleName = analyzeRule.splitSourceRule(bookListRule.name)
             val ruleBookUrl = analyzeRule.splitSourceRule(bookListRule.bookUrl)
             val ruleAuthor = analyzeRule.splitSourceRule(bookListRule.author)
-            val ruleCoverUrl = analyzeRule.splitSourceRule(bookListRule.coverUrl)
+            // 搜索书籍时不解析图片封面，大幅降低资源开销并加快搜索速度
+            val ruleCoverUrl = if (isSearch) emptyList() else analyzeRule.splitSourceRule(bookListRule.coverUrl)
             val ruleIntro = analyzeRule.splitSourceRule(bookListRule.intro)
             val ruleKind = analyzeRule.splitSourceRule(bookListRule.kind)
             val ruleLastChapter = analyzeRule.splitSourceRule(bookListRule.lastChapter)

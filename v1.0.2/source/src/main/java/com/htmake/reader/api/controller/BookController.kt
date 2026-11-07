@@ -81,6 +81,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import me.ag2s.epublib.domain.*
 import me.ag2s.epublib.epub.EpubWriter
 import me.ag2s.epublib.util.ResourceUtil
@@ -1393,23 +1394,19 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var bookSourceString = getBookSourceStringBySourceURL(bookSourceUrl, userNameSpace)
 
         var searchBook: Book? = null
-        if (bookSourceString.isNullOrEmpty()) {
-            // 判断是不是本地书籍
-            val localBookSourceList = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
-
-            // 遍历判断书本是否存在
-            if (localBookSourceList != null) {
-                for (i in 0 until localBookSourceList.size()) {
-                    var _searchBook = localBookSourceList.getJsonObject(i).mapTo(SearchBook::class.java)
-                    if (_searchBook.bookUrl.equals(newBookUrl)) {
-                        searchBook = _searchBook.toBook()
-                        break;
-                    }
+        // 优先在本地缓存搜索源中匹配目标书籍，避免产生额外的远端 HTTP 详情请求
+        val localBookSourceList = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
+        if (localBookSourceList != null) {
+            for (i in 0 until localBookSourceList.size()) {
+                var _searchBook = localBookSourceList.getJsonObject(i).mapTo(SearchBook::class.java)
+                if (_searchBook.bookUrl.equals(newBookUrl)) {
+                    searchBook = _searchBook.toBook()
+                    break
                 }
             }
-            if (searchBook == null) {
-                return returnData.setErrorMsg("书源信息错误")
-            }
+        }
+        if (searchBook == null && bookSourceString.isNullOrEmpty()) {
+            return returnData.setErrorMsg("书源信息错误")
         }
 
         var newBookInfo = if (searchBook != null) {
@@ -1444,8 +1441,14 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             existBook
         }
 
-        // 更新目录
-        getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
+        // 更新目录 (增加超时保护，避免网络堵塞卡住换源主流程)
+        try {
+            withTimeoutOrNull(12000L) {
+                getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
+            }
+        } catch (e: Exception) {
+            logger.warn("setBookSource: 目录更新异常，将在后续进入阅读时重新加载: {}", e.message)
+        }
         return returnData.setData(newBookInfo)
     }
 

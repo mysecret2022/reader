@@ -27,6 +27,17 @@
             style="display:none"
           />
         </div>
+        <div v-if="isInShelf" style="text-align: center; margin-top: 6px;">
+          <el-button
+            type="text"
+            size="mini"
+            icon="el-icon-picture"
+            style="padding: 0; color: #409EFF;"
+            @click="openCoverPicker"
+          >
+            修改封面
+          </el-button>
+        </div>
       </div>
       <div class="book-name">{{ showBookInfo.name }}</div>
       <div class="book-kind" v-html="renderBookKind(showBookInfo.kind)"></div>
@@ -186,6 +197,9 @@ export default {
     },
     triggerBookCoverRefClick() {
       this.$refs.bookCoverRef.dispatchEvent(new MouseEvent("click"));
+    },
+    openCoverPicker() {
+      eventBus.$emit("openCoverPicker", this.showBookInfo);
     },
     onCoverFileChange(event) {
       if (!event.target || !event.target.files || !event.target.files.length) {

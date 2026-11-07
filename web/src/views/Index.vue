@@ -446,105 +446,111 @@
       @click="showNavigation = false"
     >
       <div class="shelf-title">
-        <i
-          class="el-icon-menu"
-          v-if="$store.getters.isNormalPage && collapseMenu"
-          @click.stop="toggleMenu"
-        ></i>
-        {{ isSearchResult ? (isExploreResult ? "探索" : "搜索") : "书架" }}
-        ({{ bookList.length }})
-        <div
-          class="title-btn"
-          v-if="$store.getters.isNormalPage && isSearchResult"
-          @click="backToShelf"
-        >
-          书架
+        <div class="shelf-title-left">
+          <i
+            class="el-icon-menu"
+            v-if="$store.getters.isNormalPage && collapseMenu"
+            @click.stop="toggleMenu"
+          ></i>
+          {{ isSearchResult ? (isExploreResult ? "探索" : "搜索") : "书架" }}
+          ({{ bookList.length }})
         </div>
-        <div
-          class="title-btn"
-          v-if="$store.getters.isNormalPage && isSearchResult"
-          @click="loadMore"
-        >
-          <i class="el-icon-loading" v-if="loadingMore"></i>
-          {{ loadingMore ? "加载中..." : "加载更多" }}
-        </div>
-        <div
-          class="title-btn"
-          @click="showExplorePop"
-          v-if="
-            $store.getters.isNormalPage && !(isSearchResult && !isExploreResult)
-          "
-        >
-          书海
-        </div>
-        <div class="title-btn" v-if="!isSearchResult" @click="refreshShelf">
-          <i class="el-icon-loading" v-if="refreshLoading"></i>
-          {{ refreshLoading ? "刷新中..." : "刷新" }}
-        </div>
-        <div
-          class="title-btn"
-          v-if="$store.getters.isNormalPage && !isSearchResult"
-          @click="showBookEditButton = !showBookEditButton"
-        >
-          {{ showBookEditButton ? "取消" : "编辑" }}
-        </div>
-        <el-dropdown
-          v-if="
-            $store.getters.isNormalPage &&
-              ($store.state.showManagerMode ||
-                ($store.state.userInfo && ($store.state.userInfo.isAdmin || $store.state.userInfo.is_admin || $store.state.userInfo.username === 'admin')))
-          "
-          @command="handleAdminMenuCommand"
-          trigger="click"
-        >
-          <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: bold;">
-            <i class="el-icon-s-operation"></i> 管理
-            <span v-if="$store.state.userInfo && $store.state.userInfo.username" style="font-weight: normal; margin-left: 2px;">
-              ({{ $store.state.userInfo.username }})
-            </span>
-            <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+        <div class="shelf-title-actions">
+          <div
+            class="title-btn"
+            v-if="$store.getters.isNormalPage && isSearchResult"
+            @click="backToShelf"
+          >
+            书架
           </div>
-          <el-dropdown-menu slot="dropdown">
-            <el-dropdown-item command="admin" icon="el-icon-s-tools">
-              控制台与管理后台
-            </el-dropdown-item>
-            <el-dropdown-item command="changePassword" icon="el-icon-key">
-              修改账户密码
-            </el-dropdown-item>
-            <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
-              退出当前账号
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </el-dropdown>
-        <el-dropdown
-          v-else-if="
-            $store.getters.isNormalPage &&
-              $store.state.userInfo &&
-              $store.state.userInfo.username
-          "
-          @command="handleUserMenuCommand"
-          trigger="click"
-        >
-          <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: 500;">
-            <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
-            <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+          <div
+            class="title-btn"
+            v-if="$store.getters.isNormalPage && isSearchResult"
+            @click="loadMore"
+          >
+            <i class="el-icon-loading" v-if="loadingMore"></i>
+            {{ loadingMore ? "加载中..." : "加载更多" }}
           </div>
-          <el-dropdown-menu slot="dropdown">
-            <el-dropdown-item command="changePassword" icon="el-icon-key">
-              修改密码
-            </el-dropdown-item>
-            <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
-              退出登录
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </el-dropdown>
-        <div
-          class="title-btn"
-          v-else-if="$store.getters.isNormalPage"
-          @click="$store.commit('setShowLogin', true)"
-          style="color: #409EFF; font-weight: bold;"
-        >
-          <i class="el-icon-user-solid"></i> 登录
+          <div
+            class="title-btn"
+            @click="showExplorePop"
+            v-if="
+              $store.getters.isNormalPage && !(isSearchResult && !isExploreResult)
+            "
+          >
+            书海
+          </div>
+          <div class="title-btn" v-if="!isSearchResult" @click="refreshShelf">
+            <i class="el-icon-loading" v-if="refreshLoading"></i>
+            {{ refreshLoading ? "刷新中..." : "刷新" }}
+          </div>
+          <div
+            class="title-btn"
+            v-if="$store.getters.isNormalPage && !isSearchResult"
+            @click="showBookEditButton = !showBookEditButton"
+          >
+            {{ showBookEditButton ? "取消" : "编辑" }}
+          </div>
+          <el-dropdown
+            v-if="
+              $store.getters.isNormalPage &&
+                ($store.state.showManagerMode ||
+                  ($store.state.userInfo && ($store.state.userInfo.isAdmin || $store.state.userInfo.is_admin || $store.state.userInfo.username === 'admin')))
+            "
+            @command="handleAdminMenuCommand"
+            trigger="click"
+            class="title-btn-dropdown"
+          >
+            <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: bold;">
+              <i class="el-icon-s-operation"></i> 管理
+              <span v-if="$store.state.userInfo && $store.state.userInfo.username" style="font-weight: normal; margin-left: 2px;">
+                ({{ $store.state.userInfo.username }})
+              </span>
+              <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+            </div>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="admin" icon="el-icon-s-tools">
+                控制台与管理后台
+              </el-dropdown-item>
+              <el-dropdown-item command="changePassword" icon="el-icon-key">
+                修改账户密码
+              </el-dropdown-item>
+              <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
+                退出当前账号
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+          <el-dropdown
+            v-else-if="
+              $store.getters.isNormalPage &&
+                $store.state.userInfo &&
+                $store.state.userInfo.username
+            "
+            @command="handleUserMenuCommand"
+            trigger="click"
+            class="title-btn-dropdown"
+          >
+            <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: 500;">
+              <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
+              <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+            </div>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="changePassword" icon="el-icon-key">
+                修改密码
+              </el-dropdown-item>
+              <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
+                退出登录
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+          <div
+            class="title-btn"
+            v-else-if="$store.getters.isNormalPage"
+            @click="$store.commit('setShowLogin', true)"
+            style="color: #409EFF; font-weight: bold;"
+          >
+            <i class="el-icon-user-solid"></i> 登录
+          </div>
         </div>
       </div>
       <div class="book-group-wrapper" v-if="!isSearchResult">
@@ -574,8 +580,12 @@
             @click="toDetail(book)"
           >
             <div class="cover-img" @click.stop="showBookInfoDialog(book)">
-              <!-- <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" /> -->
+              <!-- 搜索时不拉取图片封面，采用极速轻量占位，大幅提高检索效率 -->
+              <div v-if="isSearchResult" class="cover search-cover-placeholder">
+                <i class="el-icon-reading"></i>
+              </div>
               <el-image
+                v-else
                 class="cover"
                 ref="bookCoverList"
                 :src="getCover(getBookCoverUrl(book), true)"
@@ -590,11 +600,19 @@
                   class="el-icon-close"
                   v-if="!isSearchResult && showBookEditButton"
                   @click.stop="deleteBook(book)"
+                  title="删除书籍"
+                ></i>
+                <i
+                  class="el-icon-picture"
+                  v-if="!isSearchResult && showBookEditButton"
+                  @click.stop="openCoverPicker(book)"
+                  title="修改书籍封面"
                 ></i>
                 <i
                   class="el-icon-edit"
                   v-if="!isSearchResult && showBookEditButton"
                   @click.stop="editBook(book)"
+                  title="编辑书籍信息"
                 ></i>
                 <i
                   class="el-icon-edit"
@@ -1031,6 +1049,63 @@
       v-model="showWebDAVManageDialog"
       @importFromLocalPathPreview="importMultiBooks"
     ></WebDAV>
+
+    <!-- 修改书籍封面弹窗 -->
+    <el-dialog
+      title="修改书籍封面"
+      :visible.sync="showCoverPicker"
+      width="560px"
+      append-to-body
+      :before-close="() => (showCoverPicker = false)"
+    >
+      <div v-if="currentCoverBook" class="cover-picker-content">
+        <div style="margin-bottom: 14px; display: flex; gap: 8px;">
+          <el-input
+            v-model="customCoverInput"
+            size="small"
+            placeholder="输入或粘贴自定义封面图片链接 (http://...)"
+            clearable
+          >
+            <template slot="prepend">图片链接</template>
+          </el-input>
+          <el-button
+            type="primary"
+            size="small"
+            icon="el-icon-check"
+            @click="applyCover(customCoverInput)"
+          >
+            保存封面
+          </el-button>
+        </div>
+        <div style="font-size: 13px; color: #606266; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <span>从可用书源自动聚合的封面图（点击即可一键设为封面）：</span>
+          <el-button
+            type="text"
+            size="mini"
+            icon="el-icon-refresh"
+            :loading="loadingCovers"
+            @click="fetchBookCovers(currentCoverBook)"
+          >
+            重新拉取
+          </el-button>
+        </div>
+        <div class="cover-grid" v-loading="loadingCovers">
+          <div
+            v-for="(cover, idx) in candidateCovers"
+            :key="idx"
+            class="cover-card"
+            :class="{ active: currentCoverBook.customCoverUrl === cover.url || currentCoverBook.coverUrl === cover.url }"
+            @click="applyCover(cover.url)"
+          >
+            <img :src="cover.url" class="cover-img" @error="onCoverImgError(cover)" />
+            <div class="cover-source-tag" :title="cover.sourceName">{{ cover.sourceName }}</div>
+          </div>
+          <div v-if="!loadingCovers && candidateCovers.length === 0" style="grid-column: 1/-1; text-align: center; color: #999; padding: 25px;">
+            暂未从书源匹配到更多封面，您可以直接在上方输入图片链接
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1083,6 +1158,12 @@ export default {
 
       showBookSourceManageDialog: false,
       manageSourceSelection: [],
+
+      showCoverPicker: false,
+      currentCoverBook: null,
+      customCoverInput: "",
+      candidateCovers: [],
+      loadingCovers: false,
       isShowFailureBookSource: false,
       checkBookSourceTip: "",
       isCheckingBookSource: false,
@@ -1221,12 +1302,90 @@ export default {
       }
       this.editBook(book, isAdd, onSuccess);
     });
+    eventBus.$on("openCoverPicker", book => {
+      this.openCoverPicker(book);
+    });
   },
   activated() {
     document.title = "阅读";
     this.scanCacheStorage();
   },
   methods: {
+    openCoverPicker(book) {
+      if (!book) return;
+      this.currentCoverBook = book;
+      this.customCoverInput = book.customCoverUrl || book.coverUrl || "";
+      this.candidateCovers = [];
+      this.showCoverPicker = true;
+      this.fetchBookCovers(book);
+    },
+    fetchBookCovers(book) {
+      if (!book) return;
+      this.loadingCovers = true;
+      Axios.post(this.api + "/getAvailableBookSource", {
+        url: book.bookUrl,
+        refresh: 0
+      })
+        .then(res => {
+          this.loadingCovers = false;
+          if (res.data.isSuccess && Array.isArray(res.data.data)) {
+            const covers = [];
+            const seen = new Set();
+            if (book.coverUrl && !seen.has(book.coverUrl)) {
+              seen.add(book.coverUrl);
+              covers.push({
+                url: book.coverUrl,
+                sourceName: book.originName || "当前书源"
+              });
+            }
+            res.data.data.forEach(item => {
+              if (item.coverUrl && item.coverUrl.startsWith("http") && !seen.has(item.coverUrl)) {
+                seen.add(item.coverUrl);
+                covers.push({
+                  url: item.coverUrl,
+                  sourceName: item.originName || "书源候选项"
+                });
+              }
+            });
+            this.candidateCovers = covers;
+          }
+        })
+        .catch(() => {
+          this.loadingCovers = false;
+        });
+    },
+    onCoverImgError(cover) {
+      const idx = this.candidateCovers.findIndex(c => c.url === cover.url);
+      if (idx >= 0) {
+        this.candidateCovers.splice(idx, 1);
+      }
+    },
+    applyCover(coverUrl) {
+      if (!coverUrl) {
+        this.$message.error("请选择或输入封面图片链接");
+        return;
+      }
+      const updatedBook = Object.assign({}, this.currentCoverBook, {
+        customCoverUrl: coverUrl,
+        coverUrl: coverUrl
+      });
+      Axios.post(this.api + "/saveBook", updatedBook).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("书籍封面已更新成功！");
+            this.showCoverPicker = false;
+            this.currentCoverBook.customCoverUrl = coverUrl;
+            this.currentCoverBook.coverUrl = coverUrl;
+            this.loadBookshelf();
+          } else {
+            this.$message.error(res.data.errorMsg || "保存封面失败");
+          }
+        },
+        err => {
+          this.$message.error("保存封面异常: " + (err && err.toString()));
+        }
+      );
+    },
     init(refresh) {
       this.$root.$children[0].init(refresh);
     },
@@ -3330,6 +3489,21 @@ export default {
       margin-bottom: 5px;
       min-width: 320px;
       box-sizing: border-box;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .shelf-title-left {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .shelf-title-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
 
       .el-icon-menu {
         cursor: pointer;
@@ -3338,14 +3512,21 @@ export default {
       .title-btn {
         font-size: 14px;
         line-height: 28px;
-        float: right;
+        float: none;
         cursor: pointer;
         user-select: none;
-        margin-left: 10px;
+        margin-left: 0;
+        display: inline-flex;
+        align-items: center;
 
         >>>.el-icon-loading {
           font-size: 16px;
         }
+      }
+
+      .title-btn-dropdown {
+        display: inline-flex;
+        align-items: center;
       }
     }
 
@@ -3818,5 +3999,59 @@ export default {
 }
 .book-group-tabs .el-tabs__header {
   margin-bottom: 0px;
+}
+.search-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  color: #64748b;
+  font-size: 32px;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+.cover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.cover-card {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: center;
+  transition: all 0.2s ease;
+  background: #f8fafc;
+  padding: 4px;
+
+  &:hover {
+    border-color: #409EFF;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  }
+  &.active {
+    border-color: #67C23A;
+    background: rgba(103, 194, 58, 0.08);
+  }
+  .cover-img {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+  }
+  .cover-source-tag {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 </style>
