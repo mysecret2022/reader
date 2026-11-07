@@ -33,12 +33,16 @@
 
 适合部署在 Linux / VPS / NAS 服务器上。新建 `docker-compose.yml` 文件：
 
+#### 1. 采用本地构建（享受本仓库全新免弹窗登录界面 🌟）
+直接克隆本仓库代码并在目录下执行即可：
 ```yaml
 version: '3.8'
 
 services:
   reader:
-    image: hectorqin/reader:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.source
     container_name: reader
     restart: always
     ports:
@@ -54,9 +58,33 @@ services:
       # 开启多用户与登录鉴权：READER_APP_SECURE=true
       - READER_APP_SECURE=true
       - READER_APP_SECUREKEY=admin_password_123 # 管理员密码（必改）
-      - READER_APP_INVITECODE=                  # 注册邀请码（留空则开放自由注册）
+      # - READER_APP_INVITECODE=register_code   # 注册邀请码（可选；如需开放自由注册请注释掉本行）
       - READER_APP_CACHECHAPTERCONTENT=true     # 开启章节内容本地缓存
       - READER_APP_USERLIMIT=50                 # 最大用户限制
+```
+
+#### 2. 采用官方预编译公共镜像（原作者旧版界面）
+```yaml
+version: '3.8'
+
+services:
+  reader:
+    image: hectorqin/reader:latest
+    container_name: reader
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./storage:/storage
+      - ./logs:/logs
+    environment:
+      - TZ=Asia/Shanghai
+      - SPRING_PROFILES_ACTIVE=prod
+      - READER_APP_SECURE=true
+      - READER_APP_SECUREKEY=admin_password_123
+      # - READER_APP_INVITECODE=register_code   # 如需开放注册请注释本行
+      - READER_APP_CACHECHAPTERCONTENT=true
+      - READER_APP_USERLIMIT=50
 ```
 
 启动命令：
