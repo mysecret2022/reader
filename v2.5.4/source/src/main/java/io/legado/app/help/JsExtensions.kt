@@ -692,6 +692,30 @@ interface JsExtensions {
         return aesEncodeToBase64ByteArray(data, key, transformation, iv)?.let { String(it) }
     }
 
+    fun createSymmetricCrypto(transformation: String, key: Any, iv: Any? = null): SymmetricCrypto {
+        return SymmetricCrypto(transformation, key, iv)
+    }
+
+    fun bytesToStr(bytes: Any?): String {
+        return when (bytes) {
+            null -> ""
+            is ByteArray -> String(bytes, Charsets.UTF_8)
+            is Array<*> -> {
+                val b = ByteArray(bytes.size) { (bytes[it] as Number).toByte() }
+                String(b, Charsets.UTF_8)
+            }
+            is Collection<*> -> {
+                val b = ByteArray(bytes.size) { (bytes.elementAt(it) as Number).toByte() }
+                String(b, Charsets.UTF_8)
+            }
+            else -> bytes.toString()
+        }
+    }
+
+    fun strToBytes(str: String?): ByteArray {
+        return str?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
+    }
+
     fun androidId(): String {
         return ""
     }

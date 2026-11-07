@@ -31,6 +31,9 @@
 6. **服务端环境 webview 智能优雅降级**：
    - 原因：原项目移植自 Android 版 Legado。部分书源配置了 `{"webView": true}`，在安卓手机上会使用内置系统的 `android.webkit.WebView` 执行，而在 Linux/Docker 等服务端 JVM 无安卓 WebView 组件，原代码中直接粗暴 `throw Exception("不支持webview")` 导致书源报错中断。
    - 解决方案：在 `AnalyzeUrl.kt` 中移除直接抛错的逻辑，改为智能降级为标准 HTTP 客户端请求，并打印友情日志。这使得绝大部分只是误标或轻量爬虫校验的书源（如《总裁小说》等）在服务端上能顺利抓取章节与正文。
+7. **完整实现 JavaScript 对称加解密与格式容错 (`java.createSymmetricCrypto`)**：
+   - 原因：部分书源（如顶点小说/盗版顶点等）在解析章节 URL 和正文时，使用 `@js:` 调用了 Legado 3.0 的 `java.createSymmetricCrypto(transformation, key, iv)`、`java.bytesToStr(...)` 以及 `<<js>` 语法。此前服务端 `JsExtensions.kt` 未实现该方法，导致 JS 执行抛出 `TypeError: java.createSymmetricCrypto is not a function`，从而导致目录或章节内容解密失败。
+   - 解决方案：新增纯 JVM 标准库实现的 [`SymmetricCrypto.kt`](file:///root/.gemini/antigravity/scratch/reader/src/main/java/io/legado/app/help/SymmetricCrypto.kt)，在 `JsExtensions.kt` 中注入 `createSymmetricCrypto`、`bytesToStr`、`strToBytes`，并在 `AppPattern.kt` 中兼容 `<+js>`（自动支持 `<<js>` 笔误规则），完整打通书源中的 JS 解密全流程。
 
 ---
 
