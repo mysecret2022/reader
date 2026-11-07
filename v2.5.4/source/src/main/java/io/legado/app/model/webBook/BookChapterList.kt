@@ -199,11 +199,13 @@ object BookChapterList {
                 }
             }
             if(log) debugLog?.log(bookSource.bookSourceUrl, "└目录列表解析完成")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "≡首章信息")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节名称:${chapterList[0].title}")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节链接:${chapterList[0].url}")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节信息:${chapterList[0].tag}")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇是否卷名:${chapterList[0].isVolume}")
+            if (chapterList.isNotEmpty()) {
+                if(log) debugLog?.log(bookSource.bookSourceUrl, "≡首章信息")
+                if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节名称:${chapterList[0].title}")
+                if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节链接:${chapterList[0].url}")
+                if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节信息:${chapterList[0].tag}")
+                if(log) debugLog?.log(bookSource.bookSourceUrl, "◇是否卷名:${chapterList[0].isVolume}")
+            }
         }
         return Pair(chapterList, nextUrlList)
     }

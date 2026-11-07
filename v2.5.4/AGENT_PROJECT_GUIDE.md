@@ -22,6 +22,12 @@
 3. **CI/CD 自动化全链条闭环**：
    - 原因：GitHub Actions runner 检出代码时不包含预构建的 JAR，若直接在 Docker 镜像内构建会导致 QEMU 模拟 ARM64 构建极其缓慢。
    - 解决方案：在 Actions 步骤中先通过 Node 18 执行 `yarn sync` 构建前端，再由 Java 11 执行 `./build.sh cli assemble` 生成 Fat JAR，最后通过 Buildx 极速封装并推送 GHCR。
+4. **空章节列表索引越界 Bug 修复 (`Index 0 out of bounds for length 0`)**：
+   - 原因：当部分书源（如顶点小说等失效或返回空列表的书源）解析目录返回 0 章节时，`BookChapterList.kt` 中记录首章信息的日志代码直接访问 `chapterList[0]`，引发未捕获的越界异常。
+   - 解决方案：在访问 `chapterList[0]` 打印首章调试信息前增加 `if (chapterList.isNotEmpty())` 判空防护。
+5. **前端界面精简与多余外链/图标移除**：
+   - 移除侧边栏「其它」一栏（公众号与 Telegram 频道宣传外链）。
+   - 移除侧边栏底部的 GitHub 仓库图标与日夜间切换按钮。
 
 ---
 
