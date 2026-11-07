@@ -347,28 +347,26 @@ class AnalyzeUrl(
         }
         val concurrentRecord = fetchStart()
         setCookie(source?.getKey())
-        val strResponse: StrResponse
         if (this.useWebView && useWebView) {
-            throw Exception("不支持webview")
-        } else {
-            strResponse = getProxyClient(proxy, debugLog).newCallStrResponse(retry) {
-                addHeaders(headerMap)
-                when (method) {
-                    RequestMethod.POST -> {
-                        url(urlNoQuery)
-                        val contentType = headerMap["Content-Type"]
-                        val body = body
-                        if (fieldMap.isNotEmpty() || body.isNullOrBlank()) {
-                            postForm(fieldMap, true)
-                        } else if (!contentType.isNullOrBlank()) {
-                            val requestBody = body.toRequestBody(contentType.toMediaType())
-                            post(requestBody)
-                        } else {
-                            postJson(body)
-                        }
+            debugLog?.log(source?.getKey() ?: "", "注意：服务端无Android原生WebView组件，已自动降级为HTTP请求尝试获取")
+        }
+        val strResponse = getProxyClient(proxy, debugLog).newCallStrResponse(retry) {
+            addHeaders(headerMap)
+            when (method) {
+                RequestMethod.POST -> {
+                    url(urlNoQuery)
+                    val contentType = headerMap["Content-Type"]
+                    val body = body
+                    if (fieldMap.isNotEmpty() || body.isNullOrBlank()) {
+                        postForm(fieldMap, true)
+                    } else if (!contentType.isNullOrBlank()) {
+                        val requestBody = body.toRequestBody(contentType.toMediaType())
+                        post(requestBody)
+                    } else {
+                        postJson(body)
                     }
-                    else -> get(urlNoQuery, fieldMap, true)
                 }
+                else -> get(urlNoQuery, fieldMap, true)
             }
         }
         fetchEnd(concurrentRecord)
