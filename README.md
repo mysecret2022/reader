@@ -59,45 +59,11 @@ services:
       - READER_APP_USERLIMIT=50                 # 最大用户限制
 ```
 
-#### 2. 采用源码本地构建（如需自行微调代码）
-```yaml
-version: '3.8'
-
-services:
-  reader:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: reader
-    restart: always
-    ports:
-      - "4396:8080"
-    volumes:
-      - ./storage:/storage
-      - ./logs:/logs
-    environment:
-      - TZ=Asia/Shanghai
-      - SPRING_PROFILES_ACTIVE=prod
-      - READER_APP_SECURE=true
-      - READER_APP_SECUREKEY=admin_password_123
-      # - READER_APP_INVITECODE=register_code
-      - READER_APP_CACHECHAPTERCONTENT=true
-      - READER_APP_USERLIMIT=50
-```
-      - TZ=Asia/Shanghai
-      - SPRING_PROFILES_ACTIVE=prod
-      - READER_APP_SECURE=true
-      - READER_APP_SECUREKEY=admin_password_123
-      # - READER_APP_INVITECODE=register_code   # 如需开放注册请注释本行
-      - READER_APP_CACHECHAPTERCONTENT=true
-      - READER_APP_USERLIMIT=50
-```
-
 启动命令：
 ```bash
 docker compose up -d
 ```
-启动后在浏览器打开 `http://<服务器IP>:8080` 即可开始阅读。
+启动后在浏览器打开 `http://<服务器IP>:4396` 即可开始阅读。
 
 ---
 
