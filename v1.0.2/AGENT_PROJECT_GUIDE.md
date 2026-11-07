@@ -87,3 +87,18 @@ rm -rf src/main/resources/web/* && cp -r web/dist/* src/main/resources/web/
 # 3. 重新构建 Docker 镜像
 docker build -t reader:local .
 ```
+
+---
+
+## 4. 关键 Bug 修复记录 (Bug Fix History)
+
+### 4.1 换源卡顿与目录加载异常修复
+- **问题现象**：换源操作响应极为缓慢，点击后长时间无响应或提示目录拉取失败，对比 1.0.1 体验明显变慢。
+- **根因分析**：
+  1. `setBookSource` 原优化试图在本地搜索缓存 `localBookSourceList` 中匹配书籍对象，但搜索结果对象 `SearchBook` 仅包含基础信息，其 `tocUrl` 为空串 `""`。
+  2. 绕过网络直接使用 `SearchBook.toBook()` 导致书籍的 `tocUrl` 被清空，随后的 `getLocalChapterList` 拿空地址请求目录，导致章节规则解析失效或触发 12 秒网络重试超时。
+  3. `Reader.vue` 中 `changeBookSource` 未强制刷新目录，导致客户端无法及时获取最新目录。
+- **解决方案**：
+  1. 恢复 1.0.1 严谨机制，线上书源始终通过 `WebBook.getBookInfo` 请求最新详情并完整抽取目标源 `tocUrl`。
+  2. 移除超时熔断包裹，确保换源完成后立刻由 `getLocalChapterList` 校准并缓存完整目录。
+  3. `Reader.vue` 恢复 `this.loadCatalog(true, true)`，确保换源后无缝更新目录与第一章内容。

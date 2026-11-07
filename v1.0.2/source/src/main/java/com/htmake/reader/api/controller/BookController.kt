@@ -1394,19 +1394,23 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var bookSourceString = getBookSourceStringBySourceURL(bookSourceUrl, userNameSpace)
 
         var searchBook: Book? = null
-        // 优先在本地缓存搜索源中匹配目标书籍，避免产生额外的远端 HTTP 详情请求
-        val localBookSourceList = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
-        if (localBookSourceList != null) {
-            for (i in 0 until localBookSourceList.size()) {
-                var _searchBook = localBookSourceList.getJsonObject(i).mapTo(SearchBook::class.java)
-                if (_searchBook.bookUrl.equals(newBookUrl)) {
-                    searchBook = _searchBook.toBook()
-                    break
+        if (bookSourceString.isNullOrEmpty()) {
+            // 判断是不是本地书籍
+            val localBookSourceList = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
+
+            // 遍历判断书本是否存在
+            if (localBookSourceList != null) {
+                for (i in 0 until localBookSourceList.size()) {
+                    var _searchBook = localBookSourceList.getJsonObject(i).mapTo(SearchBook::class.java)
+                    if (_searchBook.bookUrl.equals(newBookUrl)) {
+                        searchBook = _searchBook.toBook()
+                        break
+                    }
                 }
             }
-        }
-        if (searchBook == null && bookSourceString.isNullOrEmpty()) {
-            return returnData.setErrorMsg("书源信息错误")
+            if (searchBook == null) {
+                return returnData.setErrorMsg("书源信息错误")
+            }
         }
 
         var newBookInfo = if (searchBook != null) {
@@ -1441,14 +1445,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             existBook
         }
 
-        // 更新目录 (增加超时保护，避免网络堵塞卡住换源主流程)
-        try {
-            withTimeoutOrNull(12000L) {
-                getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
-            }
-        } catch (e: Exception) {
-            logger.warn("setBookSource: 目录更新异常，将在后续进入阅读时重新加载: {}", e.message)
-        }
+        // 更新目录
+        getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
         return returnData.setData(newBookInfo)
     }
 

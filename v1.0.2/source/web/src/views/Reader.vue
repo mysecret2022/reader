@@ -1104,8 +1104,8 @@ export default {
       this.popBookSourceVisible = false;
       this.show = false;
       this.tryRefresh = false;
-      // 换源已在后端完成目录校准并存库，无需重复网络全量重抓
-      this.loadCatalog(false, true);
+      // 保持与 1.0.1 体验完全一致，换源后刷新目录与最新章节
+      this.loadCatalog(true, true);
     },
     loadCatalog(refresh, init) {
       if (!this.api) {
