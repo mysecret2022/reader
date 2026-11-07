@@ -33,20 +33,18 @@
 
 适合部署在 Linux / VPS / NAS 服务器上。新建 `docker-compose.yml` 文件：
 
-#### 1. 采用本地构建（享受本仓库全新免弹窗登录界面 🌟）
-直接克隆本仓库代码并在目录下执行即可：
+#### 1. 直接拉取本仓库 GitHub 编译好的全新镜像（即拉即用 🌟）
+无需本地编译环境，直接使用 GitHub Actions 自动编译构建并推送到 GHCR 的镜像：
 ```yaml
 version: '3.8'
 
 services:
   reader:
-    build:
-      context: .
-      dockerfile: Dockerfile.source
+    image: ghcr.io/mysecret2022/reader:latest
     container_name: reader
     restart: always
     ports:
-      - "8080:8080" # 访问端口，可按需修改，如 4396:8080
+      - "4396:8080" # 访问端口，可按需修改
     volumes:
       - ./storage:/storage # 数据持久化目录（书源、书架、缓存及配置）
       - ./logs:/logs       # 日志输出目录
@@ -54,30 +52,38 @@ services:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       # ================= 权限模式配置 =================
-      # 个人自用直接免密：READER_APP_SECURE=false
-      # 开启多用户与登录鉴权：READER_APP_SECURE=true
-      - READER_APP_SECURE=true
+      - READER_APP_SECURE=true                  # 开启多用户登录鉴权
       - READER_APP_SECUREKEY=admin_password_123 # 管理员密码（必改）
       # - READER_APP_INVITECODE=register_code   # 注册邀请码（可选；如需开放自由注册请注释掉本行）
       - READER_APP_CACHECHAPTERCONTENT=true     # 开启章节内容本地缓存
       - READER_APP_USERLIMIT=50                 # 最大用户限制
 ```
 
-#### 2. 采用官方预编译公共镜像（原作者旧版界面）
+#### 2. 采用源码本地构建（如需自行微调代码）
 ```yaml
 version: '3.8'
 
 services:
   reader:
-    image: hectorqin/reader:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: reader
     restart: always
     ports:
-      - "8080:8080"
+      - "4396:8080"
     volumes:
       - ./storage:/storage
       - ./logs:/logs
     environment:
+      - TZ=Asia/Shanghai
+      - SPRING_PROFILES_ACTIVE=prod
+      - READER_APP_SECURE=true
+      - READER_APP_SECUREKEY=admin_password_123
+      # - READER_APP_INVITECODE=register_code
+      - READER_APP_CACHECHAPTERCONTENT=true
+      - READER_APP_USERLIMIT=50
+```
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       - READER_APP_SECURE=true
