@@ -2818,29 +2818,7 @@ export default {
         : this.bookSourceList;
     },
     bookSourceGroupList() {
-      const groupsMap = {};
-      this.bookSourceList.forEach(v => {
-        if (v.bookSourceGroup) {
-          groupsMap[v.bookSourceGroup] = (groupsMap[v.bookSourceGroup] | 0) + 1;
-        }
-      });
-      const groups = [
-        {
-          name: "全部分组",
-          value: "",
-          count: this.bookSourceList.length
-        }
-      ];
-      for (const i in groupsMap) {
-        if (Object.hasOwnProperty.call(groupsMap, i)) {
-          groups.push({
-            name: i,
-            value: i,
-            count: groupsMap[i]
-          });
-        }
-      }
-      return groups;
+      return this.$store.getters.bookSourceGroupList;
     },
     bookSourceShowGroup() {
       if (!this.isShowFailureBookSource) {
@@ -2848,6 +2826,9 @@ export default {
         this.bookSourceShowList.forEach(v => {
           v.bookSourceGroup && groups.add(v.bookSourceGroup);
         });
+        groups.add("@javascript");
+        groups.add("支持webview");
+        groups.add("普通格式");
         groups.add("未分组");
         return Array.from(groups);
       } else {
@@ -2868,11 +2849,25 @@ export default {
             : true
         );
       } else {
-        return this.bookSourceShowList.filter(v =>
-          this.showSourceGroup === "未分组"
-            ? !v.bookSourceGroup
-            : v.bookSourceGroup === this.showSourceGroup
-        );
+        return this.bookSourceShowList.filter(v => {
+          const raw = JSON.stringify(v);
+          const lowerRaw = raw.toLowerCase();
+          const isJs = raw.includes("@js:") || raw.includes("<js>") || raw.includes("<+js>") || lowerRaw.includes("javascript");
+          const isWebView = lowerRaw.includes("webview");
+          if (this.showSourceGroup === "@javascript") {
+            return isJs;
+          }
+          if (this.showSourceGroup === "支持webview") {
+            return isWebView;
+          }
+          if (this.showSourceGroup === "普通格式") {
+            return !isJs && !isWebView;
+          }
+          if (this.showSourceGroup === "未分组") {
+            return !v.bookSourceGroup;
+          }
+          return v.bookSourceGroup === this.showSourceGroup;
+        });
       }
     },
     bookSourceShowResultPageList() {

@@ -1,7 +1,7 @@
 <template>
   <div class="popup-wrapper" :style="popupTheme">
     <div class="title-zone">
-      <div class="title">来源({{ bookSource.length }})</div>
+      <div class="title">来源({{ displayedBookSource.length }})</div>
       <div :class="{ 'title-btn': true, loading: loadingMore }">
         <el-select
           size="mini"
@@ -39,7 +39,7 @@
       <div class="source-list">
         <div
           class="source-item"
-          v-for="(searchBook, index) in bookSource"
+          v-for="(searchBook, index) in displayedBookSource"
           :class="{ selected: isSelected(searchBook) }"
           :key="index"
           @click="changeBookSource(searchBook)"
@@ -97,6 +97,40 @@ export default {
     },
     readingBook() {
       return this.$store.getters.readingBook || {};
+    },
+    displayedBookSource() {
+      if (!this.bookSourceGroup) {
+        return this.bookSource;
+      }
+      return this.bookSource.filter(item => {
+        const sourceUrl = item.origin || item.bookUrl;
+        const matchedSource = this.$store.state.bookSourceList.find(
+          s => s.bookSourceUrl === sourceUrl || s.bookSourceName === item.originName
+        );
+        const raw = matchedSource
+          ? JSON.stringify(matchedSource)
+          : JSON.stringify(item);
+        const lowerRaw = raw.toLowerCase();
+        const isJs =
+          raw.includes("@js:") ||
+          raw.includes("<js>") ||
+          raw.includes("<+js>") ||
+          lowerRaw.includes("javascript");
+        const isWebView = lowerRaw.includes("webview");
+        if (this.bookSourceGroup === "@javascript") {
+          return isJs;
+        }
+        if (this.bookSourceGroup === "支持webview") {
+          return isWebView;
+        }
+        if (this.bookSourceGroup === "普通格式") {
+          return !isJs && !isWebView;
+        }
+        if (matchedSource && matchedSource.bookSourceGroup) {
+          return matchedSource.bookSourceGroup === this.bookSourceGroup;
+        }
+        return true;
+      });
     }
   },
   mounted() {},
@@ -109,6 +143,11 @@ export default {
     readingBook(val, oldVal) {
       if (val.bookUrl !== oldVal.bookUrl) {
         this.bookSourceGroupIndexMap = {};
+      }
+    },
+    bookSourceGroup(val) {
+      if (val && this.displayedBookSource.length === 0) {
+        this.searchBookSourceByEventStream();
       }
     }
   },
@@ -262,6 +301,8 @@ export default {
         accessToken: this.$store.state.token,
         concurrentCount: this.$store.state.searchConfig.concurrentCount,
         url: this.$store.getters.readingBook.bookUrl,
+        name: this.$store.getters.readingBook.name,
+        author: this.$store.getters.readingBook.author,
         bookSourceGroup: this.bookSourceGroup,
         lastIndex: this.bookSourceGroupIndexMap[this.bookSourceGroup]
       };

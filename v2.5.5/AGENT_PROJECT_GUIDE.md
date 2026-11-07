@@ -48,6 +48,15 @@
 ### 6) 界面净化
 - 在 `web/src/views/Index.vue` 中移除了底部的微信/TG 推广链接、GitHub 图标以及白天黑夜主题切换图标。
 
+### 7) 书源分组与换源筛选增加 @javascript 与 支持webview 选项
+- **背景与需求**：
+  - 用户书源包含普通格式小说、包含脚本解密的 `@javascript` 书源（如顶点小说等），以及标记了 `{'webView': true}` 的 WebView 书源（如独步小说、总裁小说等）。
+  - 用户需要能快速精准筛选/搜索 `@javascript` 格式或 WebView 格式的书源，避免全部混杂在一起。
+- **实现方案**：
+  1. **前端 Vuex 与界面**：在 `bookSourceGroupList`、`BookSource.vue` 及 `Index.vue` 中自动识别与统计 `@javascript (脚本解密)`、`支持webview` 和 `普通格式 (标准小说)`，动态加入选择框与书源管理分类。
+  2. **换源联动**：在“换源/来源”弹窗中，切换对应分组时实时过滤并可自动异步检索对应类型的书源。
+  3. **后端过滤**：在 `loadBookSourceStringList` 中对 `@javascript`、`支持webview`、`普通格式` 做专门规则分类匹配，支持在多源搜索与换源检索中精准过滤。
+
 ---
 
 ## 3. 本地部署与测试指引

@@ -557,7 +557,23 @@ export default new Vuex.Store({
     },
     bookSourceGroupList: state => {
       const groupsMap = {};
+      let jsCount = 0;
+      let webViewCount = 0;
+      let normalCount = 0;
       state.bookSourceList.forEach(v => {
+        const raw = JSON.stringify(v);
+        const lowerRaw = raw.toLowerCase();
+        const isJs = raw.includes("@js:") || raw.includes("<js>") || raw.includes("<+js>") || lowerRaw.includes("javascript");
+        const isWebView = lowerRaw.includes("webview");
+        if (isJs) {
+          jsCount++;
+        }
+        if (isWebView) {
+          webViewCount++;
+        }
+        if (!isJs && !isWebView) {
+          normalCount++;
+        }
         if (v.bookSourceGroup) {
           groupsMap[v.bookSourceGroup] = (groupsMap[v.bookSourceGroup] | 0) + 1;
         }
@@ -567,6 +583,21 @@ export default new Vuex.Store({
           name: "全部分组",
           value: "",
           count: state.bookSourceList.length
+        },
+        {
+          name: "@javascript (脚本解密)",
+          value: "@javascript",
+          count: jsCount
+        },
+        {
+          name: "支持webview",
+          value: "支持webview",
+          count: webViewCount
+        },
+        {
+          name: "普通格式 (标准小说)",
+          value: "普通格式",
+          count: normalCount
         }
       ];
       for (const i in groupsMap) {

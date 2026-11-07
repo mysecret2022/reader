@@ -977,6 +977,30 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             book = bookInfoCache.getAsString(bookUrl)?.toMap()?.toDataClass()
         }
         if (book == null) {
+            val name = if (context.request().method() == HttpMethod.POST) {
+                context.bodyAsJson.getString("name", "")
+            } else {
+                context.queryParam("name").firstOrNull() ?: ""
+            }
+            val author = if (context.request().method() == HttpMethod.POST) {
+                context.bodyAsJson.getString("author", "")
+            } else {
+                context.queryParam("author").firstOrNull() ?: ""
+            }
+            if (name.isNotEmpty()) {
+                book = getShelfBookByNameAndAuthor(name, author, userNameSpace)
+                if (book == null) {
+                    book = Book().apply {
+                        this.name = name
+                        this.author = author
+                        this.bookUrl = bookUrl
+                        setRootDir(getWorkDir())
+                        setUserNameSpace(userNameSpace)
+                    }
+                }
+            }
+        }
+        if (book == null) {
             response.write("event: error\n")
             response.end("data: " + jsonEncode(returnData.setErrorMsg("书籍信息错误"), false) + "\n\n")
             return
@@ -1878,14 +1902,44 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (bookSourceList != null) {
             for (i in 0 until bookSourceList.size()) {
                 var isAdd = true
+                val sourceJson = bookSourceList.getJsonObject(i)
+                val sourceStr = sourceJson.toString()
+                val lowerStr = sourceStr.toLowerCase()
+
+                val isJsSource = sourceStr.contains("@js:", ignoreCase = true) ||
+                                 sourceStr.contains("<js>", ignoreCase = true) ||
+                                 sourceStr.contains("<+js>", ignoreCase = true) ||
+                                 lowerStr.contains("javascript")
+
+                val isWebViewSource = lowerStr.contains("webview")
+
                 if (!bookSourceGroup.isEmpty()) {
-                    val bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
-                    if (!bookSource.bookSourceGroup.equals(bookSourceGroup)) {
-                        isAdd = false
+                    if (bookSourceGroup.equals("@javascript", ignoreCase = true) ||
+                        bookSourceGroup.equals("@js", ignoreCase = true) ||
+                        bookSourceGroup.equals("javascript", ignoreCase = true)) {
+                        if (!isJsSource) {
+                            isAdd = false
+                        }
+                    } else if (bookSourceGroup.equals("支持webview", ignoreCase = true) ||
+                               bookSourceGroup.equals("webview", ignoreCase = true) ||
+                               bookSourceGroup.equals("@webview", ignoreCase = true)) {
+                        if (!isWebViewSource) {
+                            isAdd = false
+                        }
+                    } else if (bookSourceGroup.equals("普通格式", ignoreCase = true) ||
+                               bookSourceGroup.equals("普通", ignoreCase = true)) {
+                        if (isJsSource || isWebViewSource) {
+                            isAdd = false
+                        }
+                    } else {
+                        val bookSource = sourceJson.mapTo(BookSource::class.java)
+                        if (!bookSource.bookSourceGroup.equals(bookSourceGroup)) {
+                            isAdd = false
+                        }
                     }
                 }
                 if (isAdd) {
-                    userBookSourceList.add(bookSourceList.getJsonObject(i).toString())
+                    userBookSourceList.add(sourceStr)
                 }
             }
         }
