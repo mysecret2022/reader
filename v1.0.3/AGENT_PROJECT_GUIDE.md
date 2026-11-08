@@ -38,8 +38,12 @@
   9. **强制登录与彻底关闭游客模式**：
      - 前端 `App.vue` 将 `canCancelLogin` 严格绑定为当前用户登录状态（`!!userInfo.username`），未登录状态下严禁关闭登录界面。
      - 彻底移除 `Login.vue` 中的“游客体验 / 直接进入书架”按钮与 `reader_guest_mode` 免登录分支，所有用户必须验证登录才可访问书架与阅读功能。
-  10. **书籍封面“重新拉取”实时多源扫描**：
-     - 重构 `BookManage.vue`、`Index.vue` 与 `Admin.vue` 中的 `fetchBookCovers` 方法，不再仅依赖本地缓存的 `getAvailableBookSource`（无缓存时返回空数组），而是启动 `searchBookSourceSSE` 实时通过全网可用书源流式并发拉取高清封面，并在前端统一规范为 `{ url, coverUrl, sourceName, originName }` 数据模型。
+  10. **书籍封面拉取“图片一闪而过”根因与彻底修复**：
+     - **根因**：原代码在 `onCoverImgError` 中定义了 `this.candidateCovers.splice(idx, 1)`，且前端直接通过 `<img :src="cover.url">` 请求第三方图床。当外部书源图床开启防盗链拦截（HTTP 403 Forbidden）时，图片触发 `@error` 立即将卡片从数组中剔除，导致刚流式拉取出来的封面卡片在数百毫秒内闪烁消失。
+     - **修复**：
+       1. 彻底移除 `candidateCovers.splice` 删卡逻辑，报错时仅优雅降级为本地默认封面占位图（`noCover.jpeg`），卡片与对应书源标签永久稳定保留；
+       2. 图片渲染增加 `referrerpolicy="no-referrer"` 标头，并接入 `getCover(cover.url, true)` 后端代理中转双重防盗链，彻底解决第三方图床 403 阻断；
+       3. 列表循环绑定 `:key="cover.url || idx"` 唯一键，避免流式追加新封面时旧卡片发生 DOM 闪烁重绘。
   11. **搜索后换源强校验先加书架**：
      - 恢复经典防呆逻辑：搜索完书籍直接阅读时，若要进行换源操作，必须先通过 `isInShelf` 弹出确认提示加入书架。
      - 强化 `App.vue` 的 `isInShelf` 流程：在用户确认后，先请求 `/saveBook`，成功后自动刷新 Vuex 书架状态，再继续执行换源并清除临时搜索路由参数；若用户取消加入书架，则立即终止换源。

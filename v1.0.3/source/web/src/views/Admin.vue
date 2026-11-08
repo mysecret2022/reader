@@ -1416,7 +1416,7 @@
         <div class="cover-grid" v-loading="loadingCovers">
           <div
             v-for="(item, idx) in candidateCovers"
-            :key="idx"
+            :key="item.coverUrl || idx"
             class="cover-card"
             :class="{
               active:
@@ -1425,7 +1425,12 @@
             }"
             @click="applyCover(item.coverUrl)"
           >
-            <img :src="item.coverUrl" class="cover-img" />
+            <img
+              :src="getCover(item.coverUrl, true)"
+              referrerpolicy="no-referrer"
+              class="cover-img"
+              @error="e => (e.target.src = noCoverImage)"
+            />
             <div class="cover-source-tag">
               {{ item.originName || "未知书源" }}
             </div>

@@ -1121,7 +1121,7 @@
         <div class="cover-grid" v-loading="loadingCovers">
           <div
             v-for="(cover, idx) in candidateCovers"
-            :key="idx"
+            :key="cover.url || idx"
             class="cover-card"
             :class="{
               active:
@@ -1131,9 +1131,10 @@
             @click="applyCover(cover.url)"
           >
             <img
-              :src="cover.url"
+              :src="getCover(cover.url, true)"
+              referrerpolicy="no-referrer"
               class="cover-img"
-              @error="onCoverImgError(cover)"
+              @error="onCoverImgError($event, cover)"
             />
             <div class="cover-source-tag" :title="cover.sourceName">
               {{ cover.sourceName }}
@@ -1484,10 +1485,10 @@ export default {
         this.loadingCovers = false;
       }
     },
-    onCoverImgError(cover) {
-      const idx = this.candidateCovers.findIndex(c => c.url === cover.url);
-      if (idx >= 0) {
-        this.candidateCovers.splice(idx, 1);
+    onCoverImgError(e) {
+      if (e && e.target) {
+        // 防止由于外部图床防盗链或链接失效导致卡片闪烁消失；优雅降级为本地默认封面，保持卡片和书源名称可见
+        e.target.src = require("@/assets/imgs/noCover.jpeg");
       }
     },
     applyCover(coverUrl) {
