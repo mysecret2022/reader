@@ -170,6 +170,6 @@ interface BaseSource : JsExtensions {
         bindings["cookie"] = CookieStore
         bindings["cache"] = CacheManager
         val fullJs: String = AppConst.JS_INJECT_HELPERS + "\n" + jsStr
-        return AppConst.SCRIPT_ENGINE.eval(fullJs as String, bindings)
+        return io.legado.app.help.RhinoScriptCache.eval(fullJs, bindings)
     }
 }

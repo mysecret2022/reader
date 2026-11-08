@@ -51,3 +51,7 @@ out
 /server/storage
 /server/target__pycache__/
 *.pyc
+
+# Local version archives
+/v*/
+

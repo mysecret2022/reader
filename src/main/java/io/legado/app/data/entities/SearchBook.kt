@@ -34,7 +34,8 @@ data class SearchBook(
     var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
     var time: Long = 0,
     var variable: String? = null,
-    var originOrder: Int = 0
+    var originOrder: Int = 0,
+    var alternateOrigins: ArrayList<Map<String, String>> = arrayListOf()
 ) :  BaseBook, Comparable<SearchBook> {
 
 //    @Ignore

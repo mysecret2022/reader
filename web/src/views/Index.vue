@@ -1771,8 +1771,27 @@ export default {
             if (result.data) {
               var data = [].concat(this.searchResult);
               result.data.forEach(v => {
-                if (!this.searchResultMap[v.bookUrl]) {
+                const bookKey = (v.name || "") + "_" + (v.author || "");
+                const existing = data.find(
+                  item =>
+                    (item.name || "") + "_" + (item.author || "") === bookKey
+                );
+                if (!existing) {
+                  this.searchResultMap[v.bookUrl] = true;
                   data.push(v);
+                } else {
+                  // 合并备用书源与补全封面简介
+                  if (v.alternateOrigins && v.alternateOrigins.length) {
+                    existing.alternateOrigins = (
+                      existing.alternateOrigins || []
+                    ).concat(v.alternateOrigins);
+                  }
+                  if (!existing.coverUrl && v.coverUrl) {
+                    existing.coverUrl = v.coverUrl;
+                  }
+                  if (!existing.intro && v.intro) {
+                    existing.intro = v.intro;
+                  }
                 }
               });
               this.searchResult = data;

@@ -672,7 +672,7 @@ class AnalyzeRule(
         bindings["src"] = content
         bindings["nextChapterUrl"] = nextChapterUrl
         val fullJs: String = AppConst.JS_INJECT_HELPERS + "\n" + jsStr
-        return SCRIPT_ENGINE.eval(fullJs as String, bindings)
+        return io.legado.app.help.RhinoScriptCache.eval(fullJs, bindings)
     }
 
     override fun getSource(): BaseSource? {

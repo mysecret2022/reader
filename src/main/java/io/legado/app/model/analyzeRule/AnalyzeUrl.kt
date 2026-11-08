@@ -245,7 +245,7 @@ class AnalyzeUrl(
         bindings["source"] = source
         bindings["result"] = result
         val fullJs: String = AppConst.JS_INJECT_HELPERS + "\n" + jsStr
-        return SCRIPT_ENGINE.eval(fullJs as String, bindings)
+        return io.legado.app.help.RhinoScriptCache.eval(fullJs, bindings)
     }
 
     fun put(key: String, value: String): String {

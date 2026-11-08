@@ -808,49 +808,91 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return
         }
 
+        // 依据熔断器健康度与历史平均耗时进行优先调度排序
+        userBookSourceList = ArrayList(userBookSourceList.sortedBy { srcStr ->
+            val srcUrl = asJsonObject(srcStr)?.getString("bookSourceUrl") ?: ""
+            com.htmake.reader.utils.SourceCircuitBreaker.getSortScore(srcUrl)
+        })
+
         searchSize = if(searchSize > 0) searchSize else 50
         concurrentCount = if(concurrentCount > 0) concurrentCount else 24
         logger.info("searchBookMulti from lastIndex: {} concurrentCount: {} searchSize: {}", lastIndex, concurrentCount, searchSize)
 
         var isEnd = false
-        context.request().connection().closeHandler{
+        context.request().connection().closeHandler {
             logger.info("客户端已断开链接，停止 searchBookMultiSSE")
             isEnd = true
         }
         var resultList = arrayListOf<SearchBook>()
-        var resultMap = mutableMapOf<String, Int>()
+        var resultMap = mutableMapOf<String, SearchBook>()
         val book = Book()
         book.name = key
-        limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
+
+        // 高效流式推流：每满 3 个结果或轮次聚合立即向客户端推送一次，避免等待大 Batch 全部跑完
+        val pendingBatch = arrayListOf<SearchBook>()
+        var lastFlushTime = System.currentTimeMillis()
+
+        limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, { it ->
             lastIndex = it
             var bookSource = userBookSourceList.get(it)
             searchBookWithSource(bookSource, book, false, userNameSpace = userNameSpace)
-        }) {list, loopCount ->
-            // logger.info("list: {}", list)
+        }) { list, loopCount ->
             val loopResult = arrayListOf<SearchBook>()
             list.forEach {
-                val bookList = it as? Collection<SearchBook>
-                bookList?.forEach { book ->
-                    // 按照 书名 + 作者名 过滤
-                    val bookKey = book.name + '_' + book.author
-                    if (!resultMap.containsKey(bookKey)) {
-                        resultList.add(book)
-                        loopResult.add(book)
-                        resultMap.put(bookKey, 1)
+                val bookColl = it as? Collection<*>
+                bookColl?.forEach { bAny ->
+                    val b = bAny as? SearchBook
+                    if (b != null) {
+                        val bookKey = b.name + '_' + b.author
+                        val existing = resultMap[bookKey]
+                        if (existing == null) {
+                            resultMap[bookKey] = b
+                            resultList.add(b)
+                            loopResult.add(b)
+                            pendingBatch.add(b)
+                        } else {
+                            // 同书多源聚合：保留备用源，补全缺失封面与简介
+                            if (b.origin.isNotEmpty() && b.bookUrl.isNotEmpty()) {
+                                existing.alternateOrigins.add(mapOf(
+                                    "origin" to b.origin,
+                                    "originName" to b.originName,
+                                    "bookUrl" to b.bookUrl
+                                ))
+                            }
+                            if ((existing.coverUrl.isNullOrEmpty()) && !b.coverUrl.isNullOrEmpty()) {
+                                existing.coverUrl = b.coverUrl
+                            }
+                            if ((existing.intro.isNullOrEmpty()) && !b.intro.isNullOrEmpty()) {
+                                existing.intro = b.intro
+                            }
+                        }
                     }
                 }
             }
-            // 返回本轮数据
-            response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to loopResult), false) + "\n\n")
-            logger.info("Loog: {} resultList.size: {}", loopCount, resultList.size)
+
+            val now = System.currentTimeMillis()
+            if (pendingBatch.size >= 3 || (pendingBatch.isNotEmpty() && now - lastFlushTime >= 250L)) {
+                response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to pendingBatch), false) + "\n\n")
+                pendingBatch.clear()
+                lastFlushTime = now
+            } else if (loopResult.isNotEmpty()) {
+                response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to loopResult), false) + "\n\n")
+                pendingBatch.clear()
+                lastFlushTime = now
+            }
 
             if (isEnd || loopCount >= concurrentLoopCount) {
-                // 超过最大轮次，终止执行
                 false
             } else {
                 resultList.size < searchSize
             }
         }
+
+        if (pendingBatch.isNotEmpty()) {
+            response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to pendingBatch), false) + "\n\n")
+            pendingBatch.clear()
+        }
+
         response.write("event: end\n")
         response.end("data: " + jsonEncode(mapOf("lastIndex" to lastIndex), false) + "\n\n")
     }
@@ -1062,35 +1104,44 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (isInvalidBookSource(bookSource, userNameSpace)) {
             return resultList;
         }
+        // 熔断器过滤：若当前书源正处于 30 分钟连续失败冷却期，直接跳过
+        if (!com.htmake.reader.utils.SourceCircuitBreaker.isAvailable(bookSource.bookSourceUrl)) {
+            return resultList;
+        }
         withContext(Dispatchers.IO) {
-            // val costTime = measureTimeMillis {
             try {
-                withTimeoutOrNull(4000L) {
-                    val start = System.currentTimeMillis()
+                // 单源严格硬超时：3500ms
+                val searchTimeoutMs = 3500L
+                val start = System.currentTimeMillis()
+                val completed = withTimeoutOrNull(searchTimeoutMs) {
                     var result = WebBook(bookSourceString, false).searchBook(book.name, 1)
                     val end = System.currentTimeMillis()
+                    val rt = end - start
+                    com.htmake.reader.utils.SourceCircuitBreaker.recordSuccess(bookSource.bookSourceUrl, rt)
                     if (result.size > 0) {
                         for (j in 0 until result.size) {
                             var _book = result.get(j)
                             if (accurate && _book.name.equals(book.name) && _book.author.equals(book.author)) {
-                                _book.time = end - start
+                                _book.time = rt
                                 resultList.add(_book)
                             } else if (!accurate && (_book.name.indexOf(book.name, ignoreCase=true) >= 0 || _book.author.indexOf(book.name, ignoreCase=true) >= 0)) {
-                                _book.time = end - start
+                                _book.time = rt
                                 resultList.add(_book)
                             }
                         }
                     }
+                    true
+                }
+                if (completed == null) {
+                    // 记录超时失败
+                    com.htmake.reader.utils.SourceCircuitBreaker.recordFailure(bookSource.bookSourceUrl)
                 }
             } catch(e: Exception) {
-                // 标记为失败源
+                // 记录异常失败并递增熔断器状态
+                com.htmake.reader.utils.SourceCircuitBreaker.recordFailure(bookSource.bookSourceUrl)
                 val info = mutableMapOf<String, Any>("sourceUrl" to bookSource.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString())
                 addInvalidBookSource(bookSource.bookSourceUrl, info, userNameSpace)
-
-                e.printStackTrace()
             }
-            // }
-            // logger.info("searchBookWithSource in Thread: {} Cost: {}", Thread.currentThread().name, costTime)
         }
         return resultList;
     }
