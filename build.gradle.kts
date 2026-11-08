@@ -56,7 +56,7 @@ apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
 group = "com.htmake"
-version = "1.0.6"
+version = "1.0.7"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8

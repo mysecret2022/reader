@@ -2638,7 +2638,7 @@ export default {
         cacheChapterContent: false,
         defaultVoice: "zh-CN-XiaoxiaoNeural",
         concurrentSearchCount: 24,
-        version: this.$store ? this.$store.state.version || "1.0.6" : "1.0.6"
+        version: this.$store ? this.$store.state.version || "1.0.7" : "1.0.7"
       },
       savingCloudSync: false,
       triggeringSync: false,
