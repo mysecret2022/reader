@@ -719,6 +719,8 @@ export default {
       speechSpeaking: false,
       showSpeechConfig: true,
       edgeAudio: null,
+      speechParagraphIndex: -1,
+      audioPreloadCache: {},
 
       currentParagraph: null,
 
@@ -2289,7 +2291,50 @@ export default {
         this.speechEndTime = 0;
       }
     },
-    startSpeech() {
+    getAllParagraphs() {
+      if (!this.$refs.bookContentRef || !this.$refs.bookContentRef.$el) {
+        return [];
+      }
+      const list = this.$refs.bookContentRef.$el.querySelectorAll(
+        ".reading-chapter h3, .reading-chapter p, h3, p"
+      );
+      return Array.from(list).filter(
+        el => el && el.innerText && el.innerText.trim().length > 0
+      );
+    },
+    preloadNextAudios(list, currentIndex, voice) {
+      if (!voice || !voice.isEdge || !list || !list.length) return;
+      for (let k = 1; k <= 2; k++) {
+        const nextIdx = currentIndex + k;
+        if (nextIdx < list.length) {
+          const nextText = list[nextIdx].innerText.trim();
+          if (nextText) {
+            const cacheKey = `${voice.id}_${this.speechRate}_${this.speechPitch}_${nextText}`;
+            if (!this.audioPreloadCache[cacheKey]) {
+              const url = `${this.api}/tts?text=${encodeURIComponent(
+                nextText
+              )}&voice=${encodeURIComponent(voice.id)}&rate=${
+                this.speechRate
+              }&pitch=${this.speechPitch}`;
+              fetch(url)
+                .then(res => {
+                  if (res.ok) return res.blob();
+                  return null;
+                })
+                .then(blob => {
+                  if (blob) {
+                    this.audioPreloadCache[cacheKey] = URL.createObjectURL(
+                      blob
+                    );
+                  }
+                })
+                .catch(() => {});
+            }
+          }
+        }
+      }
+    },
+    startSpeech(targetIndex) {
       if (this.error) {
         return;
       }
@@ -2307,41 +2352,54 @@ export default {
         return;
       }
 
-      if (this.speechSpeaking) {
-        if (
-          this.speechEndTime > 0 &&
-          new Date().getTime() > this.speechEndTime
-        ) {
-          this.$message.info("定时关闭朗读");
-          return;
-        }
-      }
-
-      const paragraph = this.getCurrentParagraph();
-      if (!paragraph || !paragraph.innerText) {
-        this.speechNext();
+      if (this.speechEndTime > 0 && new Date().getTime() > this.speechEndTime) {
+        this.$message.info("定时关闭朗读");
+        this.stopSpeech();
         return;
       }
 
-      this.showParagraph(paragraph, true);
+      const paragraphs = this.getAllParagraphs();
+      if (!paragraphs.length) {
+        return;
+      }
+
+      let idx =
+        typeof targetIndex === "number"
+          ? targetIndex
+          : this.speechParagraphIndex;
+      if (idx < 0 || idx >= paragraphs.length) {
+        const currentInView = this.getCurrentParagraph();
+        idx = paragraphs.indexOf(currentInView);
+        if (idx < 0) idx = 0;
+      }
+
+      this.speechParagraphIndex = idx;
+      const paragraph = paragraphs[idx];
+
+      paragraphs.forEach(p => {
+        if (p !== paragraph && p.className.includes("reading")) {
+          p.className = p.className.replace(/\breading\b/g, "").trim();
+        }
+      });
       paragraph.className = "reading";
+      this.showParagraph(paragraph, true);
       this.speechSpeaking = true;
       this.skipAutoNext = false;
 
       if (voice.isEdge) {
-        // 使用微软 Edge TTS 神经语音库播放
         if (!this.edgeAudio) {
           this.edgeAudio = new Audio();
-        } else {
-          this.edgeAudio.pause();
         }
         const text = paragraph.innerText.trim();
-        const url = `${this.api}/tts?text=${encodeURIComponent(
+        const cacheKey = `${voice.id}_${this.speechRate}_${this.speechPitch}_${text}`;
+        const directUrl = `${this.api}/tts?text=${encodeURIComponent(
           text
         )}&voice=${encodeURIComponent(voice.id)}&rate=${
           this.speechRate
         }&pitch=${this.speechPitch}`;
-        this.edgeAudio.src = url;
+
+        const audioUrl = this.audioPreloadCache[cacheKey] || directUrl;
+        this.edgeAudio.src = audioUrl;
 
         this.edgeAudio.onended = () => {
           if (!this.skipAutoNext) {
@@ -2353,26 +2411,26 @@ export default {
         };
 
         this.edgeAudio.onerror = () => {
-          this.speechSpeaking = false;
+          if (!this.skipAutoNext) {
+            setTimeout(() => {
+              if (this.speechSpeaking) this.speechNext();
+            }, 1000);
+          } else {
+            this.speechSpeaking = false;
+          }
         };
 
-        this.edgeAudio.play().catch(() => {
-          this.speechSpeaking = false;
-        });
+        this.edgeAudio
+          .play()
+          .then(() => {
+            this.speechSpeaking = true;
+          })
+          .catch(() => {
+            this.speechSpeaking = false;
+          });
 
-        // 预加载下一段音频，实现零延迟顺畅听书
-        const nextP = this.getNextParagraph();
-        if (nextP && nextP.innerText) {
-          const nextText = nextP.innerText.trim();
-          const nextUrl = `${this.api}/tts?text=${encodeURIComponent(
-            nextText
-          )}&voice=${encodeURIComponent(voice.id)}&rate=${
-            this.speechRate
-          }&pitch=${this.speechPitch}`;
-          fetch(nextUrl, { mode: "no-cors" }).catch(() => {});
-        }
+        this.preloadNextAudios(paragraphs, idx, voice);
       } else {
-        // 本地系统自带语音合成
         if (window.speechSynthesis && window.speechSynthesis.speaking) {
           window.speechSynthesis.cancel();
         }
@@ -2411,10 +2469,12 @@ export default {
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }
-        const current = this.getCurrentParagraph();
-        if (current) {
-          current.className = "";
-        }
+        const paragraphs = this.getAllParagraphs();
+        paragraphs.forEach(p => {
+          if (p.className.includes("reading")) {
+            p.className = p.className.replace(/\breading\b/g, "").trim();
+          }
+        });
       } catch (error) {
         //
       }
@@ -2422,7 +2482,7 @@ export default {
     restartSpeech() {
       this.stopSpeech();
       setTimeout(() => {
-        this.startSpeech();
+        this.startSpeech(this.speechParagraphIndex);
       }, 100);
     },
     toggleSpeech() {
@@ -2430,38 +2490,32 @@ export default {
     },
     speechPrev() {
       this.stopSpeech();
-      const current = this.getCurrentParagraph();
-      const prev = this.getPrevParagraph();
-      if (prev) {
-        this.showParagraph(prev, true);
-        if (current) current.className = "";
-        prev.className = "reading";
-        this.startSpeech();
+      if (this.speechParagraphIndex > 0) {
+        this.speechParagraphIndex--;
+        this.startSpeech(this.speechParagraphIndex);
       } else {
-        // 上一章
         this.$once("showContent", () => {
           setTimeout(() => {
-            this.startSpeech();
-          }, 100);
+            const newList = this.getAllParagraphs();
+            this.speechParagraphIndex = Math.max(0, newList.length - 1);
+            this.startSpeech(this.speechParagraphIndex);
+          }, 300);
         });
         this.toLastChapter();
       }
     },
     speechNext() {
       this.stopSpeech();
-      const current = this.getCurrentParagraph();
-      const next = this.getNextParagraph();
-      if (next) {
-        this.showParagraph(next, true);
-        if (current) current.className = "";
-        next.className = "reading";
-        this.startSpeech();
+      const list = this.getAllParagraphs();
+      if (this.speechParagraphIndex + 1 < list.length) {
+        this.speechParagraphIndex++;
+        this.startSpeech(this.speechParagraphIndex);
       } else {
-        // 下一章
         this.$once("showContent", () => {
           setTimeout(() => {
-            this.startSpeech();
-          }, 100);
+            this.speechParagraphIndex = 0;
+            this.startSpeech(0);
+          }, 300);
         });
         this.toNextChapter();
       }

@@ -1726,6 +1726,166 @@
             </div>
           </div>
         </section>
+
+        <!-- 7. 后端设定与说明图解 -->
+        <section v-if="activeTab === 'backend'" class="tab-pane">
+          <h2 class="pane-title">后端服务设定与说明图解</h2>
+
+          <!-- 后端连接状态卡片 -->
+          <div class="table-card" style="margin-bottom: 24px;">
+            <div
+              style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;"
+            >
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div
+                  style="width: 14px; height: 14px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);"
+                ></div>
+                <div>
+                  <div
+                    style="font-weight: 600; font-size: 16px; color: #1e293b;"
+                  >
+                    后端服务连接状态：<span style="color: #10b981;"
+                      >已连接正常</span
+                    >
+                    <span
+                      v-if="backendLatency > 0"
+                      style="font-size: 13px; color: #64748b; font-weight: normal; margin-left: 8px;"
+                      >(通信延迟 {{ backendLatency }}ms)</span
+                    >
+                  </div>
+                  <div
+                    style="font-size: 13px; color: #64748b; margin-top: 4px;"
+                  >
+                    当前正在通信的服务地址：<code
+                      style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0284c7;"
+                      >{{ api || "当前同源服务 (默认)" }}</code
+                    >
+                  </div>
+                </div>
+              </div>
+              <div>
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  icon="el-icon-refresh"
+                  :loading="testingBackend"
+                  @click="testBackendConnect"
+                >
+                  测试连通性
+                </el-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 后端通信地址配置表单 -->
+          <div class="table-card" style="margin-bottom: 24px;">
+            <div class="card-header" style="margin-bottom: 16px;">
+              <h3 style="margin: 0; font-size: 16px; color: #1e293b;">
+                自定义接口地址设置 (API Prefix)
+              </h3>
+            </div>
+            <p
+              style="font-size: 14px; color: #64748b; margin-top: 0; margin-bottom: 16px;"
+            >
+              默认情况下，前端会自动连接同源部署的后端服务。如果您通过独立客户端、局域网穿透或多端部署，可在此自定义指定后端接口的访问路径。
+            </p>
+            <el-form
+              label-width="130px"
+              size="medium"
+              style="max-width: 650px;"
+              @submit.native.prevent
+            >
+              <el-form-item label="后端接口地址:">
+                <el-input
+                  v-model="backendApiInput"
+                  placeholder="例如：http://192.168.0.30:8080/reader3 或留空使用同源"
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button
+                  type="primary"
+                  :loading="testingBackend"
+                  @click="saveBackendApi"
+                >
+                  保存并应用新地址
+                </el-button>
+                <el-button @click="resetBackendApi">
+                  恢复默认设置
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <!-- 说明图解与网络拓扑展示区 (预留插槽) -->
+          <div class="table-card">
+            <div class="card-header" style="margin-bottom: 16px;">
+              <h3
+                style="margin: 0; font-size: 16px; color: #1e293b; display: flex; align-items: center; gap: 8px;"
+              >
+                <i class="el-icon-picture" style="color: #3b82f6;"></i>
+                后端部署与配置说明图解
+              </h3>
+            </div>
+
+            <div
+              class="diagram-display-area"
+              style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 36px 20px; text-align: center; background: #f8fafc; margin-bottom: 20px;"
+            >
+              <i
+                class="el-icon-picture-outline"
+                style="font-size: 54px; color: #94a3b8; margin-bottom: 12px; display: inline-block;"
+              ></i>
+              <h4 style="margin: 0 0 8px 0; color: #334155; font-size: 16px;">
+                说明图解展示区 (预留空间)
+              </h4>
+              <p
+                style="margin: 0 auto 16px auto; max-width: 520px; color: #64748b; font-size: 13px; line-height: 1.6;"
+              >
+                本区域专为后续放置系统架构图、网络配置拓扑、Docker
+                映射流程或手把手部署教学图解设计。您可以直接在此处引入图片或自定义操作说明。
+              </p>
+              <div
+                style="display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center;"
+              >
+                <el-tag size="small" type="info">Docker 容器端口 8080</el-tag>
+                <el-tag size="small" type="info">局域网 IP / 域名穿透</el-tag>
+                <el-tag size="small" type="info"
+                  >反向代理与 WebSocket 连通</el-tag
+                >
+              </div>
+            </div>
+
+            <!-- 常见配置快速备忘 -->
+            <div
+              style="background: #f1f5f9; border-radius: 8px; padding: 16px; font-size: 13px; color: #475569; line-height: 1.8;"
+            >
+              <div
+                style="font-weight: 600; color: #1e293b; margin-bottom: 4px;"
+              >
+                💡 常见连接与配置小贴士：
+              </div>
+              <div>
+                1. <strong>局域网访问</strong>：在家庭或公司内网中，通过宿主机
+                IP（例如
+                <code>http://192.168.0.30:8080</code
+                >）即可在电脑和手机浏览器中直接畅享阅读与听书。
+              </div>
+              <div>
+                2. <strong>公网与外网穿透</strong>：如配置了域名或 Nginx
+                反代，请将反代目标指向容器的
+                <code>8080</code> 端口，并确保开启了
+                <code>Upgrade $http_upgrade</code>（WebSocket支持）。
+              </div>
+              <div>
+                3.
+                <strong>跨端配置</strong
+                >：当在手机上添加书签或配置字体后，所有设置均会自动与后端空间持久化同步。
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -2422,8 +2582,12 @@ export default {
         { index: "cache", title: "本地缓存", icon: "el-icon-delete" },
         { index: "cloudSync", title: "云同步与备份", icon: "el-icon-cloudy" },
         { index: "logs", title: "诊断运行日志", icon: "el-icon-document" },
-        { index: "storage", title: "本地书仓维护", icon: "el-icon-folder" }
+        { index: "storage", title: "本地书仓维护", icon: "el-icon-folder" },
+        { index: "backend", title: "后端设定", icon: "el-icon-connection" }
       ],
+      backendApiInput: "",
+      testingBackend: false,
+      backendLatency: 0,
       userList: [],
       bookSourceList: [],
       loadingUsers: false,
@@ -2577,7 +2741,8 @@ export default {
         { index: "shelf", title: "书架设置", icon: "el-icon-reading" },
         { index: "userSpace", title: "用户空间", icon: "el-icon-user" },
         { index: "webdav", title: "WebDAV", icon: "el-icon-folder-opened" },
-        { index: "cache", title: "本地缓存", icon: "el-icon-delete" }
+        { index: "cache", title: "本地缓存", icon: "el-icon-delete" },
+        { index: "backend", title: "后端设定", icon: "el-icon-connection" }
       ];
     },
     userNS: {
@@ -2665,6 +2830,7 @@ export default {
     }
   },
   created() {
+    this.backendApiInput = this.api || "";
     if (this.isAdmin) {
       this.refreshAllData();
       this.fetchSystemConfig();
@@ -2681,6 +2847,9 @@ export default {
         this.$router.replace("/" + this.currentUser.username).catch(() => {});
       }
     }
+    if (this.$route.query && this.$route.query.tab) {
+      this.activeTab = this.$route.query.tab;
+    }
   },
   methods: {
     toggleTheme() {
@@ -2689,7 +2858,14 @@ export default {
     handleTabSelect(index) {
       if (
         !this.isAdmin &&
-        !["sources", "shelf", "userSpace", "webdav", "cache"].includes(index)
+        ![
+          "sources",
+          "shelf",
+          "userSpace",
+          "webdav",
+          "cache",
+          "backend"
+        ].includes(index)
       ) {
         this.activeTab = "sources";
         return;
@@ -3267,6 +3443,55 @@ export default {
       setTimeout(() => {
         eventBus.$emit("showLocalStore");
       }, 300);
+    },
+    async testBackendConnect() {
+      const targetApi = (this.backendApiInput || "")
+        .trim()
+        .replace(/\/*$/g, "");
+      this.testingBackend = true;
+      const startTime = Date.now();
+      try {
+        const testUrl = (targetApi || this.api || "") + "/getBookshelf";
+        await Axios.get(testUrl, { timeout: 6000 });
+        this.backendLatency = Date.now() - startTime;
+        this.$message.success(`连接成功！延迟约 ${this.backendLatency}ms`);
+      } catch (e) {
+        this.backendLatency = 0;
+        this.$message.warning(
+          "连接测试超时或接口不可达，请检查IP/端口是否正确"
+        );
+      } finally {
+        this.testingBackend = false;
+      }
+    },
+    async saveBackendApi() {
+      const targetApi = (this.backendApiInput || "")
+        .trim()
+        .replace(/\/*$/g, "");
+      this.testingBackend = true;
+      try {
+        const testUrl = (targetApi || this.api || "") + "/getBookshelf";
+        await Axios.get(testUrl, { timeout: 6000 });
+        setCache("api_prefix", targetApi);
+        this.$store.commit("setApi", targetApi);
+        this.$message.success("后端接口地址已保存并应用！");
+        if (this.$root.$children[0] && this.$root.$children[0].init) {
+          this.$root.$children[0].init(true);
+        }
+      } catch (e) {
+        this.$message.error("无法连接到该接口地址，请核对地址或检查网络");
+      } finally {
+        this.testingBackend = false;
+      }
+    },
+    resetBackendApi() {
+      this.backendApiInput = "";
+      setCache("api_prefix", "");
+      this.$store.commit("setApi", "");
+      this.$message.success("已恢复为默认同源服务连接");
+      if (this.$root.$children[0] && this.$root.$children[0].init) {
+        this.$root.$children[0].init(true);
+      }
     },
     openAddUserDialog() {
       this.newUserForm = {

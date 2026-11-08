@@ -147,7 +147,7 @@
               :effect="isNight ? 'dark' : 'light'"
               class="setting-connect"
               :class="{ 'no-point': connecting }"
-              @click="setIP"
+              @click="toBackendSetting"
             >
               {{ connectStatus }}
             </el-tag>
@@ -3102,6 +3102,14 @@ export default {
       } else if (command === "logout") {
         this.logoutConfirm();
       }
+    },
+    toBackendSetting() {
+      const username =
+        this.$store.state.userInfo && this.$store.state.userInfo.username;
+      const targetPath = username && !this.isAdmin ? "/" + username : "/admin";
+      this.$router
+        .push({ path: targetPath, query: { tab: "backend" } })
+        .catch(() => {});
     },
     promptChangePassword() {
       this.$prompt("请输入新密码 (不少于4位):", "修改当前用户密码", {

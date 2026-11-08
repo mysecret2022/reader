@@ -145,17 +145,17 @@ const settings = {
     // 楷体
     {
       fontFamily:
-        'custom-kt, reader-kt, "Kaiti SC", STKaiti, "KaiTi", "KaiTi_GB2312", "DFKai-SB", serif'
+        '"LXGW WenKai", custom-kt, reader-kt, "Kaiti SC", STKaiti, "KaiTi", "KaiTi_GB2312", "DFKai-SB", serif'
     },
     // 宋体
     {
       fontFamily:
-        'custom-st, reader-st, "Songti SC", STSong, "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif'
+        '"Noto Serif SC", custom-st, reader-st, "Songti SC", STSong, "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif'
     },
     // 仿宋
     {
       fontFamily:
-        'custom-fs, reader-fs, STFangsong, FangSong, FangSong_GB2312, "Songti SC", serif'
+        'custom-fs, reader-fs, STFangsong, FangSong, FangSong_GB2312, "LXGW WenKai", "Songti SC", serif'
     },
     // 自定义字体
     {
