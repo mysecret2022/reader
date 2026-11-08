@@ -102,6 +102,7 @@ export class TTSQueuePlayer {
     this.onEnded = options.onEnded || (() => {});
     this.onError = options.onError || (() => {});
     this.onQueueEmpty = options.onQueueEmpty || (() => {});
+    this.onNearEnd = options.onNearEnd || (() => {}); // 提前预取下一章回调
 
     this._bindAudioEvents();
   }
@@ -113,6 +114,11 @@ export class TTSQueuePlayer {
       this._revokeChunk(this.currentIndex);
       this.currentIndex++;
 
+      // 跨章无缝衔接：若播到倒数第 2 块，提前触发下一章正文静默拉取
+      if (this.currentIndex >= this.chunks.length - 2) {
+        this.onNearEnd();
+      }
+
       if (this.currentIndex < this.chunks.length) {
         this._playCurrentChunk();
         this._prefetchSlidingWindow();
@@ -120,7 +126,7 @@ export class TTSQueuePlayer {
         this._revokeChunk(this.currentIndex);
         this.isPlaying = false;
         this.onEnded();
-        // 触发跨章节无缝连播回调
+        // 触发跨章节连播
         this.onQueueEmpty();
       }
     });
@@ -246,6 +252,10 @@ export class TTSQueuePlayer {
 
     if (this.isPlaying) {
       this.audio.src = item.blobUrl;
+      // 双轨制语速：使用原生 playbackRate 变速，保持后端高频缓存复用
+      if (this.rate && this.rate !== 1.0) {
+        this.audio.playbackRate = Number(this.rate) || 1.0;
+      }
       try {
         await this.audio.play();
       } catch (err) {
@@ -297,6 +307,31 @@ export class TTSQueuePlayer {
     if (item && item.blobUrl) {
       URL.revokeObjectURL(item.blobUrl);
       this.cachePool.delete(index);
+    }
+  }
+
+  setVoice(voice) {
+    if (this.voice === voice) return;
+    this.voice = voice;
+    // 发音人变更：立即取消当前未播出的预取缓存
+    for (const ctrl of this.activeControllers) {
+      ctrl.abort();
+    }
+    this.activeControllers.clear();
+    for (const [idx] of this.cachePool) {
+      if (idx > this.currentIndex) {
+        this._revokeChunk(idx);
+      }
+    }
+    if (this.isPlaying) {
+      this._prefetchSlidingWindow();
+    }
+  }
+
+  setRate(rate) {
+    this.rate = rate;
+    if (this.audio) {
+      this.audio.playbackRate = Number(rate) || 1.0;
     }
   }
 

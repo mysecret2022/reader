@@ -30,6 +30,14 @@ TTL_SECONDS = int(os.environ.get("TTS_CACHE_TTL", str(24 * 3600)))  # 24 hours
 
 # Singleflight in-flight map: hash -> asyncio.Task / Future
 in_flight_tasks = {}
+request_counter = 0
+
+def maybe_clean_cache():
+    """低频抽样清理 (每 50 次请求执行一次)，防止高频 stat() 造成磁盘 I/O 抖动"""
+    global request_counter
+    request_counter += 1
+    if request_counter % 50 == 0:
+        clean_expired_and_lru_cache()
 
 VOICES = [
     {"id": "zh-CN-XiaoxiaoNeural", "name": "晓晓 (女声·小说优选)", "gender": "Female", "locale": "zh-CN"},
@@ -201,7 +209,7 @@ class TTSRequestHandler(BaseHTTPRequestHandler):
             loop.run_until_complete(
                 do_synthesize_with_retry(text, voice, rate_str, pitch_str, cache_file, max_retries=2)
             )
-            clean_expired_and_lru_cache()
+            maybe_clean_cache()
             if not fut.done():
                 fut.set_result(True)
         except Exception as e:

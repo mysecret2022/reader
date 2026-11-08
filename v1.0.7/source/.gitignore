@@ -49,4 +49,5 @@ out
 
 /server/logs
 /server/storage
-/server/target
+/server/target__pycache__/
+*.pyc

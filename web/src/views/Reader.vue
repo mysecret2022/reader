@@ -565,6 +565,21 @@ export default {
       //
     }
     this.$Lazyload.$on("loaded", this.lazyloadHandler);
+    // iOS 前后台切换与来电恢复后的 DOM 朗读高亮即时对齐
+    this.visibilityChangeHandler = () => {
+      if (
+        document.visibilityState === "visible" &&
+        this.speechSpeaking &&
+        this.speechParagraphIndex >= 0
+      ) {
+        const paragraphs = this.getAllParagraphs();
+        const curP = paragraphs[this.speechParagraphIndex];
+        if (curP) {
+          this.showParagraph(curP, true);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", this.visibilityChangeHandler);
   },
   deactivated() {
     this.stopSpeech();
@@ -577,6 +592,12 @@ export default {
     this.unwatchFn && this.unwatchFn();
     this.releaseWakeLockFn && this.releaseWakeLockFn();
     this.$Lazyload.$off("loaded", this.lazyloadHandler);
+    if (this.visibilityChangeHandler) {
+      document.removeEventListener(
+        "visibilitychange",
+        this.visibilityChangeHandler
+      );
+    }
   },
   watch: {
     chapterName(to) {
@@ -721,6 +742,7 @@ export default {
       showSpeechConfig: true,
       edgeAudio: null,
       ttsQueuePlayer: null,
+      loadingNextChapterForSpeech: false,
       speechParagraphIndex: -1,
       audioPreloadCache: {},
 
@@ -2418,6 +2440,26 @@ export default {
             onChunkEnd: () => {
               if (this.speechParagraphIndex + 1 < paragraphs.length) {
                 this.speechParagraphIndex++;
+              }
+            },
+            onNearEnd: () => {
+              // 倒数第2块提前静默预加载下一章正文，避免 iOS 锁屏 Audio Session 断链
+              if (
+                !this.loadingNextChapterForSpeech &&
+                this.chapterIndex + 1 < (this.catalog ? this.catalog.length : 0)
+              ) {
+                this.loadingNextChapterForSpeech = true;
+                const nextChapter = this.catalog[this.chapterIndex + 1];
+                if (nextChapter && nextChapter.url) {
+                  this.getContent(nextChapter.url).then(
+                    () => {
+                      this.loadingNextChapterForSpeech = false;
+                    },
+                    () => {
+                      this.loadingNextChapterForSpeech = false;
+                    }
+                  );
+                }
               }
             },
             onQueueEmpty: () => {

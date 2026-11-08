@@ -148,10 +148,10 @@ const settings = {
       fontFamily:
         '"Noto Serif SC", custom-st, reader-st, "Songti SC", STSong, "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif'
     },
-    // 3: 手写体 (马善政手写毛笔切片 + 回退)
+    // 3: 手写体 (马善政毛笔行楷切片 + 楷体优雅回退栈)
     {
       fontFamily:
-        '"Ma Shan Zheng", custom-shouti, "LXGW WenKai", "Kaiti SC", STKaiti, cursive, serif'
+        '"Ma Shan Zheng", "LXGW WenKai", custom-shouti, "Kaiti SC", STKaiti, "KaiTi", "KaiTi_GB2312", serif'
     },
     // 4: 自定义字体 (用户自行上传)
     {
