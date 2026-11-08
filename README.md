@@ -1,6 +1,6 @@
 # reader (阅读3 服务器增强版)
 
-> **声明**：本项目基于原开源项目 [rorschach883/reader](https://github.com/rorschach883/reader) 与 [hectorqin/reader](https://github.com/hectorqin/reader) 进行二次开发与构建维护。维护者非官方原作者，特此向原作者团队及相关开源贡献者致敬。
+> **声明**：本项目基于原开源项目 [hectorqin/reader](https://github.com/hectorqin/reader) 进行二次开发与构建维护。维护者非官方原作者，特此向原作者团队及相关开源贡献者致敬。
 
 ---
 
@@ -161,7 +161,7 @@ storage/
 
 本项目深度站在开源巨人的肩膀上，对以下优秀开源项目、开发者以及社区作者表示由衷的感谢与崇高敬意：
 
-1. **[hectorqin/reader](https://github.com/hectorqin/reader) & [rorschach883/reader](https://github.com/rorschach883/reader)**
+1. **[hectorqin/reader](https://github.com/hectorqin/reader)**
    - 本项目核心代码源自作者 [hectorqin](https://github.com/hectorqin) 创造的 Reader 2.x 完整服务器端，感谢其在小说抓取规则解析、Vert.x 服务端架构上所做的卓越设计。
 2. **[gedoor/legado (阅读3.0)](https://github.com/gedoor/legado) & [gedoor/MyBookshelf](https://github.com/gedoor/MyBookshelf)**
    - 开源界最强阅读神器，本项目规则引擎、数据结构标准与书源解析生态均脱胎于阅读开源社区规范。
