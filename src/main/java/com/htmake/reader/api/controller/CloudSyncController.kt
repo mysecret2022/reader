@@ -424,7 +424,7 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
     /**
      * 上传文件到 WebDAV (HTTP PUT, 自动处理目录 MKCOL)
      */
-    private fun uploadFileToWebDAV(url: String, content: ByteArray, username: String, pass: String): Boolean {
+    fun uploadFileToWebDAV(url: String, content: ByteArray, username: String, pass: String): Boolean {
         try {
             val credential = Credentials.basic(username, pass)
 

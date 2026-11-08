@@ -583,4 +583,57 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         return returnData.setData("缓存清理完毕")
     }
+
+    /**
+     * 获取个人 WebDAV 配置 (支持继承管理员全局默认配置)
+     */
+    suspend fun getUserWebdavConfig(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val userNameSpace = getUserNameSpace(context)
+        val userCfg = asJsonObject(getUserStorage(userNameSpace, "userWebdavConfig")) ?: JsonObject()
+
+        // 获取管理员全局默认配置作为参考/继承
+        val adminSyncCfg = asJsonObject(getStorage("data", "cloudSyncConfig")) ?: JsonObject()
+        val defaultUrl = adminSyncCfg.getString("webdavUrl") ?: ""
+        val defaultUsername = adminSyncCfg.getString("webdavUsername") ?: ""
+        val defaultPath = adminSyncCfg.getString("webdavRemotePath") ?: "/reader-backup"
+
+        val useDefault = userCfg.getBoolean("useDefault") ?: (userCfg.getString("webdavUrl").isNullOrEmpty())
+        val result = mutableMapOf<String, Any>(
+            "useDefault" to useDefault,
+            "webdavUrl" to (userCfg.getString("webdavUrl") ?: ""),
+            "webdavUsername" to (userCfg.getString("webdavUsername") ?: ""),
+            "webdavPassword" to (userCfg.getString("webdavPassword") ?: ""),
+            "webdavRemotePath" to (userCfg.getString("webdavRemotePath") ?: "/reader-backup"),
+            "defaultUrl" to defaultUrl,
+            "defaultUsername" to defaultUsername,
+            "defaultRemotePath" to defaultPath
+        )
+        return returnData.setData(result)
+    }
+
+    /**
+     * 保存个人 WebDAV 配置
+     */
+    suspend fun saveUserWebdavConfig(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val body = context.bodyAsJson ?: return returnData.setErrorMsg("参数错误")
+        val userNameSpace = getUserNameSpace(context)
+
+        val saveObj = JsonObject()
+            .put("useDefault", body.getBoolean("useDefault", true))
+            .put("webdavUrl", body.getString("webdavUrl", "")?.trim() ?: "")
+            .put("webdavUsername", body.getString("webdavUsername", "")?.trim() ?: "")
+            .put("webdavPassword", body.getString("webdavPassword", "")?.trim() ?: "")
+            .put("webdavRemotePath", body.getString("webdavRemotePath", "/reader-backup")?.trim() ?: "/reader-backup")
+
+        saveUserStorage(userNameSpace, "userWebdavConfig", saveObj)
+        return returnData.setData("保存成功")
+    }
 }

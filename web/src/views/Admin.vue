@@ -382,11 +382,12 @@
           </el-table>
         </section>
 
-        <!-- 3. 书源健康治理 -->
+        <!-- 3. 书源设置（书源管理、探索书源、导入书源、远程书源、失效书源、调试书源） -->
         <section v-if="activeTab === 'sources'" class="tab-pane">
           <div class="pane-header">
             <h2 class="pane-title">
-              书源健康管理 (共 {{ filteredSources.length }} 条)
+              <i class="el-icon-collection"></i> 书源设置 (共
+              {{ filteredSources.length }} 条)
             </h2>
             <div class="filter-actions">
               <el-input
@@ -395,13 +396,13 @@
                 size="small"
                 prefix-icon="el-icon-search"
                 clearable
-                style="width: 200px; margin-right: 10px;"
+                style="width: 170px; margin-right: 8px;"
               ></el-input>
               <el-select
                 v-model="sourceTypeFilter"
                 size="small"
                 placeholder="书源类型"
-                style="width: 120px; margin-right: 10px;"
+                style="width: 110px; margin-right: 8px;"
               >
                 <el-option label="全部类型" value="all"></el-option>
                 <el-option label="包含 @js" value="js"></el-option>
@@ -409,13 +410,12 @@
                 <el-option label="标准纯净源" value="normal"></el-option>
               </el-select>
               <el-button
-                type="success"
+                type="warning"
                 size="small"
-                icon="el-icon-connection"
-                @click="syncAdminSources"
-                title="将管理员配置的默认书源同步至当前账户"
+                icon="el-icon-discover"
+                @click="openExploreDialog"
               >
-                同步管理员书源
+                探索书源
               </el-button>
               <el-button
                 type="primary"
@@ -426,16 +426,42 @@
                 导入书源
               </el-button>
               <el-button
+                type="success"
+                size="small"
+                icon="el-icon-link"
+                @click="loadRemoteBookSource"
+              >
+                远程书源
+              </el-button>
+              <el-button
                 type="info"
                 size="small"
                 icon="el-icon-first-aid-kit"
                 :loading="checkingInvalidSources"
                 @click="checkAndShowInvalidSources"
               >
-                失效源检测
+                失效书源
+              </el-button>
+              <el-button
+                size="small"
+                icon="el-icon-video-play"
+                @click="debugBookSource"
+              >
+                调试书源
+              </el-button>
+              <el-button
+                type="primary"
+                plain
+                size="small"
+                icon="el-icon-connection"
+                @click="syncAdminSources"
+                title="将管理员配置的默认书源同步至当前账户"
+              >
+                同步管理员源
               </el-button>
               <el-button
                 type="success"
+                plain
                 size="small"
                 icon="el-icon-check"
                 @click="batchToggleSources(true)"
@@ -443,7 +469,8 @@
                 全部启用
               </el-button>
               <el-button
-                type="warning"
+                type="danger"
+                plain
                 size="small"
                 icon="el-icon-close"
                 @click="batchToggleSources(false)"
@@ -894,6 +921,424 @@
               </div>
             </el-tab-pane>
           </el-tabs>
+        </section>
+
+        <!-- 3.6 用户空间（默认/切换空间、备份用户配置、同步用户配置、加载用户空间） -->
+        <section v-if="activeTab === 'userSpace'" class="tab-pane">
+          <div class="pane-header-group">
+            <div>
+              <h2 class="pane-title" style="margin-bottom: 4px;">
+                <i class="el-icon-user"></i> 用户空间与多端配置管理
+              </h2>
+              <span class="pane-subtitle"
+                >备份与恢复当前终端的界面阅读习惯、书架排序、搜索偏好，并在管理模式下切换空间</span
+              >
+            </div>
+          </div>
+
+          <div class="dashboard-box" style="margin-bottom: 20px;">
+            <div class="box-header">
+              <div class="box-title-group">
+                <h3 class="box-title">
+                  <i class="el-icon-postcard"></i> 当前用户空间与身份信息
+                </h3>
+              </div>
+            </div>
+            <div
+              style="padding: 16px; display: flex; flex-direction: column; gap: 16px;"
+            >
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <span style="font-weight: bold; width: 110px;"
+                  >当前登录账号:</span
+                >
+                <el-tag size="medium" type="primary">{{
+                  currentUser ? currentUser.username : "未知"
+                }}</el-tag>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <span style="font-weight: bold; width: 110px;"
+                  >工作空间 (userNS):</span
+                >
+                <el-select
+                  v-if="isAdmin || $store.state.showManagerMode"
+                  v-model="userNS"
+                  size="small"
+                  style="width: 240px;"
+                  placeholder="切换用户空间"
+                >
+                  <el-option
+                    label="默认空间 (default)"
+                    value="default"
+                  ></el-option>
+                  <el-option
+                    v-for="u in userList"
+                    :key="u.username"
+                    :label="
+                      u.username +
+                        (u.username === (currentUser && currentUser.username)
+                          ? ' (当前)'
+                          : '')
+                    "
+                    :value="u.username"
+                  ></el-option>
+                </el-select>
+                <span v-else style="color: #64748b;">{{
+                  userNS || (currentUser && currentUser.username) || "default"
+                }}</span>
+
+                <el-button
+                  v-if="isAdmin || $store.state.showManagerMode"
+                  size="small"
+                  icon="el-icon-refresh"
+                  @click="loadUserList"
+                >
+                  加载用户空间
+                </el-button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-box" style="margin-bottom: 20px;">
+            <div class="box-header">
+              <div class="box-title-group">
+                <h3 class="box-title">
+                  <i class="el-icon-upload"></i> 终端配置同步与备份
+                </h3>
+                <span class="box-subtitle">
+                  将本机的阅读器配置、书架展示偏好、搜索设置备份到服务器，或从服务器拉取恢复
+                </span>
+              </div>
+            </div>
+            <div style="padding: 16px; display: flex; gap: 20px;">
+              <el-card shadow="hover" style="flex: 1;">
+                <div slot="header">
+                  <span style="font-weight: bold;"
+                    ><i class="el-icon-upload2"></i> 备份用户配置</span
+                  >
+                </div>
+                <p style="font-size: 13px; color: #64748b; line-height: 1.6;">
+                  将当前终端已保存的阅读习惯（字体、背景、翻页方式）、书架分组与排序方案、搜索配置等备份至后端服务器。
+                </p>
+                <el-button
+                  type="primary"
+                  size="small"
+                  icon="el-icon-upload2"
+                  :loading="savingUserConfigLoading"
+                  @click="saveUserConfig"
+                >
+                  立即备份当前配置
+                </el-button>
+              </el-card>
+
+              <el-card shadow="hover" style="flex: 1;">
+                <div slot="header">
+                  <span style="font-weight: bold;"
+                    ><i class="el-icon-download"></i> 同步用户配置</span
+                  >
+                </div>
+                <p style="font-size: 13px; color: #64748b; line-height: 1.6;">
+                  从后端服务器拉取之前备份的用户配置数据，覆盖当前终端本地存储并即时生效。
+                </p>
+                <el-button
+                  type="success"
+                  size="small"
+                  icon="el-icon-download"
+                  :loading="restoringUserConfigLoading"
+                  @click="restoreUserConfig"
+                >
+                  立即从服务器同步配置
+                </el-button>
+              </el-card>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3.7 WebDAV 与云端备份（文件管理、保存备份、配置使用默认设置或自定义个人 WebDAV） -->
+        <section v-if="activeTab === 'webdav'" class="tab-pane">
+          <div class="pane-header-group">
+            <div>
+              <h2 class="pane-title" style="margin-bottom: 4px;">
+                <i class="el-icon-folder-opened"></i> WebDAV 与云端备份
+              </h2>
+              <span class="pane-subtitle"
+                >管理个人 WebDAV
+                云盘、配置自动多端备份、浏览已备份的书籍与书源文件</span
+              >
+            </div>
+            <div class="pane-actions">
+              <el-button
+                type="success"
+                size="small"
+                icon="el-icon-folder-opened"
+                @click="showWebDAVManageDialog = true"
+              >
+                WebDAV 文件管理
+              </el-button>
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-box"
+                :loading="backingUpToWebdav"
+                @click="backupToWebdav"
+              >
+                保存备份
+              </el-button>
+            </div>
+          </div>
+
+          <!-- WebDAV 配置面板 -->
+          <div class="dashboard-box" style="margin-bottom: 20px;">
+            <div class="box-header">
+              <div class="box-title-group">
+                <h3 class="box-title">
+                  <i class="el-icon-setting"></i> WebDAV 服务端连接设置
+                </h3>
+                <span class="box-subtitle">
+                  支持使用系统管理员统一配置的默认
+                  WebDAV，或配置您自己的坚果云、Alist、群晖等私人 WebDAV
+                </span>
+              </div>
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-check"
+                :loading="savingWebdavConfig"
+                @click="saveUserWebdavConfig"
+              >
+                保存 WebDAV 配置
+              </el-button>
+            </div>
+
+            <el-form
+              :model="userWebdavConfig"
+              label-width="160px"
+              size="small"
+              style="max-width: 720px; padding: 16px 0;"
+            >
+              <el-form-item label="配置模式">
+                <el-radio-group v-model="userWebdavConfig.useDefault">
+                  <el-radio :label="true"
+                    >使用管理员默认设置 (同步全局)</el-radio
+                  >
+                  <el-radio :label="false">自定义个人 WebDAV</el-radio>
+                </el-radio-group>
+              </el-form-item>
+
+              <div
+                v-if="userWebdavConfig.useDefault"
+                style="margin-left: 160px; margin-bottom: 18px;"
+              >
+                <el-alert
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  :title="
+                    '当前使用管理员默认 WebDAV：' +
+                      (userWebdavConfig.defaultUrl
+                        ? userWebdavConfig.defaultUrl
+                        : '（管理员暂未配置全局 WebDAV）')
+                  "
+                >
+                </el-alert>
+              </div>
+
+              <div v-show="!userWebdavConfig.useDefault">
+                <el-form-item label="WebDAV 服务器地址">
+                  <el-input
+                    v-model="userWebdavConfig.webdavUrl"
+                    placeholder="例如: https://dav.jianguoyun.com/dav/ 或 http://192.168.1.100:5244/dav"
+                    clearable
+                  ></el-input>
+                </el-form-item>
+
+                <el-form-item label="WebDAV 账户名">
+                  <el-input
+                    v-model="userWebdavConfig.webdavUsername"
+                    placeholder="WebDAV 登录用户名或邮箱"
+                    clearable
+                  ></el-input>
+                </el-form-item>
+
+                <el-form-item label="WebDAV 密码 / Token">
+                  <el-input
+                    v-model="userWebdavConfig.webdavPassword"
+                    type="password"
+                    placeholder="WebDAV 密码或应用授权密码"
+                    show-password
+                  ></el-input>
+                </el-form-item>
+
+                <el-form-item label="远端存放目录">
+                  <el-input
+                    v-model="userWebdavConfig.webdavRemotePath"
+                    placeholder="默认: /reader-backup"
+                    clearable
+                  ></el-input>
+                </el-form-item>
+              </div>
+            </el-form>
+          </div>
+        </section>
+
+        <!-- 3.8 本地缓存（容量查看、清空书源/章节列表/章节内容缓存） -->
+        <section v-if="activeTab === 'cache'" class="tab-pane">
+          <div class="pane-header-group">
+            <div>
+              <h2 class="pane-title" style="margin-bottom: 4px;">
+                <i class="el-icon-delete"></i> 本地存储与离线缓存管理
+              </h2>
+              <span class="pane-subtitle"
+                >查看浏览器端离线章节、书源及图片缓存占用，一键安全清空释放存储空间</span
+              >
+            </div>
+            <div class="pane-actions">
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-refresh"
+                @click="scanCacheStorage"
+              >
+                刷新缓存统计
+              </el-button>
+            </div>
+          </div>
+
+          <div class="stat-cards">
+            <div class="stat-card">
+              <div class="stat-icon bg-blue"><i class="el-icon-coin"></i></div>
+              <div class="stat-info">
+                <div class="stat-value">{{ localCacheStats.total }}</div>
+                <div class="stat-label">浏览器本地缓存总量</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-green">
+                <i class="el-icon-notebook-1"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value">
+                  {{ localCacheStats.bookSourceList }}
+                </div>
+                <div class="stat-label">书源信息本地缓存</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-purple">
+                <i class="el-icon-tickets"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value">{{ localCacheStats.chapterList }}</div>
+                <div class="stat-label">书籍目录列表缓存</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon bg-orange">
+                <i class="el-icon-document"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-value">
+                  {{ localCacheStats.chapterContent }}
+                </div>
+                <div class="stat-label">离线章节正文缓存</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-box">
+            <div class="box-header">
+              <div class="box-title-group">
+                <h3 class="box-title">
+                  <i class="el-icon-brush"></i> 专项缓存清理操作
+                </h3>
+              </div>
+            </div>
+            <div
+              style="padding: 16px; display: flex; flex-direction: column; gap: 14px;"
+            >
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8fafc; border-radius: 6px;"
+              >
+                <div>
+                  <div style="font-weight: bold;">清空书源缓存</div>
+                  <div style="font-size: 12px; color: #64748b;">
+                    清空当前浏览器存储的书源本地副本，占用：{{
+                      localCacheStats.bookSourceList
+                    }}
+                  </div>
+                </div>
+                <el-button
+                  size="small"
+                  type="warning"
+                  icon="el-icon-delete"
+                  @click="handleClearCache('bookSourceList')"
+                  >清空书源缓存</el-button
+                >
+              </div>
+
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8fafc; border-radius: 6px;"
+              >
+                <div>
+                  <div style="font-weight: bold;">清空章节列表缓存</div>
+                  <div style="font-size: 12px; color: #64748b;">
+                    清除所有书籍在本地缓存的最新章节目录列表，占用：{{
+                      localCacheStats.chapterList
+                    }}
+                  </div>
+                </div>
+                <el-button
+                  size="small"
+                  type="warning"
+                  icon="el-icon-delete"
+                  @click="handleClearCache('chapterList')"
+                  >清空章节列表缓存</el-button
+                >
+              </div>
+
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8fafc; border-radius: 6px;"
+              >
+                <div>
+                  <div style="font-weight: bold;">清空章节内容缓存</div>
+                  <div style="font-size: 12px; color: #64748b;">
+                    清理本地离线缓存的所有图书章节正文内容，占用：{{
+                      localCacheStats.chapterContent
+                    }}
+                  </div>
+                </div>
+                <el-button
+                  size="small"
+                  type="danger"
+                  icon="el-icon-delete"
+                  @click="handleClearCache('chapterContent')"
+                  >清空章节内容缓存</el-button
+                >
+              </div>
+
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #fef2f2; border-radius: 6px; border: 1px solid #fee2e2;"
+              >
+                <div>
+                  <div style="font-weight: bold; color: #dc2626;">
+                    一键清空全部本地数据缓存
+                  </div>
+                  <div style="font-size: 12px; color: #ef4444;">
+                    包括书源、目录、正文与临时搜索缓存全部重置，总计占用：{{
+                      localCacheStats.total
+                    }}
+                  </div>
+                </div>
+                <el-button
+                  size="small"
+                  type="danger"
+                  icon="el-icon-delete-solid"
+                  @click="handleClearCache('')"
+                  >全量清空缓存</el-button
+                >
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- 4. 诊断系统日志 -->
@@ -1766,6 +2211,109 @@
         >
       </div>
     </el-dialog>
+
+    <!-- 探索书源弹窗 -->
+    <el-dialog
+      title="探索书源"
+      :visible.sync="showExploreDialog"
+      width="680px"
+      append-to-body
+    >
+      <div style="height: 520px; overflow-y: auto;">
+        <Explore
+          v-if="showExploreDialog"
+          :visible="showExploreDialog"
+          :bookSourceList="bookSourceList"
+          @showSearchList="handleExploreSearchResult"
+          @close="showExploreDialog = false"
+        />
+      </div>
+    </el-dialog>
+
+    <!-- 探索发现书籍结果弹窗 -->
+    <el-dialog
+      title="探索发现书籍列表"
+      :visible.sync="showExploreResultsDialog"
+      width="75%"
+      append-to-body
+    >
+      <div
+        style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;"
+      >
+        <span style="font-size: 13px; color: #64748b;">
+          共发现 <strong>{{ exploreSearchResults.length }}</strong> 本书籍
+        </span>
+        <el-button
+          type="primary"
+          size="small"
+          icon="el-icon-reading"
+          @click="$router.push('/')"
+        >
+          前往主页阅读
+        </el-button>
+      </div>
+      <el-table
+        :data="exploreSearchResults"
+        stripe
+        size="small"
+        max-height="520"
+      >
+        <el-table-column label="封面" width="80" align="center">
+          <template slot-scope="scope">
+            <img
+              :src="scope.row.coverUrl || noCoverImage"
+              style="width: 44px; height: 60px; object-fit: cover; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+              @error="e => (e.target.src = noCoverImage)"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="name" label="书名" min-width="140">
+          <template slot-scope="scope">
+            <div style="font-weight: bold; color: #1e293b;">
+              {{ scope.row.name }}
+            </div>
+            <div style="font-size: 11px; color: #94a3b8;">
+              {{ scope.row.originName || scope.row.origin || "网络书源" }}
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="author"
+          label="作者"
+          width="120"
+        ></el-table-column>
+        <el-table-column
+          prop="latestChapterTitle"
+          label="最新章节"
+          min-width="160"
+          show-overflow-tooltip
+        ></el-table-column>
+        <el-table-column
+          prop="intro"
+          label="简介"
+          min-width="220"
+          show-overflow-tooltip
+        ></el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template slot-scope="scope">
+            <el-button
+              type="primary"
+              size="mini"
+              icon="el-icon-plus"
+              @click="saveBookFromExplore(scope.row)"
+            >
+              加入书架
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- WebDAV 文件管理弹窗 -->
+    <WebDAV
+      v-model="showWebDAVManageDialog"
+      @importFromLocalPathPreview="importMultiBooks"
+    ></WebDAV>
   </div>
 </template>
 
@@ -1773,9 +2321,16 @@
 import Axios from "../plugins/axios";
 import { LimitResquest } from "../plugins/helper";
 import eventBus from "../plugins/eventBus";
+import { getCache, setCache } from "../plugins/cache";
+import WebDAV from "../components/WebDAV.vue";
+import Explore from "../components/Explore.vue";
 
 export default {
   name: "AdminView",
+  components: {
+    WebDAV,
+    Explore
+  },
   data() {
     return {
       activeTab: "overview",
@@ -1786,7 +2341,11 @@ export default {
           icon: "el-icon-data-analysis"
         },
         { index: "users", title: "用户权限治理", icon: "el-icon-user-solid" },
-        { index: "sources", title: "书源健康管理", icon: "el-icon-collection" },
+        { index: "sources", title: "书源设置", icon: "el-icon-collection" },
+        { index: "shelf", title: "书架设置", icon: "el-icon-reading" },
+        { index: "userSpace", title: "用户空间", icon: "el-icon-user" },
+        { index: "webdav", title: "WebDAV", icon: "el-icon-folder-opened" },
+        { index: "cache", title: "本地缓存", icon: "el-icon-delete" },
         { index: "cloudSync", title: "云同步与备份", icon: "el-icon-cloudy" },
         { index: "logs", title: "诊断运行日志", icon: "el-icon-document" },
         { index: "storage", title: "本地书仓维护", icon: "el-icon-folder" }
@@ -1878,7 +2437,40 @@ export default {
       checkSourceConcurrent: 16,
       isScanningSources: false,
       scanSourceProgress: 0,
-      scanSourceLimitHandler: null
+      scanSourceLimitHandler: null,
+
+      // 探索书源
+      showExploreDialog: false,
+      showExploreResultsDialog: false,
+      exploreSearchResults: [],
+
+      // 用户空间与配置同步
+      savingUserConfigLoading: false,
+      restoringUserConfigLoading: false,
+
+      // WebDAV
+      showWebDAVManageDialog: false,
+      loadingWebdavConfig: false,
+      savingWebdavConfig: false,
+      backingUpToWebdav: false,
+      userWebdavConfig: {
+        useDefault: true,
+        webdavUrl: "",
+        webdavUsername: "",
+        webdavPassword: "",
+        webdavRemotePath: "/reader-backup",
+        defaultUrl: "",
+        defaultUsername: "",
+        defaultRemotePath: ""
+      },
+
+      // 本地缓存
+      localCacheStats: {
+        total: "0 B",
+        bookSourceList: "0 B",
+        chapterList: "0 B",
+        chapterContent: "0 B"
+      }
     };
   },
   computed: {
@@ -1898,9 +2490,27 @@ export default {
         return this.navMenuItems;
       }
       return [
-        { index: "sources", title: "书源管理", icon: "el-icon-collection" },
-        { index: "shelf", title: "书架设置", icon: "el-icon-reading" }
+        { index: "sources", title: "书源设置", icon: "el-icon-collection" },
+        { index: "shelf", title: "书架设置", icon: "el-icon-reading" },
+        { index: "userSpace", title: "用户空间", icon: "el-icon-user" },
+        { index: "webdav", title: "WebDAV", icon: "el-icon-folder-opened" },
+        { index: "cache", title: "本地缓存", icon: "el-icon-delete" }
       ];
+    },
+    userNS: {
+      get() {
+        return (
+          this.$store.state.userNS ||
+          (this.currentUser && this.currentUser.username) ||
+          "default"
+        );
+      },
+      set(val) {
+        this.$store.commit("setUserNS", val);
+        if (val) {
+          this.$store.commit("setIsManagerMode", true);
+        }
+      }
     },
     filteredShelfBooks() {
       if (!this.shelfSearchKey) return this.shelfBooks;
@@ -1957,6 +2567,15 @@ export default {
       return this.filteredSources.slice(start, start + this.sourcePageSize);
     }
   },
+  watch: {
+    userNS(val) {
+      if (val) {
+        this.fetchSources();
+        this.fetchShelfBooks();
+        this.fetchBookGroups();
+      }
+    }
+  },
   created() {
     if (this.isAdmin) {
       this.refreshAllData();
@@ -1980,7 +2599,10 @@ export default {
       this.$store.commit("setNightTheme", !this.isNight);
     },
     handleTabSelect(index) {
-      if (!this.isAdmin && index !== "sources" && index !== "shelf") {
+      if (
+        !this.isAdmin &&
+        !["sources", "shelf", "userSpace", "webdav", "cache"].includes(index)
+      ) {
         this.activeTab = "sources";
         return;
       }
@@ -1998,19 +2620,31 @@ export default {
       } else if (index === "shelf") {
         this.fetchShelfBooks();
         this.fetchBookGroups();
+      } else if (index === "webdav") {
+        this.fetchUserWebdavConfig();
+      } else if (index === "cache") {
+        this.scanCacheStorage();
+      } else if (index === "userSpace") {
+        if (this.isAdmin || this.$store.state.showManagerMode) {
+          this.fetchUsers();
+        }
       }
     },
     refreshAllData() {
       if (this.isAdmin) {
         this.fetchUsers();
         this.fetchSources();
+        this.fetchShelfBooks();
+        this.fetchBookGroups();
         this.fetchSystemConfig();
         this.fetchCloudSyncConfig();
+        this.fetchUserWebdavConfig();
         this.$message.success("数据与系统状态已全部刷新");
       } else {
         this.fetchSources();
         this.fetchShelfBooks();
         this.fetchBookGroups();
+        this.fetchUserWebdavConfig();
         this.$message.success("书源与书架数据已刷新");
       }
     },
@@ -2914,6 +3548,391 @@ export default {
           this.$message.error("删除异常");
         }
       });
+    },
+    // 探索书源
+    openExploreDialog() {
+      this.showExploreDialog = true;
+    },
+    handleExploreSearchResult(books) {
+      this.exploreSearchResults = books || [];
+      this.showExploreDialog = false;
+      this.showExploreResultsDialog = true;
+    },
+    async saveBookFromExplore(book) {
+      try {
+        const res = await Axios.post(this.api + "/saveBook", book);
+        if (res.data.isSuccess) {
+          this.$message.success(`《${book.name}》已成功加入书架！`);
+          this.fetchShelfBooks();
+        } else {
+          this.$message.error(res.data.errorMsg || "加入书架失败");
+        }
+      } catch (e) {
+        this.$message.error("加入书架异常: " + e.toString());
+      }
+    },
+    // 远程书源
+    async loadRemoteBookSource() {
+      const userKey =
+        (this.currentUser ? this.currentUser.username : "admin") +
+        "@lastRemoteSourceUrl";
+      const lastRemoteSourceUrl = getCache(userKey, "");
+      const res = await this.$prompt(
+        "请输入远程书源链接 (URL)",
+        "导入远程书源文件",
+        {
+          inputValue: lastRemoteSourceUrl || "",
+          confirmButtonText: "拉取并导入",
+          cancelButtonText: "取消"
+        }
+      ).catch(() => false);
+      if (!res || !res.value) return;
+
+      const url = res.value.trim();
+      try {
+        const fetchRes = await Axios.post(this.api + "/readRemoteSourceFile", {
+          url
+        });
+        if (fetchRes.data.isSuccess && Array.isArray(fetchRes.data.data)) {
+          setCache(userKey, url);
+          let sourceList = [];
+          fetchRes.data.data.forEach(v => {
+            try {
+              const data = typeof v === "string" ? JSON.parse(v) : v;
+              if (Array.isArray(data)) {
+                sourceList = sourceList.concat(data);
+              } else if (data && data.bookSourceUrl) {
+                sourceList.push(data);
+              }
+            } catch (e) {
+              // 忽略非 JSON 数据行
+            }
+          });
+          if (sourceList.length > 0) {
+            await this.saveImportedSources(sourceList);
+          } else {
+            this.$message.warning("未在该远程链接中解析出有效的书源数据");
+          }
+        } else {
+          const directRes = await Axios.get(url);
+          const data = directRes.data;
+          if (Array.isArray(data)) {
+            await this.saveImportedSources(data);
+          } else {
+            this.$message.error(
+              (fetchRes.data && fetchRes.data.errorMsg) || "拉取远程书源失败"
+            );
+          }
+        }
+      } catch (err) {
+        this.$message.error("读取远程书源失败: " + err.toString());
+      }
+    },
+    // 调试书源
+    debugBookSource() {
+      window.open(
+        window.location.origin +
+          window.location.pathname +
+          "bookSourceDebug/#domain=" +
+          this.api,
+        "_blank"
+      );
+    },
+    // 用户空间配置备份与恢复
+    async saveUserConfig() {
+      if (!window.localStorage) {
+        this.$message.error("当前终端不支持 localStorage");
+        return;
+      }
+      const res = await this.$confirm(
+        "确认要备份当前终端的阅读配置、书架设置、搜索设置、自定义配置方案至服务器吗？",
+        "提示",
+        {
+          confirmButtonText: "确定备份",
+          cancelButtonText: "取消",
+          type: "info"
+        }
+      ).catch(() => false);
+      if (!res) return;
+
+      this.savingUserConfigLoading = true;
+      const userConfig = {};
+      ["config", "shelfConfig", "searchConfig", "customConfigList"].forEach(
+        key => {
+          const val = getCache(key);
+          if (val) {
+            userConfig[key] = val;
+          }
+        }
+      );
+      try {
+        const resData = await Axios.post(
+          this.api + "/saveUserConfig",
+          userConfig
+        );
+        if (resData.data.isSuccess) {
+          this.$message.success("终端配置已成功备份至云端！");
+        } else {
+          this.$message.error(resData.data.errorMsg || "备份失败");
+        }
+      } catch (err) {
+        this.$message.error("备份异常: " + err.toString());
+      } finally {
+        this.savingUserConfigLoading = false;
+      }
+    },
+    async restoreUserConfig() {
+      if (!window.localStorage) {
+        this.$message.error("当前终端不支持 localStorage");
+        return;
+      }
+      const res = await this.$confirm(
+        "确认要从服务器备份恢复当前终端的阅读配置、书架设置与主题偏好吗？当前终端现有设置将被覆盖。",
+        "提示",
+        {
+          confirmButtonText: "确定恢复",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => false);
+      if (!res) return;
+
+      this.restoringUserConfigLoading = true;
+      try {
+        const resData = await Axios.get(this.api + "/getUserConfig");
+        if (resData.data.isSuccess && resData.data.data) {
+          for (const key in resData.data.data) {
+            if (Object.prototype.hasOwnProperty.call(resData.data.data, key)) {
+              setCache(key, resData.data.data[key]);
+            }
+          }
+          this.$store.dispatch("syncFromLocalStorage");
+          this.$message.success("终端配置已成功从云端恢复并生效！");
+        } else {
+          this.$message.error(resData.data.errorMsg || "获取云端配置失败");
+        }
+      } catch (err) {
+        this.$message.error("恢复异常: " + err.toString());
+      } finally {
+        this.restoringUserConfigLoading = false;
+      }
+    },
+    async loadUserList() {
+      try {
+        const res = await Axios.get(this.api + "/getUserList");
+        if (res.data.isSuccess && res.data.data) {
+          this.userList = res.data.data.map(v => ({
+            ...v,
+            userNS: v.username
+          }));
+          this.$store.commit("setIsManagerMode", true);
+          this.$message.success(`成功加载 ${this.userList.length} 个用户空间`);
+        } else {
+          this.$message.error(res.data.errorMsg || "加载用户空间失败");
+        }
+      } catch (err) {
+        this.$message.error("加载用户空间异常: " + err.toString());
+      }
+    },
+    // WebDAV
+    async fetchUserWebdavConfig() {
+      this.loadingWebdavConfig = true;
+      try {
+        const res = await Axios.get(this.api + "/getUserWebdavConfig");
+        if (res.data.isSuccess && res.data.data) {
+          this.userWebdavConfig = {
+            useDefault: res.data.data.useDefault !== false,
+            webdavUrl: res.data.data.webdavUrl || "",
+            webdavUsername: res.data.data.webdavUsername || "",
+            webdavPassword: res.data.data.webdavPassword || "",
+            webdavRemotePath:
+              res.data.data.webdavRemotePath || "/reader-backup",
+            defaultUrl: res.data.data.defaultUrl || "",
+            defaultUsername: res.data.data.defaultUsername || "",
+            defaultRemotePath:
+              res.data.data.defaultRemotePath || "/reader-backup"
+          };
+        }
+      } catch (err) {
+        this.$message.error("获取 WebDAV 配置异常: " + err.toString());
+      } finally {
+        this.loadingWebdavConfig = false;
+      }
+    },
+    async saveUserWebdavConfig() {
+      this.savingWebdavConfig = true;
+      try {
+        const postData = {
+          useDefault: this.userWebdavConfig.useDefault,
+          webdavUrl: this.userWebdavConfig.webdavUrl,
+          webdavUsername: this.userWebdavConfig.webdavUsername,
+          webdavPassword: this.userWebdavConfig.webdavPassword,
+          webdavRemotePath: this.userWebdavConfig.webdavRemotePath
+        };
+        const res = await Axios.post(
+          this.api + "/saveUserWebdavConfig",
+          postData
+        );
+        if (res.data.isSuccess) {
+          this.$message.success("个人 WebDAV 配置保存成功！");
+        } else {
+          this.$message.error(res.data.errorMsg || "保存 WebDAV 配置失败");
+        }
+      } catch (err) {
+        this.$message.error("保存 WebDAV 配置异常: " + err.toString());
+      } finally {
+        this.savingWebdavConfig = false;
+      }
+    },
+    async backupToWebdav() {
+      const res = await this.$confirm(
+        "确认要将当前书源和书架信息覆盖备份文件中的书源、书架和分组数据，并上传到 WebDAV 吗？",
+        "提示",
+        {
+          confirmButtonText: "确定备份",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => false);
+      if (!res) return;
+
+      this.backingUpToWebdav = true;
+      try {
+        const resData = await Axios.post(this.api + "/backupToWebdav");
+        if (resData.data.isSuccess) {
+          this.$message.success(resData.data.data || "备份成功并已保存！");
+        } else {
+          this.$message.error(resData.data.errorMsg || "备份失败");
+        }
+      } catch (err) {
+        this.$message.error("备份异常: " + err.toString());
+      } finally {
+        this.backingUpToWebdav = false;
+      }
+    },
+    async importMultiBooks(books) {
+      if (!books || books.length === 0) return;
+      let count = 0;
+      for (let i = 0; i < books.length; i++) {
+        const item = books[i];
+        const b = item.book || item;
+        try {
+          const res = await Axios.post(this.api + "/saveBook", b);
+          if (res.data.isSuccess) count++;
+        } catch (e) {
+          // 忽略单本书籍导入失败继续下一本
+        }
+      }
+      this.$message.success(`成功导入 ${count} 本书籍至书架！`);
+      this.fetchShelfBooks();
+    },
+    // 本地缓存清理与统计
+    async scanCacheStorage() {
+      if (!window.$cacheStorage) {
+        this.localCacheStats = {
+          total: "不支持",
+          bookSourceList: "-",
+          chapterList: "-",
+          chapterContent: "-"
+        };
+        return;
+      }
+      const total = (await this.analyseLocalStorage()) || {
+        totalBytes: "0 B"
+      };
+      const source = (await this.analyseLocalStorage("bookSourceList")) || {
+        totalBytes: "0 B"
+      };
+      const chapter = (await this.analyseLocalStorage("chapterList")) || {
+        totalBytes: "0 B"
+      };
+      const content = (await this.analyseLocalStorage("chapterContent")) || {
+        totalBytes: "0 B"
+      };
+
+      this.localCacheStats = {
+        total: total.totalBytes,
+        bookSourceList: source.totalBytes,
+        chapterList: chapter.totalBytes,
+        chapterContent: content.totalBytes
+      };
+    },
+    analyseLocalStorage(match) {
+      if (!window.$cacheStorage)
+        return Promise.resolve({ totalBytes: "0 B", cacheBytes: "0 B" });
+      let totalBytes = 0;
+      let cacheBytes = 0;
+      return window.$cacheStorage
+        .iterate((value, key) => {
+          if (!match || key.indexOf(match) >= 0) {
+            const strVal = JSON.stringify(value) || "";
+            const len = strVal.getBytesLength
+              ? strVal.getBytesLength()
+              : new Blob([strVal]).size;
+            totalBytes += len;
+            if (key.startsWith("localCache@")) {
+              cacheBytes += len;
+            }
+          }
+        })
+        .then(() => {
+          return {
+            totalBytes: this.formatFileSize(totalBytes),
+            cacheBytes: this.formatFileSize(cacheBytes)
+          };
+        })
+        .catch(() => {
+          return { totalBytes: "0 B", cacheBytes: "0 B" };
+        });
+    },
+    async handleClearCache(match) {
+      const matchText =
+        match === "bookSourceList"
+          ? "书源列表"
+          : match === "chapterList"
+          ? "章节目录"
+          : match === "chapterContent"
+          ? "离线章节正文"
+          : "全部本地数据";
+
+      const confirmRes = await this.$confirm(
+        `确认要清空【${matchText}】本地缓存吗？`,
+        "提示",
+        {
+          confirmButtonText: "确定清空",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => false);
+      if (!confirmRes) return;
+
+      if (!window.$cacheStorage) {
+        this.$message.warning("当前终端未启用离线存储");
+        return;
+      }
+
+      let clearedBytes = 0;
+      try {
+        await window.$cacheStorage.iterate((value, key) => {
+          if (!match || key.indexOf(match) >= 0) {
+            if (key.startsWith("localCache@")) {
+              const strVal = JSON.stringify(value) || "";
+              clearedBytes += strVal.getBytesLength
+                ? strVal.getBytesLength()
+                : new Blob([strVal]).size;
+              window.$cacheStorage.removeItem(key);
+            }
+          }
+        });
+        await this.scanCacheStorage();
+        this.$message.success(
+          `已清空【${matchText}】缓存（释放空间 ${this.formatFileSize(
+            clearedBytes
+          )}）`
+        );
+      } catch (err) {
+        this.$message.error("清理缓存异常: " + err.toString());
+      }
     }
   }
 };

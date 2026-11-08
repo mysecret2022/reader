@@ -801,7 +801,53 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
         if (!bookController.saveToWebdav(latestZipFilePath, userNameSpace)) {
             return returnData.setErrorMsg("备份失败")
         }
-        return returnData.setData("")
+
+        // 检查用户是否配置了自定义或默认 WebDAV 远端同步
+        try {
+            val userCfg = asJsonObject(getUserStorage(userNameSpace, "userWebdavConfig")) ?: io.vertx.core.json.JsonObject()
+            val adminSyncCfg = asJsonObject(getStorage("data", "cloudSyncConfig")) ?: io.vertx.core.json.JsonObject()
+            val useDefault = userCfg.getBoolean("useDefault") ?: (userCfg.getString("webdavUrl").isNullOrEmpty())
+
+            val targetUrl: String
+            val targetUser: String
+            val targetPass: String
+            val targetDir: String
+
+            if (useDefault) {
+                targetUrl = adminSyncCfg.getString("webdavUrl") ?: ""
+                targetUser = adminSyncCfg.getString("webdavUsername") ?: ""
+                targetPass = adminSyncCfg.getString("webdavPassword") ?: ""
+                targetDir = adminSyncCfg.getString("webdavRemotePath") ?: "/reader-backup"
+            } else {
+                targetUrl = userCfg.getString("webdavUrl") ?: ""
+                targetUser = userCfg.getString("webdavUsername") ?: ""
+                targetPass = userCfg.getString("webdavPassword") ?: ""
+                targetDir = userCfg.getString("webdavRemotePath") ?: "/reader-backup"
+            }
+
+            if (targetUrl.isNotEmpty() && targetUser.isNotEmpty()) {
+                val updatedLatestZip = bookController.getLastBackFileFromWebdav(userNameSpace)
+                if (updatedLatestZip != null) {
+                    val zipFile = File(updatedLatestZip)
+                    if (zipFile.exists()) {
+                        val cloudController = CloudSyncController(coroutineContext)
+                        val cleanUrl = if (targetUrl.endsWith("/")) targetUrl.dropLast(1) else targetUrl
+                        val cleanDir = if (!targetDir.startsWith("/")) "/$targetDir" else targetDir
+                        val fullRemoteUrl = "$cleanUrl$cleanDir/users/$userNameSpace/${zipFile.name}"
+                        val uploaded = cloudController.uploadFileToWebDAV(fullRemoteUrl, zipFile.readBytes(), targetUser, targetPass)
+                        if (uploaded) {
+                            return returnData.setData("已保存并成功同步上传至远程 WebDAV！")
+                        } else {
+                            return returnData.setData("已保存本地备份，但远程 WebDAV 上传失败，请检查网络与账户配置")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("backupToWebdav remote upload error", e)
+        }
+
+        return returnData.setData("备份成功")
     }
 
 }
