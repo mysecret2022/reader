@@ -31,22 +31,19 @@
 在宿主机新建目录（如 `reader`），并在该目录下创建 `docker-compose.yml` 文件：
 
 ```yaml
-version: '3.8'
-
 services:
   reader:
     image: ghcr.io/mysecret2022/reader:dev
     container_name: reader
     restart: always
     ports:
-      - "8080:8080" # 外部访问端口，按需调整（宿主机端口:容器端口）
+      - "8080:8080" # 外部访问端口，按需调整
     volumes:
       - ./storage:/storage # 数据持久化目录（书源、书架、缓存及配置）
-      - ./logs:/app/logs   # 系统运行日志输出目录（后台管理「诊断运行日志」实时互通）
+      - ./logs:/app/logs   # 日志输出目录（与管理后台诊断日志实时互通）
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
-      # 💡 提示：多用户登录鉴权、管理员密码、注册邀请码、章节正文缓存及用户配额已全面支持在【管理后台】在线设置，无需在此配置环境变量。
 ```
 
 #### 2. 启动服务
@@ -128,16 +125,18 @@ pause
 
 ---
 
-## ⚙️ 环境变量与核心参数一览表
+## ⚙️ 核心参数与环境变量说明
+
+> **推荐说明**：多用户登录鉴权、管理员密码、注册邀请码、系统用户上限、章节高速缓存等均已支持在管理员后台（`http://<服务器IP>:8080/#/admin`）在线可视化调整，即时生效且自动持久化保存，无需在容器配置中手动指定。如有特殊需要可在启动时预设以下环境变量：
 
 | 环境变量参数 | 命令行对应参数 | 默认值 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `READER_APP_SECURE` | `--reader.app.secure` | `false` | 是否开启用户登录鉴权（`true`/`false`） |
-| `READER_APP_SECUREKEY` | `--reader.app.secureKey` | 无 | 初始系统管理员 `admin` 的密码 |
-| `READER_APP_INVITECODE` | `--reader.app.inviteCode` | 空 | 注册邀请码。若设置，新用户注册必须填写该码 |
-| `READER_APP_USERLIMIT` | `--reader.app.userLimit` | `50` | 允许注册的最大用户数上限 |
+| `READER_APP_SECURE` | `--reader.app.secure` | `true` | 是否开启多用户登录鉴权（默认为 `true` 开启强制登录） |
+| `READER_APP_SECUREKEY` | `--reader.app.secureKey` | 无 | 初始系统管理员 `admin` 的密码（系统初次启动默认密码为 `admin`） |
+| `READER_APP_INVITECODE` | `--reader.app.inviteCode` | 空 | 注册专属邀请码（后台可随时开关） |
+| `READER_APP_USERLIMIT` | `--reader.app.userLimit` | `50` | 允许注册的最大用户数上限（后台可弹性调整） |
 | `READER_APP_USERBOOKLIMIT`| `--reader.app.userBookLimit` | `200` | 单个用户书架最大收藏图书数量 |
-| `READER_APP_CACHECHAPTERCONTENT` | `--reader.app.cacheChapterContent` | `false` | 是否在服务端本地缓存章节正文内容 |
+| `READER_APP_CACHECHAPTERCONTENT` | `--reader.app.cacheChapterContent` | `true` | 是否在服务端本地缓存章节正文内容（默认为 `true`） |
 | `READER_SERVER_PORT` | `--reader.server.port` | `8080` | 服务端监听端口号 |
 
 ---

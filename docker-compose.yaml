@@ -1,17 +1,13 @@
-version: '3.8'
-
 services:
   reader:
-    # 🌟 直接从 GitHub Packages (GHCR) 拉取编译好的全新镜像
     image: ghcr.io/mysecret2022/reader:dev
     container_name: reader
     restart: always
     ports:
-      - "8080:8080" # 外部访问端口，按需调整（宿主机端口:容器端口）
+      - "8080:8080" # 外部访问端口，按需调整
     volumes:
       - ./storage:/storage # 数据持久化目录（书源、书架、缓存及配置）
-      - ./logs:/app/logs   # 日志输出目录（后台管理「诊断运行日志」实时互通）
+      - ./logs:/app/logs   # 日志输出目录（与管理后台诊断日志实时互通）
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
-      # 💡 提示：多用户登录鉴权、管理员密码、注册邀请码、章节缓存及用户配额已全面支持在【管理后台】在线设置，无需在此配置环境变量。
