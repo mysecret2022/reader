@@ -79,15 +79,31 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
 
     suspend fun getUserBookSourceJson(userNameSpace: String): JsonArray? {
         var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
-        if (bookSourceList == null && !userNameSpace.equals("default")) {
-            // 用户书源文件不存在，拷贝系统书源
-            var systemBookSourceList: JsonArray? = asJsonArray(getUserStorage("default", "bookSource"))
-            if (systemBookSourceList != null) {
-                saveUserStorage(userNameSpace, "bookSource", systemBookSourceList.getList())
-                bookSourceList = systemBookSourceList
+        if ((bookSourceList == null || bookSourceList.isEmpty()) && !userNameSpace.equals("admin")) {
+            // 用户书源文件不存在或为空，优先拷贝默认管理员(admin)的书源，其次default
+            var adminBookSourceList: JsonArray? = asJsonArray(getUserStorage("admin", "bookSource"))
+                ?: asJsonArray(getUserStorage("default", "bookSource"))
+            if (adminBookSourceList != null && !adminBookSourceList.isEmpty()) {
+                saveUserStorage(userNameSpace, "bookSource", adminBookSourceList.getList())
+                bookSourceList = adminBookSourceList
             }
         }
         return bookSourceList
+    }
+
+    suspend fun syncAdminBookSources(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val userNameSpace = getUserNameSpace(context)
+        val adminSources = asJsonArray(getUserStorage("admin", "bookSource"))
+            ?: asJsonArray(getUserStorage("default", "bookSource"))
+        if (adminSources == null || adminSources.isEmpty()) {
+            return returnData.setErrorMsg("默认管理员尚未配置书源")
+        }
+        saveUserStorage(userNameSpace, "bookSource", adminSources.getList())
+        return returnData.setData(adminSources.getList())
     }
 
     suspend fun saveBookSource(context: RoutingContext): ReturnData {
@@ -125,6 +141,9 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList)
+        if (userNameSpace.equals("admin") || userNameSpace.equals("default")) {
+            saveUserStorage("default", "bookSource", bookSourceList)
+        }
         return returnData.setData("")
     }
 
@@ -266,6 +285,9 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList)
+        if (userNameSpace.equals("admin") || userNameSpace.equals("default")) {
+            saveUserStorage("default", "bookSource", bookSourceList)
+        }
         return returnData.setData("")
     }
 
@@ -299,6 +321,9 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList)
+        if (userNameSpace.equals("admin") || userNameSpace.equals("default")) {
+            saveUserStorage("default", "bookSource", bookSourceList)
+        }
         return returnData.setData("")
     }
 

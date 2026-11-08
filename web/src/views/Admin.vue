@@ -6,13 +6,20 @@
         <div class="brand-logo" @click="$router.push('/')">
           <i class="el-icon-reading"></i>
           <span class="brand-title">Reader</span>
-          <span class="brand-badge">控制台 v1.0.2</span>
+          <span class="brand-badge">控制台 v1.0.3</span>
         </div>
       </div>
       <div class="header-right">
-        <el-tag size="small" type="success" effect="dark" class="user-badge">
+        <el-tag
+          size="small"
+          :type="isAdmin ? 'danger' : 'success'"
+          effect="dark"
+          class="user-badge"
+        >
           <i class="el-icon-user"></i>
-          {{ currentUser ? currentUser.username : "管理员" }}
+          {{ currentUser ? currentUser.username : "用户" }} ({{
+            isAdmin ? "系统管理员" : "普通用户"
+          }})
         </el-tag>
         <el-button
           size="small"
@@ -37,7 +44,7 @@
       <aside class="admin-sidebar">
         <div class="sidebar-nav-list">
           <div
-            v-for="item in navMenuItems"
+            v-for="item in authorizedNavItems"
             :key="item.index"
             class="sidebar-nav-item"
             :class="{ active: activeTab === item.index }"
@@ -53,7 +60,7 @@
         <!-- 1. 系统概览与配置管理 -->
         <section v-if="activeTab === 'overview'" class="tab-pane">
           <h2 class="pane-title">系统状态总览与快速控制</h2>
-          
+
           <!-- 4个核心指标卡片（支持点击互动与快捷修改） -->
           <div class="stat-cards">
             <!-- 1. 用户总数与配额卡片 -->
@@ -62,11 +69,15 @@
               @click="openQuotaDialog"
               title="点击调整用户上限配额或快速加人"
             >
-              <div class="stat-icon bg-blue"><i class="el-icon-user-solid"></i></div>
+              <div class="stat-icon bg-blue">
+                <i class="el-icon-user-solid"></i>
+              </div>
               <div class="stat-info">
                 <div class="stat-value">
                   {{ userList.length }}
-                  <span class="stat-unit">/ {{ systemConfig.userLimit }} 人</span>
+                  <span class="stat-unit"
+                    >/ {{ systemConfig.userLimit }} 人</span
+                  >
                 </div>
                 <div class="stat-label">
                   注册用户配额 <i class="el-icon-edit-outline"></i>
@@ -81,7 +92,9 @@
               @click="openSourceBatchDialog"
               title="点击进行书源批量操作与健康治理"
             >
-              <div class="stat-icon bg-green"><i class="el-icon-notebook-2"></i></div>
+              <div class="stat-icon bg-green">
+                <i class="el-icon-notebook-2"></i>
+              </div>
               <div class="stat-info">
                 <div class="stat-value">
                   {{ bookSourceCount }}
@@ -100,7 +113,9 @@
               @click="openShelfDialog"
               title="点击查看与清理全局书架图书"
             >
-              <div class="stat-icon bg-purple"><i class="el-icon-reading"></i></div>
+              <div class="stat-icon bg-purple">
+                <i class="el-icon-reading"></i>
+              </div>
               <div class="stat-info">
                 <div class="stat-value">
                   {{ shelfCount }}
@@ -392,6 +407,15 @@
                 <el-option label="标准纯净源" value="normal"></el-option>
               </el-select>
               <el-button
+                type="success"
+                size="small"
+                icon="el-icon-connection"
+                @click="syncAdminSources"
+                title="将管理员配置的默认书源同步至当前账户"
+              >
+                同步管理员书源
+              </el-button>
+              <el-button
                 type="primary"
                 size="small"
                 icon="el-icon-upload2"
@@ -503,6 +527,373 @@
           </div>
         </section>
 
+        <!-- 3.5 书架设置（书籍管理、分组管理、导入书籍、浏览书仓、刷新缓存） -->
+        <section v-if="activeTab === 'shelf'" class="tab-pane">
+          <div class="pane-header-group">
+            <div>
+              <h2 class="pane-title" style="margin-bottom: 4px;">
+                <i class="el-icon-reading"></i> 书架综合设置与维护
+              </h2>
+              <span class="pane-subtitle"
+                >一站式管理个人书架：图书治理与换封面、分类分组维护、本地及书仓导书、全站缓存清理</span
+              >
+            </div>
+            <div class="pane-actions">
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-upload2"
+                @click="triggerUploadBook"
+              >
+                导入书籍
+              </el-button>
+              <el-button
+                type="warning"
+                size="small"
+                icon="el-icon-refresh"
+                @click="refreshShelfAndCache"
+              >
+                刷新缓存
+              </el-button>
+            </div>
+          </div>
+
+          <el-tabs v-model="shelfSubTab" type="border-card" class="shelf-tabs">
+            <!-- 1. 书籍管理 -->
+            <el-tab-pane name="books" label="书籍管理">
+              <div
+                style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;"
+              >
+                <span style="font-size: 13px; color: #64748b;">
+                  当前书架共有 <strong>{{ shelfBooks.length }}</strong> 本书籍
+                </span>
+                <el-input
+                  v-model="shelfSearchKey"
+                  placeholder="搜索书名或作者..."
+                  size="small"
+                  clearable
+                  prefix-icon="el-icon-search"
+                  style="width: 220px;"
+                ></el-input>
+              </div>
+              <el-table
+                :data="filteredShelfBooks"
+                stripe
+                size="small"
+                style="width: 100%;"
+              >
+                <el-table-column label="封面" width="80" align="center">
+                  <template slot-scope="scope">
+                    <img
+                      :src="getBookCover(scope.row)"
+                      style="width: 44px; height: 60px; object-fit: cover; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.15);"
+                      @error="e => (e.target.src = noCoverImage)"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="name" label="书名" min-width="140">
+                  <template slot-scope="scope">
+                    <div style="font-weight: bold; color: #1e293b;">
+                      {{ scope.row.name }}
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8;">
+                      {{
+                        scope.row.originName || scope.row.origin || "未知来源"
+                      }}
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="author"
+                  label="作者"
+                  width="120"
+                ></el-table-column>
+                <el-table-column label="分组" width="110">
+                  <template slot-scope="scope">
+                    <el-tag size="mini" type="info">{{
+                      getGroupName(scope.row.group)
+                    }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="最新章节"
+                  min-width="160"
+                  show-overflow-tooltip
+                >
+                  <template slot-scope="scope">
+                    <span>{{ scope.row.latestChapterTitle || "-" }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="阅读进度"
+                  min-width="140"
+                  show-overflow-tooltip
+                >
+                  <template slot-scope="scope">
+                    <span style="color: #64748b;">{{
+                      scope.row.durChapterTitle || "未开始"
+                    }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="180" align="center">
+                  <template slot-scope="scope">
+                    <el-button
+                      type="text"
+                      size="mini"
+                      icon="el-icon-picture"
+                      style="color: #E6A23C;"
+                      @click="openCoverPicker(scope.row)"
+                    >
+                      修改封面
+                    </el-button>
+                    <el-button
+                      type="text"
+                      size="mini"
+                      icon="el-icon-top"
+                      @click="topShelfBook(scope.row)"
+                    >
+                      置顶
+                    </el-button>
+                    <el-button
+                      type="text"
+                      size="mini"
+                      icon="el-icon-delete"
+                      style="color: #F56C6C;"
+                      @click="removeShelfBookItem(scope.row)"
+                    >
+                      移除
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <!-- 2. 分组管理 -->
+            <el-tab-pane name="groups" label="分组管理">
+              <div
+                style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;"
+              >
+                <span style="font-size: 13px; color: #64748b;"
+                  >自定义书籍分组类别</span
+                >
+                <el-button
+                  type="primary"
+                  size="small"
+                  icon="el-icon-plus"
+                  @click="openAddGroupDialog"
+                >
+                  新建分组
+                </el-button>
+              </div>
+              <el-table :data="bookGroupList" stripe size="small">
+                <el-table-column
+                  prop="groupName"
+                  label="分组名称"
+                  min-width="160"
+                ></el-table-column>
+                <el-table-column
+                  prop="groupId"
+                  label="分组ID"
+                  width="100"
+                  align="center"
+                ></el-table-column>
+                <el-table-column label="包含书籍数" width="120" align="center">
+                  <template slot-scope="scope">
+                    {{ getGroupBookCount(scope.row.groupId) }} 本
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="160" align="center">
+                  <template slot-scope="scope">
+                    <el-button
+                      type="text"
+                      size="mini"
+                      icon="el-icon-edit"
+                      @click="renameGroup(scope.row)"
+                      >重命名</el-button
+                    >
+                    <el-button
+                      type="text"
+                      size="mini"
+                      icon="el-icon-delete"
+                      style="color: #F56C6C;"
+                      @click="deleteGroup(scope.row)"
+                      >删除</el-button
+                    >
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <!-- 3. 导入书籍 -->
+            <el-tab-pane name="importBook" label="导入书籍">
+              <div
+                style="padding: 24px; text-align: center; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;"
+              >
+                <i
+                  class="el-icon-upload"
+                  style="font-size: 48px; color: #409EFF; margin-bottom: 12px;"
+                ></i>
+                <div
+                  style="font-size: 16px; font-weight: bold; margin-bottom: 8px;"
+                >
+                  上传本地书籍文件
+                </div>
+                <div
+                  style="font-size: 13px; color: #64748b; margin-bottom: 16px;"
+                >
+                  支持 .txt、.epub、.cbz
+                  格式书籍，上传后将自动解析并加入您的书架
+                </div>
+                <input
+                  type="file"
+                  ref="shelfBookFileInput"
+                  style="display: none;"
+                  accept=".txt,.epub,.cbz"
+                  @change="onShelfBookFileSelected"
+                />
+                <el-button
+                  type="primary"
+                  icon="el-icon-folder-opened"
+                  @click="triggerUploadBook"
+                >
+                  选择书籍文件上传
+                </el-button>
+              </div>
+            </el-tab-pane>
+
+            <!-- 4. 浏览书仓 -->
+            <el-tab-pane name="localStore" label="浏览书仓">
+              <div
+                style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;"
+              >
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 13px; color: #64748b;"
+                    >当前书仓路径：</span
+                  >
+                  <el-tag size="small">{{ localStorePath }}</el-tag>
+                  <el-button
+                    v-if="localStorePath !== '/'"
+                    type="text"
+                    size="mini"
+                    icon="el-icon-top"
+                    @click="navigateLocalStoreUp"
+                  >
+                    上一级
+                  </el-button>
+                </div>
+                <el-button
+                  size="mini"
+                  icon="el-icon-refresh"
+                  @click="fetchLocalStoreFiles"
+                  >刷新书仓</el-button
+                >
+              </div>
+              <el-table
+                :data="localStoreFiles"
+                v-loading="loadingLocalStore"
+                stripe
+                size="small"
+              >
+                <el-table-column label="名称" min-width="200">
+                  <template slot-scope="scope">
+                    <i
+                      :class="
+                        scope.row.isDir ? 'el-icon-folder' : 'el-icon-document'
+                      "
+                      style="margin-right: 6px; color: #409EFF;"
+                    ></i>
+                    <span
+                      :style="
+                        scope.row.isDir
+                          ? 'cursor: pointer; color: #409EFF; font-weight: bold;'
+                          : ''
+                      "
+                      @click="
+                        scope.row.isDir
+                          ? enterLocalStoreFolder(scope.row.name)
+                          : null
+                      "
+                    >
+                      {{ scope.row.name }}
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="size" label="大小" width="120">
+                  <template slot-scope="scope">
+                    {{ scope.row.isDir ? "-" : formatFileSize(scope.row.size) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="120" align="center">
+                  <template slot-scope="scope">
+                    <el-button
+                      v-if="!scope.row.isDir"
+                      type="text"
+                      size="mini"
+                      icon="el-icon-plus"
+                      @click="importLocalStoreBook(scope.row)"
+                    >
+                      加入书架
+                    </el-button>
+                    <el-button
+                      v-else
+                      type="text"
+                      size="mini"
+                      @click="enterLocalStoreFolder(scope.row.name)"
+                    >
+                      打开目录
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <!-- 5. 刷新缓存 -->
+            <el-tab-pane name="cache" label="刷新缓存">
+              <div style="padding: 16px; background: #fff; border-radius: 6px;">
+                <h4 style="margin-top: 0; margin-bottom: 12px;">
+                  缓存与数据同步选项
+                </h4>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                  <div
+                    style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 6px;"
+                  >
+                    <div>
+                      <div style="font-weight: bold;">刷新书架书籍状态</div>
+                      <div style="font-size: 12px; color: #64748b;">
+                        从后端重新载入最新书架目录与进度
+                      </div>
+                    </div>
+                    <el-button
+                      size="small"
+                      type="primary"
+                      icon="el-icon-refresh"
+                      @click="refreshShelfAndCache"
+                      >立即刷新</el-button
+                    >
+                  </div>
+                  <div
+                    style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 6px;"
+                  >
+                    <div>
+                      <div style="font-weight: bold;">清空书源与目录缓存</div>
+                      <div style="font-size: 12px; color: #64748b;">
+                        清理已缓存的书源章节列表及搜索临时数据
+                      </div>
+                    </div>
+                    <el-button
+                      size="small"
+                      type="warning"
+                      icon="el-icon-delete"
+                      @click="clearSourceAndCatalogCache"
+                      >清理缓存</el-button
+                    >
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </section>
+
         <!-- 4. 诊断系统日志 -->
         <section v-if="activeTab === 'logs'" class="tab-pane">
           <div class="pane-header">
@@ -547,7 +938,8 @@
               :key="idx"
               class="log-line"
               :class="{
-                'line-error': line.includes('ERROR') || line.includes('Exception'),
+                'line-error':
+                  line.includes('ERROR') || line.includes('Exception'),
                 'line-warn': line.includes('WARN')
               }"
             >
@@ -567,7 +959,8 @@
                 <i class="el-icon-cloudy"></i> 云同步与数据备份治理
               </h2>
               <span class="pane-subtitle"
-                >支持将书源、书架、替换规则及全站数据自动增量同步与全量打包备份至 GitHub 仓库与 WebDAV 云盘</span
+                >支持将书源、书架、替换规则及全站数据自动增量同步与全量打包备份至
+                GitHub 仓库与 WebDAV 云盘</span
               >
             </div>
             <div class="pane-actions">
@@ -617,19 +1010,25 @@
               <div class="cloud-status-card">
                 <div class="status-meta-title">增量同步状态</div>
                 <div class="status-meta-time">
-                  上次执行：{{ cloudSyncConfig.lastIncrementalSyncTime || "尚未执行" }}
+                  上次执行：{{
+                    cloudSyncConfig.lastIncrementalSyncTime || "尚未执行"
+                  }}
                 </div>
                 <div class="status-meta-detail">
-                  <i class="el-icon-info"></i> {{ cloudSyncConfig.lastIncrementalStatus || "无状态记录" }}
+                  <i class="el-icon-info"></i>
+                  {{ cloudSyncConfig.lastIncrementalStatus || "无状态记录" }}
                 </div>
               </div>
               <div class="cloud-status-card">
                 <div class="status-meta-title">全量备份状态</div>
                 <div class="status-meta-time">
-                  上次执行：{{ cloudSyncConfig.lastFullBackupTime || "尚未执行" }}
+                  上次执行：{{
+                    cloudSyncConfig.lastFullBackupTime || "尚未执行"
+                  }}
                 </div>
                 <div class="status-meta-detail">
-                  <i class="el-icon-info"></i> {{ cloudSyncConfig.lastFullStatus || "无状态记录" }}
+                  <i class="el-icon-info"></i>
+                  {{ cloudSyncConfig.lastFullStatus || "无状态记录" }}
                 </div>
               </div>
             </div>
@@ -638,7 +1037,9 @@
           <!-- 云同步与定时策略配置表单 -->
           <div class="dashboard-box config-box">
             <el-form :model="cloudSyncConfig" label-width="140px" size="small">
-              <h4 class="form-section-title"><i class="el-icon-timer"></i> 自动化策略与定时调度</h4>
+              <h4 class="form-section-title">
+                <i class="el-icon-timer"></i> 自动化策略与定时调度
+              </h4>
               <el-row :gutter="20">
                 <el-col :xs="24" :sm="12">
                   <el-form-item label="开启云端自动同步">
@@ -651,32 +1052,65 @@
                 </el-col>
                 <el-col :xs="24" :sm="12">
                   <el-form-item label="备份存储目标渠道">
-                    <el-select v-model="cloudSyncConfig.target" style="width: 100%;">
-                      <el-option label="同时备份到 GitHub 与 WebDAV" value="both"></el-option>
-                      <el-option label="仅备份到 GitHub 仓库" value="github"></el-option>
-                      <el-option label="仅备份到 WebDAV 云盘" value="webdav"></el-option>
+                    <el-select
+                      v-model="cloudSyncConfig.target"
+                      style="width: 100%;"
+                    >
+                      <el-option
+                        label="同时备份到 GitHub 与 WebDAV"
+                        value="both"
+                      ></el-option>
+                      <el-option
+                        label="仅备份到 GitHub 仓库"
+                        value="github"
+                      ></el-option>
+                      <el-option
+                        label="仅备份到 WebDAV 云盘"
+                        value="webdav"
+                      ></el-option>
                     </el-select>
                   </el-form-item>
                 </el-col>
                 <el-col :xs="24" :sm="12">
                   <el-form-item label="增量同步间隔">
-                    <el-select v-model="cloudSyncConfig.incrementalIntervalMinutes" style="width: 100%;">
+                    <el-select
+                      v-model="cloudSyncConfig.incrementalIntervalMinutes"
+                      style="width: 100%;"
+                    >
                       <el-option label="每 15 分钟" :value="15"></el-option>
-                      <el-option label="每 30 分钟 (推荐)" :value="30"></el-option>
+                      <el-option
+                        label="每 30 分钟 (推荐)"
+                        :value="30"
+                      ></el-option>
                       <el-option label="每 1 小时" :value="60"></el-option>
                       <el-option label="每 6 小时" :value="360"></el-option>
                       <el-option label="每 12 小时" :value="720"></el-option>
-                      <el-option label="关闭增量定时 (仅手动)" :value="0"></el-option>
+                      <el-option
+                        label="关闭增量定时 (仅手动)"
+                        :value="0"
+                      ></el-option>
                     </el-select>
                   </el-form-item>
                 </el-col>
                 <el-col :xs="24" :sm="12">
                   <el-form-item label="全量备份间隔">
-                    <el-select v-model="cloudSyncConfig.fullBackupIntervalHours" style="width: 100%;">
-                      <el-option label="每天打包全量备份 (推荐)" :value="24"></el-option>
-                      <el-option label="每 3 天打包一次" :value="72"></el-option>
+                    <el-select
+                      v-model="cloudSyncConfig.fullBackupIntervalHours"
+                      style="width: 100%;"
+                    >
+                      <el-option
+                        label="每天打包全量备份 (推荐)"
+                        :value="24"
+                      ></el-option>
+                      <el-option
+                        label="每 3 天打包一次"
+                        :value="72"
+                      ></el-option>
                       <el-option label="每周打包一次" :value="168"></el-option>
-                      <el-option label="关闭全量定时 (仅手动)" :value="0"></el-option>
+                      <el-option
+                        label="关闭全量定时 (仅手动)"
+                        :value="0"
+                      ></el-option>
                     </el-select>
                   </el-form-item>
                 </el-col>
@@ -685,7 +1119,9 @@
               <el-divider></el-divider>
 
               <!-- GitHub 配置 -->
-              <h4 class="form-section-title"><i class="el-icon-link"></i> GitHub 仓库存储配置</h4>
+              <h4 class="form-section-title">
+                <i class="el-icon-link"></i> GitHub 仓库存储配置
+              </h4>
               <el-row :gutter="20">
                 <el-col :xs="24" :sm="12">
                   <el-form-item label="仓库所有者 (Owner)">
@@ -737,8 +1173,11 @@
                       show-password
                       placeholder="必须设置数据包加密密码！上传至 GitHub 的全量与增量包均将采用 AES-256-GCM 强加密保护"
                     ></el-input>
-                    <div style="font-size: 12px; color: #e6a23c; margin-top: 4px;">
-                      <i class="el-icon-lock"></i> 强安全保障：哪怕仓库公开，未经密码授权也完全无法读取任何数据包。
+                    <div
+                      style="font-size: 12px; color: #e6a23c; margin-top: 4px;"
+                    >
+                      <i class="el-icon-lock"></i>
+                      强安全保障：哪怕仓库公开，未经密码授权也完全无法读取任何数据包。
                     </div>
                   </el-form-item>
                 </el-col>
@@ -747,7 +1186,9 @@
               <el-divider></el-divider>
 
               <!-- WebDAV 配置 -->
-              <h4 class="form-section-title"><i class="el-icon-folder-opened"></i> WebDAV 云盘存储配置</h4>
+              <h4 class="form-section-title">
+                <i class="el-icon-folder-opened"></i> WebDAV 云盘存储配置
+              </h4>
               <el-row :gutter="20">
                 <el-col :xs="24">
                   <el-form-item label="WebDAV 服务器地址">
@@ -817,10 +1258,16 @@
     </div>
 
     <!-- 弹窗 1：用户上限配额快速修改 -->
-    <el-dialog title="修改用户上限配额" :visible.sync="showQuotaDialog" width="400px">
+    <el-dialog
+      title="修改用户上限配额"
+      :visible.sync="showQuotaDialog"
+      width="400px"
+    >
       <el-form label-width="110px" size="small">
         <el-form-item label="当前用户数">
-          <span style="font-weight: bold; color: #3b82f6;">{{ userList.length }} 人</span>
+          <span style="font-weight: bold; color: #3b82f6;"
+            >{{ userList.length }} 人</span
+          >
         </el-form-item>
         <el-form-item label="系统用户配额">
           <el-input-number
@@ -832,40 +1279,77 @@
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
-        <el-button @click="showQuotaDialog = false" size="small">取消</el-button>
-        <el-button type="primary" @click="saveQuotaAndClose" size="small">保存配额</el-button>
+        <el-button @click="showQuotaDialog = false" size="small"
+          >取消</el-button
+        >
+        <el-button type="primary" @click="saveQuotaAndClose" size="small"
+          >保存配额</el-button
+        >
       </div>
     </el-dialog>
 
     <!-- 弹窗 2：书源批量快捷控制 -->
-    <el-dialog title="书源批量快捷控制" :visible.sync="showSourceBatchDialog" width="460px">
+    <el-dialog
+      title="书源批量快捷控制"
+      :visible.sync="showSourceBatchDialog"
+      width="460px"
+    >
       <p style="margin-top: 0; color: #64748b;">
         当前已配置 {{ bookSourceList.length }} 个书源，可执行一键批量操作：
       </p>
       <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <el-button type="success" size="small" icon="el-icon-check" @click="batchToggleSources(true)">
+        <el-button
+          type="success"
+          size="small"
+          icon="el-icon-check"
+          @click="batchToggleSources(true)"
+        >
           一键启用全部书源
         </el-button>
-        <el-button type="warning" size="small" icon="el-icon-close" @click="batchToggleSources(false)">
+        <el-button
+          type="warning"
+          size="small"
+          icon="el-icon-close"
+          @click="batchToggleSources(false)"
+        >
           一键禁用全部书源
         </el-button>
       </div>
-      <el-button type="primary" size="small" icon="el-icon-d-arrow-right" @click="goToSourcesTab">
+      <el-button
+        type="primary"
+        size="small"
+        icon="el-icon-d-arrow-right"
+        @click="goToSourcesTab"
+      >
         进入完整书源管理页面
       </el-button>
       <div slot="footer" class="dialog-footer">
-        <el-button @click="showSourceBatchDialog = false" size="small">关闭</el-button>
+        <el-button @click="showSourceBatchDialog = false" size="small"
+          >关闭</el-button
+        >
       </div>
     </el-dialog>
 
     <!-- 弹窗 3：全局书架书籍管理 -->
-    <el-dialog title="书架书籍整理" :visible.sync="showShelfDialog" width="560px">
+    <el-dialog
+      title="书架书籍整理"
+      :visible.sync="showShelfDialog"
+      width="560px"
+    >
       <p style="margin-top: 0; color: #64748b;">
         当前共有 {{ shelfBooks.length }} 本书籍在书架上：
       </p>
       <el-table :data="shelfBooks" max-height="300" stripe size="small">
-        <el-table-column prop="name" label="书名" min-width="140"></el-table-column>
-        <el-table-column prop="author" label="作者" width="100"></el-table-column>
+        <el-table-column
+          prop="name"
+          label="书名"
+          min-width="140"
+        ></el-table-column>
+        <el-table-column
+          prop="author"
+          label="作者"
+          width="100"
+        ></el-table-column>
         <el-table-column label="操作" width="80" align="center">
           <template slot-scope="scope">
             <el-button
@@ -880,7 +1364,101 @@
         </el-table-column>
       </el-table>
       <div slot="footer" class="dialog-footer">
-        <el-button @click="showShelfDialog = false" size="small">完成</el-button>
+        <el-button @click="showShelfDialog = false" size="small"
+          >完成</el-button
+        >
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗：从在线书源选择并替换书封面 -->
+    <el-dialog
+      title="修改书籍封面"
+      :visible.sync="showCoverPicker"
+      width="560px"
+      append-to-body
+    >
+      <div v-if="currentCoverBook">
+        <div style="margin-bottom: 12px; font-size: 14px;">
+          当前书籍：<strong style="color: #409EFF;">{{
+            currentCoverBook.name
+          }}</strong>
+          ({{ currentCoverBook.author }})
+        </div>
+        <div style="margin-bottom: 15px; display: flex; gap: 8px;">
+          <el-input
+            v-model="customCoverInput"
+            size="small"
+            placeholder="自定义图片链接 http(s)://... 或从下方书源选择"
+          ></el-input>
+          <el-button
+            type="primary"
+            size="small"
+            icon="el-icon-check"
+            @click="applyCover(customCoverInput)"
+          >
+            直接应用
+          </el-button>
+        </div>
+        <div
+          style="font-size: 13px; color: #888; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"
+        >
+          <span>各书源封面候选项 (点击即可设为新封面)：</span>
+          <el-button
+            type="text"
+            size="mini"
+            icon="el-icon-refresh"
+            :loading="loadingCovers"
+            @click="fetchBookCovers(currentCoverBook)"
+          >
+            重新拉取
+          </el-button>
+        </div>
+        <div class="cover-grid" v-loading="loadingCovers">
+          <div
+            v-for="(item, idx) in candidateCovers"
+            :key="idx"
+            class="cover-card"
+            :class="{
+              active:
+                (currentCoverBook.customCoverUrl ||
+                  currentCoverBook.coverUrl) === item.coverUrl
+            }"
+            @click="applyCover(item.coverUrl)"
+          >
+            <img :src="item.coverUrl" class="cover-img" />
+            <div class="cover-source-tag">
+              {{ item.originName || "未知书源" }}
+            </div>
+          </div>
+          <div
+            v-if="!loadingCovers && candidateCovers.length === 0"
+            style="grid-column: 1 / -1; text-align: center; color: #999; padding: 20px 0;"
+          >
+            暂未从其他书源匹配到图片封面，请手动输入图片链接
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗：新建分组 -->
+    <el-dialog
+      title="新建书籍分组"
+      :visible.sync="showAddGroupDialog"
+      width="400px"
+      append-to-body
+    >
+      <el-input
+        v-model="newGroupName"
+        placeholder="请输入分组名称"
+        size="small"
+      ></el-input>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="showAddGroupDialog = false" size="small"
+          >取消</el-button
+        >
+        <el-button type="primary" @click="saveNewGroup" size="small"
+          >确定</el-button
+        >
       </div>
     </el-dialog>
 
@@ -914,7 +1492,9 @@
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button @click="showAddUser = false" size="small">取消</el-button>
-        <el-button type="primary" @click="submitAddUser" size="small">确认添加</el-button>
+        <el-button type="primary" @click="submitAddUser" size="small"
+          >确认添加</el-button
+        >
       </div>
     </el-dialog>
 
@@ -934,12 +1514,18 @@
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button @click="showResetPwd = false" size="small">取消</el-button>
-        <el-button type="primary" @click="submitResetPwd" size="small">确认修改</el-button>
+        <el-button type="primary" @click="submitResetPwd" size="small"
+          >确认修改</el-button
+        >
       </div>
     </el-dialog>
 
     <!-- 弹窗 6：导入书源弹窗 -->
-    <el-dialog title="导入书源" :visible.sync="showImportSourceDialog" width="520px">
+    <el-dialog
+      title="导入书源"
+      :visible.sync="showImportSourceDialog"
+      width="520px"
+    >
       <el-tabs v-model="importSourceTab">
         <el-tab-pane label="网络远程链接" name="url">
           <el-input
@@ -949,8 +1535,15 @@
             placeholder="请输入书源 JSON 文件的 HTTP/HTTPS 网络地址"
           ></el-input>
           <div style="margin-top: 15px; text-align: right;">
-            <el-button size="small" @click="showImportSourceDialog = false">取消</el-button>
-            <el-button type="primary" size="small" :loading="importingSource" @click="submitImportSourceUrl">
+            <el-button size="small" @click="showImportSourceDialog = false"
+              >取消</el-button
+            >
+            <el-button
+              type="primary"
+              size="small"
+              :loading="importingSource"
+              @click="submitImportSourceUrl"
+            >
               立即拉取并导入
             </el-button>
           </div>
@@ -963,8 +1556,15 @@
             placeholder="请在此粘贴书源 JSON 数据 (单个书源或书源数组)"
           ></el-input>
           <div style="margin-top: 15px; text-align: right;">
-            <el-button size="small" @click="showImportSourceDialog = false">取消</el-button>
-            <el-button type="primary" size="small" :loading="importingSource" @click="submitImportSourceText">
+            <el-button size="small" @click="showImportSourceDialog = false"
+              >取消</el-button
+            >
+            <el-button
+              type="primary"
+              size="small"
+              :loading="importingSource"
+              @click="submitImportSourceText"
+            >
               解析并导入
             </el-button>
           </div>
@@ -973,7 +1573,11 @@
     </el-dialog>
 
     <!-- 弹窗 7：失效书源诊断与清理 -->
-    <el-dialog title="失效书源体检与批量治理" :visible.sync="showInvalidSourcesDialog" width="760px">
+    <el-dialog
+      title="失效书源体检与批量治理"
+      :visible.sync="showInvalidSourcesDialog"
+      width="760px"
+    >
       <el-alert
         title="体检原理说明"
         type="info"
@@ -982,14 +1586,22 @@
         style="margin-bottom: 16px;"
       >
         <div style="font-size: 12px; line-height: 1.6; color: #475569;">
-          <div><b>① 书名实测扫描（推荐）</b>：模拟读者使用测试书名（如《斗罗大陆》）向各大书源网站发送并发搜索请求，若网站倒闭、超时无响应或结构报错，即精准判定失效。</div>
-          <div><b>② 系统运行记录</b>：读取后端服务在日常阅读、转码和搜索中自动捕获并记录的历史异常书源。</div>
+          <div>
+            <b>① 书名实测扫描（推荐）</b
+            >：模拟读者使用测试书名（如《斗罗大陆》）向各大书源网站发送并发搜索请求，若网站倒闭、超时无响应或结构报错，即精准判定失效。
+          </div>
+          <div>
+            <b>② 系统运行记录</b
+            >：读取后端服务在日常阅读、转码和搜索中自动捕获并记录的历史异常书源。
+          </div>
         </div>
       </el-alert>
 
       <el-tabs v-model="invalidSourceMode">
         <el-tab-pane label="① 书名实测扫描" name="keyword">
-          <div style="background: #f8fafc; padding: 14px 16px; border-radius: 6px; margin-bottom: 14px; border: 1px solid #e2e8f0;">
+          <div
+            style="background: #f8fafc; padding: 14px 16px; border-radius: 6px; margin-bottom: 14px; border: 1px solid #e2e8f0;"
+          >
             <el-row :gutter="12" type="flex" align="middle">
               <el-col :span="8">
                 <el-input
@@ -1042,14 +1654,31 @@
                 </el-button>
               </el-col>
             </el-row>
-            <div v-if="isScanningSources || scanSourceProgress > 0" style="margin-top: 10px;">
+            <div
+              v-if="isScanningSources || scanSourceProgress > 0"
+              style="margin-top: 10px;"
+            >
               <el-progress
                 :percentage="scanSourcePercentage"
-                :status="isScanningSources ? undefined : (invalidSourcesList.length > 0 ? 'exception' : 'success')"
+                :status="
+                  isScanningSources
+                    ? undefined
+                    : invalidSourcesList.length > 0
+                    ? 'exception'
+                    : 'success'
+                "
               ></el-progress>
-              <div style="font-size: 12px; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between;">
-                <span>正在扫描：{{ scanSourceProgress }} / {{ bookSourceList.length }} 个书源</span>
-                <span v-if="invalidSourcesList.length > 0" style="color: #ef4444; font-weight: bold;">
+              <div
+                style="font-size: 12px; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between;"
+              >
+                <span
+                  >正在扫描：{{ scanSourceProgress }} /
+                  {{ bookSourceList.length }} 个书源</span
+                >
+                <span
+                  v-if="invalidSourcesList.length > 0"
+                  style="color: #ef4444; font-weight: bold;"
+                >
                   已发现 {{ invalidSourcesList.length }} 个失效书源
                 </span>
                 <span v-else style="color: #10b981;">暂未发现异常书源</span>
@@ -1059,7 +1688,9 @@
         </el-tab-pane>
 
         <el-tab-pane label="② 系统运行异常记录" name="runtime">
-          <div style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+          <div
+            style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;"
+          >
             <span style="font-size: 13px; color: #64748b;">
               直接调取后端在运行过程中自动捕捉的超时或异常源记录
             </span>
@@ -1076,7 +1707,9 @@
         </el-tab-pane>
       </el-tabs>
 
-      <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+      <div
+        style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;"
+      >
         <span style="font-size: 13px; font-weight: bold; color: #334155;">
           失效书源清单 ({{ invalidSourcesList.length }})
         </span>
@@ -1092,8 +1725,17 @@
       </div>
 
       <el-table :data="invalidSourcesList" max-height="340" stripe size="small">
-        <el-table-column prop="bookSourceName" label="书源名称" min-width="140"></el-table-column>
-        <el-table-column prop="error" label="失效具体原因" min-width="240" show-overflow-tooltip>
+        <el-table-column
+          prop="bookSourceName"
+          label="书源名称"
+          min-width="140"
+        ></el-table-column>
+        <el-table-column
+          prop="error"
+          label="失效具体原因"
+          min-width="240"
+          show-overflow-tooltip
+        >
           <template slot-scope="scope">
             <span style="color: #ef4444;">{{ scope.row.error }}</span>
           </template>
@@ -1112,7 +1754,9 @@
         </el-table-column>
       </el-table>
       <div slot="footer" class="dialog-footer">
-        <el-button @click="showInvalidSourcesDialog = false" size="small">关闭</el-button>
+        <el-button @click="showInvalidSourcesDialog = false" size="small"
+          >关闭</el-button
+        >
       </div>
     </el-dialog>
   </div>
@@ -1129,7 +1773,11 @@ export default {
     return {
       activeTab: "overview",
       navMenuItems: [
-        { index: "overview", title: "系统状态总览", icon: "el-icon-data-analysis" },
+        {
+          index: "overview",
+          title: "系统状态总览",
+          icon: "el-icon-data-analysis"
+        },
         { index: "users", title: "用户权限治理", icon: "el-icon-user-solid" },
         { index: "sources", title: "书源健康管理", icon: "el-icon-collection" },
         { index: "cloudSync", title: "云同步与备份", icon: "el-icon-cloudy" },
@@ -1145,6 +1793,20 @@ export default {
       sourcePage: 1,
       sourcePageSize: 15,
       logs: [],
+      shelfSubTab: "books",
+      shelfSearchKey: "",
+      bookGroupList: [],
+      showAddGroupDialog: false,
+      newGroupName: "",
+      localStorePath: "/",
+      localStoreFiles: [],
+      loadingLocalStore: false,
+      showCoverPicker: false,
+      currentCoverBook: null,
+      customCoverInput: "",
+      candidateCovers: [],
+      loadingCovers: false,
+      noCoverImage: require("../assets/imgs/noCover.jpeg"),
       logLines: 50,
       logErrorOnly: false,
       showAddUser: false,
@@ -1213,9 +1875,40 @@ export default {
     };
   },
   computed: {
+    api() {
+      return this.$store.state.api || "/reader3";
+    },
+    isAdmin() {
+      return !!(
+        this.currentUser &&
+        (this.currentUser.is_admin ||
+          this.currentUser.isAdmin ||
+          this.currentUser.username === "admin")
+      );
+    },
+    authorizedNavItems() {
+      if (this.isAdmin) {
+        return this.navMenuItems;
+      }
+      return [
+        { index: "sources", title: "书源管理", icon: "el-icon-collection" },
+        { index: "shelf", title: "书架设置", icon: "el-icon-reading" }
+      ];
+    },
+    filteredShelfBooks() {
+      if (!this.shelfSearchKey) return this.shelfBooks;
+      const k = this.shelfSearchKey.toLowerCase();
+      return this.shelfBooks.filter(
+        b =>
+          (b.name && b.name.toLowerCase().includes(k)) ||
+          (b.author && b.author.toLowerCase().includes(k))
+      );
+    },
     scanSourcePercentage() {
       if (!this.bookSourceList || this.bookSourceList.length === 0) return 0;
-      const pct = Math.round((this.scanSourceProgress / this.bookSourceList.length) * 100);
+      const pct = Math.round(
+        (this.scanSourceProgress / this.bookSourceList.length) * 100
+      );
       return Math.min(pct, 100);
     },
     isNight() {
@@ -1288,9 +1981,13 @@ export default {
     },
     async fetchSystemConfig() {
       try {
-        const res = await Axios.get("/getSystemConfig");
+        const res = await Axios.get(this.api + "/getSystemConfig");
         if (res.data.isSuccess && res.data.data) {
-          this.systemConfig = Object.assign({}, this.systemConfig, res.data.data);
+          this.systemConfig = Object.assign(
+            {},
+            this.systemConfig,
+            res.data.data
+          );
         }
       } catch (err) {
         //
@@ -1298,9 +1995,13 @@ export default {
     },
     async fetchCloudSyncConfig() {
       try {
-        const res = await Axios.get("/getCloudSyncConfig");
+        const res = await Axios.get(this.api + "/getCloudSyncConfig");
         if (res.data.isSuccess && res.data.data) {
-          this.cloudSyncConfig = Object.assign({}, this.cloudSyncConfig, res.data.data);
+          this.cloudSyncConfig = Object.assign(
+            {},
+            this.cloudSyncConfig,
+            res.data.data
+          );
         }
       } catch (err) {
         //
@@ -1309,10 +2010,17 @@ export default {
     async submitCloudSyncConfig() {
       this.savingCloudSync = true;
       try {
-        const res = await Axios.post("/saveCloudSyncConfig", this.cloudSyncConfig);
+        const res = await Axios.post(
+          this.api + "/saveCloudSyncConfig",
+          this.cloudSyncConfig
+        );
         if (res.data.isSuccess) {
           this.$message.success("云同步配置保存成功！");
-          this.cloudSyncConfig = Object.assign({}, this.cloudSyncConfig, res.data.data);
+          this.cloudSyncConfig = Object.assign(
+            {},
+            this.cloudSyncConfig,
+            res.data.data
+          );
         } else {
           this.$message.error(res.data.errorMsg || "保存云同步配置失败");
         }
@@ -1325,7 +2033,7 @@ export default {
     async manualTriggerSync() {
       this.triggeringSync = true;
       try {
-        const res = await Axios.post("/triggerCloudSync");
+        const res = await Axios.post(this.api + "/triggerCloudSync");
         if (res.data.isSuccess) {
           this.$message.success(`增量同步执行完成：${res.data.data}`);
           this.fetchCloudSyncConfig();
@@ -1341,7 +2049,7 @@ export default {
     async manualTriggerBackup() {
       this.triggeringBackup = true;
       try {
-        const res = await Axios.post("/triggerCloudBackup");
+        const res = await Axios.post(this.api + "/triggerCloudBackup");
         if (res.data.isSuccess) {
           this.$message.success(`全量备份打包上传成功：${res.data.data}`);
           this.fetchCloudSyncConfig();
@@ -1357,7 +2065,10 @@ export default {
     async submitSystemConfig() {
       this.savingConfig = true;
       try {
-        const res = await Axios.post("/saveSystemConfig", this.systemConfig);
+        const res = await Axios.post(
+          this.api + "/saveSystemConfig",
+          this.systemConfig
+        );
         if (res.data.isSuccess) {
           this.$message.success("系统全局配置保存成功！");
         } else {
@@ -1372,7 +2083,9 @@ export default {
     async quickToggleRegister() {
       this.systemConfig.allowRegister = !this.systemConfig.allowRegister;
       await this.submitSystemConfig();
-      const statusText = this.systemConfig.allowRegister ? "已开启自主注册" : "已暂停自主注册";
+      const statusText = this.systemConfig.allowRegister
+        ? "已开启自主注册"
+        : "已暂停自主注册";
       this.$message.info(`系统准入策略变更：${statusText}`);
     },
     openQuotaDialog() {
@@ -1398,9 +2111,11 @@ export default {
         type: "warning"
       }).then(async () => {
         try {
-          await Axios.post("/deleteShelfBook", { url: book.bookUrl });
+          await Axios.post(this.api + "/deleteBook", { url: book.bookUrl });
           this.$message.success("书籍已移除");
-          const idx = this.shelfBooks.findIndex(b => b.bookUrl === book.bookUrl);
+          const idx = this.shelfBooks.findIndex(
+            b => b.bookUrl === book.bookUrl
+          );
           if (idx !== -1) {
             this.shelfBooks.splice(idx, 1);
           }
@@ -1411,15 +2126,19 @@ export default {
     },
     async batchToggleSources(enabled) {
       const actionText = enabled ? "启用" : "禁用";
-      this.$confirm(`确定要一键${actionText}全部 ${this.bookSourceList.length} 个书源吗？`, "批量操作", {
-        type: "warning"
-      }).then(async () => {
+      this.$confirm(
+        `确定要一键${actionText}全部 ${this.bookSourceList.length} 个书源吗？`,
+        "批量操作",
+        {
+          type: "warning"
+        }
+      ).then(async () => {
         try {
           const updatedList = this.bookSourceList.map(s => {
             s.enabled = enabled;
             return s;
           });
-          await Axios.post("/saveBookSources", updatedList);
+          await Axios.post(this.api + "/saveBookSources", updatedList);
           this.$message.success(`已一键${actionText}全部书源`);
           this.fetchSources();
         } catch (err) {
@@ -1430,7 +2149,7 @@ export default {
     async fetchUsers() {
       this.loadingUsers = true;
       try {
-        const res = await Axios.get("/getUserList");
+        const res = await Axios.get(this.api + "/getUserList");
         if (res.data.isSuccess) {
           this.userList = res.data.data || [];
         }
@@ -1443,7 +2162,7 @@ export default {
     async fetchSources() {
       this.loadingSources = true;
       try {
-        const res = await Axios.get("/getBookSources");
+        const res = await Axios.get(this.api + "/getBookSources");
         if (res.data.isSuccess) {
           this.bookSourceList = res.data.data || [];
         }
@@ -1470,7 +2189,7 @@ export default {
     },
     async toggleSourceEnabled(source) {
       try {
-        await Axios.post("/saveBookSource", source);
+        await Axios.post(this.api + "/saveBookSource", source);
         this.$message.success(`书源 [${source.bookSourceName}] 状态已更新`);
       } catch (err) {
         this.$message.error("更新书源失败");
@@ -1485,7 +2204,7 @@ export default {
         }
       ).then(async () => {
         try {
-          await Axios.post("/deleteBookSources", [source]);
+          await Axios.post(this.api + "/deleteBookSources", [source]);
           this.$message.success("删除书源成功");
           this.fetchSources();
         } catch (err) {
@@ -1537,7 +2256,7 @@ export default {
         this.$message.warning("未检测到有效书源数据");
         return;
       }
-      const res = await Axios.post("/saveBookSources", list);
+      const res = await Axios.post(this.api + "/saveBookSources", list);
       if (res.data.isSuccess) {
         this.$message.success(`成功导入 ${list.length} 个书源！`);
         this.fetchSources();
@@ -1565,16 +2284,18 @@ export default {
       const timeout = Math.max(1000, this.checkSourceTimeout || 5000);
       const total = this.bookSourceList.length;
 
-      const limitFunc = LimitResquest(concurrent, (handler) => {
+      const limitFunc = LimitResquest(concurrent, handler => {
         this.scanSourceProgress = handler.requestCount;
         if (handler.isEnd()) {
           this.isScanningSources = false;
-          this.$message.success(`体检完成！共扫描 ${total} 个书源，发现 ${this.invalidSourcesList.length} 个失效书源`);
+          this.$message.success(
+            `体检完成！共扫描 ${total} 个书源，发现 ${this.invalidSourcesList.length} 个失效书源`
+          );
         }
       });
       this.scanSourceLimitHandler = limitFunc;
 
-      this.bookSourceList.forEach((source) => {
+      this.bookSourceList.forEach(source => {
         limitFunc(async () => {
           try {
             const res = await Axios.post(
@@ -1605,7 +2326,11 @@ export default {
               reason = "网络中断或域名无法连接";
             } else if (errStr.includes("404")) {
               reason = "HTTP 404 (页面不存在或源失效)";
-            } else if (errStr.includes("500") || errStr.includes("502") || errStr.includes("503")) {
+            } else if (
+              errStr.includes("500") ||
+              errStr.includes("502") ||
+              errStr.includes("503")
+            ) {
               reason = "HTTP 5xx (目标源服务器内部崩溃)";
             } else if (errStr) {
               reason = errStr;
@@ -1629,13 +2354,15 @@ export default {
     async loadRuntimeInvalidSources() {
       this.checkingInvalidSources = true;
       try {
-        const res = await Axios.post("/getInvalidBookSources");
+        const res = await Axios.post(this.api + "/getInvalidBookSources");
         if (res.data.isSuccess) {
           const rawMap = res.data.data || {};
           const list = [];
           for (let url in rawMap) {
             const item = rawMap[url];
-            const matched = this.bookSourceList.find(s => s.bookSourceUrl === url);
+            const matched = this.bookSourceList.find(
+              s => s.bookSourceUrl === url
+            );
             list.push({
               bookSourceUrl: url,
               bookSourceName: (matched && matched.bookSourceName) || url,
@@ -1655,9 +2382,13 @@ export default {
     },
     async deleteSingleInvalidSource(row) {
       try {
-        await Axios.post("/deleteBookSources", [{ bookSourceUrl: row.bookSourceUrl }]);
+        await Axios.post(this.api + "/deleteBookSources", [
+          { bookSourceUrl: row.bookSourceUrl }
+        ]);
         this.$message.success("已移除失效源");
-        this.invalidSourcesList = this.invalidSourcesList.filter(s => s.bookSourceUrl !== row.bookSourceUrl);
+        this.invalidSourcesList = this.invalidSourcesList.filter(
+          s => s.bookSourceUrl !== row.bookSourceUrl
+        );
         this.fetchSources();
       } catch (err) {
         this.$message.error("移除失败");
@@ -1665,12 +2396,18 @@ export default {
     },
     async cleanupAllInvalidSources() {
       if (this.invalidSourcesList.length === 0) return;
-      this.$confirm(`确认要清理全部 ${this.invalidSourcesList.length} 个失效书源吗？`, "批量清理", {
-        type: "warning"
-      }).then(async () => {
+      this.$confirm(
+        `确认要清理全部 ${this.invalidSourcesList.length} 个失效书源吗？`,
+        "批量清理",
+        {
+          type: "warning"
+        }
+      ).then(async () => {
         try {
-          const payload = this.invalidSourcesList.map(s => ({ bookSourceUrl: s.bookSourceUrl }));
-          await Axios.post("/deleteBookSources", payload);
+          const payload = this.invalidSourcesList.map(s => ({
+            bookSourceUrl: s.bookSourceUrl
+          }));
+          await Axios.post(this.api + "/deleteBookSources", payload);
           this.$message.success("失效书源已全部清理完毕");
           this.invalidSourcesList = [];
           this.showInvalidSourcesDialog = false;
@@ -1682,7 +2419,7 @@ export default {
     },
     async fetchLogs() {
       try {
-        const res = await Axios.get("/getSystemLogs", {
+        const res = await Axios.get(this.api + "/getSystemLogs", {
           params: {
             lines: this.logLines,
             error: this.logErrorOnly
@@ -1708,9 +2445,11 @@ export default {
     },
     async clearSystemCacheFiles() {
       try {
-        const res = await Axios.post("/clearSystemCache");
+        const res = await Axios.post(this.api + "/clearSystemCache");
         if (res.data.isSuccess) {
-          this.$message.success(res.data.data || "失效音频与解析缓存已全部清空");
+          this.$message.success(
+            res.data.data || "失效音频与解析缓存已全部清空"
+          );
         } else {
           this.$message.error(res.data.errorMsg || "清理缓存失败");
         }
@@ -1740,7 +2479,7 @@ export default {
         return;
       }
       try {
-        const res = await Axios.post("/addUser", this.newUserForm);
+        const res = await Axios.post(this.api + "/addUser", this.newUserForm);
         if (res.data.isSuccess) {
           this.$message.success("添加用户成功");
           this.showAddUser = false;
@@ -1763,7 +2502,7 @@ export default {
         return;
       }
       try {
-        const res = await Axios.post("/resetPassword", {
+        const res = await Axios.post(this.api + "/resetPassword", {
           username: this.currentEditUser.username,
           password: this.newPassword
         });
@@ -1779,10 +2518,316 @@ export default {
     },
     async updateUserPerm(user) {
       try {
-        await Axios.post("/updateUser", user);
+        await Axios.post(this.api + "/updateUser", user);
         this.$message.success("权限更新成功");
       } catch (err) {
         this.$message.error("权限更新失败");
+      }
+    },
+    async syncAdminSources() {
+      try {
+        const res = await Axios.post(this.api + "/syncAdminBookSources");
+        if (res.data.isSuccess) {
+          const count = res.data.data ? res.data.data.length : 0;
+          this.$message.success(`已同步管理员书源，共载入 ${count} 个书源！`);
+          this.fetchSources();
+        } else {
+          this.$message.error(res.data.errorMsg || "同步失败");
+        }
+      } catch (err) {
+        this.$message.error("同步管理员书源异常: " + err.toString());
+      }
+    },
+    async fetchShelfBooks() {
+      try {
+        const res = await Axios.get(this.api + "/getBookshelf");
+        if (res.data.isSuccess) {
+          this.$store.commit("setShelfBooks", res.data.data);
+        }
+      } catch (e) {
+        //
+      }
+    },
+    async fetchBookGroups() {
+      try {
+        const res = await Axios.get(this.api + "/getBookGroups");
+        if (res.data.isSuccess) {
+          this.bookGroupList = res.data.data || [];
+        }
+      } catch (e) {
+        //
+      }
+    },
+    getGroupName(groupId) {
+      if (typeof groupId === "undefined" || groupId === 0) return "未分组";
+      const g = this.bookGroupList.find(x => x.groupId === groupId);
+      return g ? g.groupName : "未分组";
+    },
+    getGroupBookCount(groupId) {
+      return this.shelfBooks.filter(b => b.group === groupId).length;
+    },
+    getBookCover(book) {
+      return book.customCoverUrl || book.coverUrl || this.noCoverImage;
+    },
+    openAddGroupDialog() {
+      this.newGroupName = "";
+      this.showAddGroupDialog = true;
+    },
+    async saveNewGroup() {
+      if (!this.newGroupName.trim()) {
+        this.$message.error("请输入分组名称");
+        return;
+      }
+      try {
+        const res = await Axios.post(this.api + "/saveBookGroup", {
+          groupName: this.newGroupName.trim()
+        });
+        if (res.data.isSuccess) {
+          this.$message.success("新建分组成功");
+          this.showAddGroupDialog = false;
+          this.fetchBookGroups();
+        } else {
+          this.$message.error(res.data.errorMsg || "新建分组失败");
+        }
+      } catch (e) {
+        this.$message.error("新建分组异常: " + e.toString());
+      }
+    },
+    renameGroup(group) {
+      this.$prompt("请输入新分组名称:", "重命名分组", {
+        inputValue: group.groupName,
+        confirmButtonText: "确定",
+        cancelButtonText: "取消"
+      }).then(async ({ value }) => {
+        if (!value || !value.trim()) return;
+        try {
+          const res = await Axios.post(this.api + "/saveBookGroup", {
+            groupId: group.groupId,
+            groupName: value.trim()
+          });
+          if (res.data.isSuccess) {
+            this.$message.success("分组重命名成功");
+            this.fetchBookGroups();
+          }
+        } catch (e) {
+          this.$message.error("重命名失败");
+        }
+      });
+    },
+    deleteGroup(group) {
+      this.$confirm(
+        `确认删除分组【${group.groupName}】吗？分组内的书籍不会被删除`,
+        "确认删除",
+        {
+          type: "warning"
+        }
+      ).then(async () => {
+        try {
+          const res = await Axios.post(this.api + "/deleteBookGroup", {
+            groupId: group.groupId
+          });
+          if (res.data.isSuccess) {
+            this.$message.success("分组已删除");
+            this.fetchBookGroups();
+          }
+        } catch (e) {
+          this.$message.error("删除分组失败");
+        }
+      });
+    },
+    async topShelfBook(book) {
+      try {
+        const minOrder = this.shelfBooks.reduce(
+          (min, b) => Math.min(min, b.order || 0),
+          0
+        );
+        const updated = Object.assign({}, book, { order: minOrder - 1 });
+        await Axios.post(this.api + "/saveBook", updated);
+        this.$message.success(`书籍《${book.name}》已置顶`);
+        this.fetchShelfBooks();
+      } catch (e) {
+        this.$message.error("置顶失败");
+      }
+    },
+    openCoverPicker(book) {
+      this.currentCoverBook = book;
+      this.customCoverInput = book.customCoverUrl || "";
+      this.candidateCovers = [];
+      this.showCoverPicker = true;
+      this.fetchBookCovers(book);
+    },
+    fetchBookCovers(book) {
+      if (!book || !book.name) return;
+      this.loadingCovers = true;
+      this.candidateCovers = [];
+      const seen = new Set();
+      if (book.coverUrl) {
+        this.candidateCovers.push({
+          coverUrl: book.coverUrl,
+          originName: "原书源封面"
+        });
+        seen.add(book.coverUrl);
+      }
+      const buildURL = require("axios/lib/helpers/buildURL");
+      const params = {
+        name: book.name,
+        author: book.author || "",
+        searchSize: 15
+      };
+      if (this.$store.state.token) {
+        params.accessToken = this.$store.state.token;
+      }
+      const sseUrl = buildURL(this.api + "/searchBookSourceSSE", params);
+      try {
+        const es = new EventSource(sseUrl);
+        es.addEventListener("message", e => {
+          try {
+            const res = JSON.parse(e.data);
+            if (res.data && Array.isArray(res.data)) {
+              res.data.forEach(item => {
+                if (item.coverUrl && !seen.has(item.coverUrl)) {
+                  seen.add(item.coverUrl);
+                  this.candidateCovers.push({
+                    coverUrl: item.coverUrl,
+                    originName: item.originName || item.origin || "在线书源"
+                  });
+                }
+              });
+            }
+          } catch (err) {
+            // ignore JSON parse error
+          }
+        });
+        const stopSSE = () => {
+          this.loadingCovers = false;
+          es.close();
+        };
+        es.addEventListener("end", stopSSE);
+        es.addEventListener("error", stopSSE);
+        setTimeout(stopSSE, 8000);
+      } catch (err) {
+        this.loadingCovers = false;
+      }
+    },
+    async applyCover(coverUrl) {
+      if (!coverUrl) {
+        this.$message.error("请选择或输入有效的图片封面链接");
+        return;
+      }
+      try {
+        const updated = Object.assign({}, this.currentCoverBook, {
+          customCoverUrl: coverUrl
+        });
+        const res = await Axios.post(this.api + "/saveBook", updated);
+        if (res.data.isSuccess) {
+          this.$message.success("书籍封面已更新成功！");
+          this.showCoverPicker = false;
+          this.fetchShelfBooks();
+        } else {
+          this.$message.error(res.data.errorMsg || "保存封面失败");
+        }
+      } catch (e) {
+        this.$message.error("保存封面异常: " + e.toString());
+      }
+    },
+    triggerUploadBook() {
+      if (this.$refs.shelfBookFileInput) {
+        this.$refs.shelfBookFileInput.click();
+      }
+    },
+    async onShelfBookFileSelected(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const loading = this.$loading({
+        text: `正在上传解析《${file.name}》...`
+      });
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await Axios.post(this.api + "/uploadFile", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        if (res.data.isSuccess) {
+          this.$message.success("书籍上传解析成功，已加入书架！");
+          this.fetchShelfBooks();
+        } else {
+          this.$message.error(res.data.errorMsg || "上传失败");
+        }
+      } catch (err) {
+        this.$message.error("上传发生异常: " + err.toString());
+      } finally {
+        loading.close();
+        e.target.value = "";
+      }
+    },
+    async fetchLocalStoreFiles() {
+      this.loadingLocalStore = true;
+      try {
+        const res = await Axios.get(this.api + "/getLocalStoreFileList", {
+          params: { path: this.localStorePath }
+        });
+        if (res.data.isSuccess) {
+          this.localStoreFiles = res.data.data || [];
+        } else {
+          this.$message.error(res.data.errorMsg || "读取书仓失败");
+        }
+      } catch (e) {
+        this.$message.error("读取书仓异常");
+      } finally {
+        this.loadingLocalStore = false;
+      }
+    },
+    enterLocalStoreFolder(folder) {
+      const p = this.localStorePath === "/" ? "" : this.localStorePath;
+      this.localStorePath = p + "/" + folder;
+      this.fetchLocalStoreFiles();
+    },
+    navigateLocalStoreUp() {
+      const parts = this.localStorePath.split("/").filter(Boolean);
+      parts.pop();
+      this.localStorePath = "/" + parts.join("/");
+      this.fetchLocalStoreFiles();
+    },
+    async importLocalStoreBook(item) {
+      try {
+        const filePath =
+          (this.localStorePath === "/" ? "" : this.localStorePath) +
+          "/" +
+          item.name;
+        const res = await Axios.post(this.api + "/importFromLocalPathPreview", {
+          path: filePath
+        });
+        if (res.data.isSuccess) {
+          this.$message.success(`《${item.name}》已成功加入书架！`);
+          this.fetchShelfBooks();
+        } else {
+          this.$message.error(res.data.errorMsg || "加入书架失败");
+        }
+      } catch (e) {
+        this.$message.error("加入书架异常: " + e.toString());
+      }
+    },
+    formatFileSize(bytes) {
+      if (!bytes || bytes <= 0) return "0 B";
+      const k = 1024;
+      const sizes = ["B", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
+    },
+    refreshShelfAndCache() {
+      this.fetchShelfBooks();
+      this.$message.success("书架书籍状态已刷新！");
+    },
+    async clearSourceAndCatalogCache() {
+      try {
+        const res = await Axios.post(this.api + "/clearCache");
+        if (res.data.isSuccess) {
+          this.$message.success("缓存已清空");
+        } else {
+          this.$message.error(res.data.errorMsg || "清理失败");
+        }
+      } catch (e) {
+        this.$message.error("清理异常");
       }
     },
     deleteUser(user) {
@@ -1790,7 +2835,9 @@ export default {
         type: "warning"
       }).then(async () => {
         try {
-          const res = await Axios.post("/deleteUsers", [user.username]);
+          const res = await Axios.post(this.api + "/deleteUsers", [
+            user.username
+          ]);
           if (res.data.isSuccess) {
             this.$message.success("删除用户成功");
             this.fetchUsers();
@@ -2279,5 +3326,48 @@ export default {
   .admin-main {
     padding: 16px;
   }
+}
+
+.cover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.cover-card {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: center;
+  transition: all 0.2s ease;
+  background: #f8fafc;
+  padding: 4px;
+}
+.cover-card:hover {
+  border-color: #409eff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+.cover-card.active {
+  border-color: #67c23a;
+  background: rgba(103, 194, 58, 0.08);
+}
+.cover-card .cover-img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+}
+.cover-card .cover-source-tag {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

@@ -1054,18 +1054,20 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         withContext(Dispatchers.IO) {
             // val costTime = measureTimeMillis {
             try {
-                val start = System.currentTimeMillis()
-                var result = WebBook(bookSourceString, false).searchBook(book.name, 1)
-                val end = System.currentTimeMillis()
-                if (result.size > 0) {
-                    for (j in 0 until result.size) {
-                        var _book = result.get(j)
-                        if (accurate && _book.name.equals(book.name) && _book.author.equals(book.author)) {
-                            _book.time = end - start
-                            resultList.add(_book)
-                        } else if (!accurate && (_book.name.indexOf(book.name, ignoreCase=true) >= 0 || _book.author.indexOf(book.name, ignoreCase=true) >= 0)) {
-                            _book.time = end - start
-                            resultList.add(_book)
+                withTimeoutOrNull(4000L) {
+                    val start = System.currentTimeMillis()
+                    var result = WebBook(bookSourceString, false).searchBook(book.name, 1)
+                    val end = System.currentTimeMillis()
+                    if (result.size > 0) {
+                        for (j in 0 until result.size) {
+                            var _book = result.get(j)
+                            if (accurate && _book.name.equals(book.name) && _book.author.equals(book.author)) {
+                                _book.time = end - start
+                                resultList.add(_book)
+                            } else if (!accurate && (_book.name.indexOf(book.name, ignoreCase=true) >= 0 || _book.author.indexOf(book.name, ignoreCase=true) >= 0)) {
+                                _book.time = end - start
+                                resultList.add(_book)
+                            }
                         }
                     }
                 }
@@ -1419,7 +1421,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (bookSourceString.isNullOrEmpty()) {
                 return returnData.setErrorMsg("书源信息错误")
             }
-            WebBook(bookSourceString, appConfig.debugLog).getBookInfo(newBookUrl)
+            try {
+                withTimeoutOrNull(5000L) {
+                    WebBook(bookSourceString, appConfig.debugLog).getBookInfo(newBookUrl)
+                } ?: return returnData.setErrorMsg("获取新源书籍信息超时，请重试或选择其他书源")
+            } catch (e: Exception) {
+                return returnData.setErrorMsg("获取新源书籍信息失败: " + (e.message ?: e.toString()))
+            }
         }
 
         editShelfBook(book, userNameSpace) { existBook ->
@@ -1445,8 +1453,14 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             existBook
         }
 
-        // 更新目录
-        getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
+        // 更新目录 (加超时保护，防止换源卡死在目录拉取)
+        try {
+            withTimeoutOrNull(6000L) {
+                getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
+            }
+        } catch (e: Exception) {
+            logger.warn("setBookSource getLocalChapterList error or timeout: {}", e.message)
+        }
         return returnData.setData(newBookInfo)
     }
 
@@ -1884,6 +1898,11 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
     fun loadBookSourceStringList(userNameSpace: String, bookSourceGroup: String = ""): List<String> {
         var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
+        if ((bookSourceList == null || bookSourceList.isEmpty()) && !userNameSpace.equals("admin")) {
+            // 普通账号未配置书源时，自动继承使用默认管理员设置的书源
+            bookSourceList = asJsonArray(getUserStorage("admin", "bookSource"))
+                ?: asJsonArray(getUserStorage("default", "bookSource"))
+        }
         var userBookSourceList = arrayListOf<String>()
         if (bookSourceList != null) {
             for (i in 0 until bookSourceList.size()) {

@@ -174,8 +174,10 @@ class YueduApi : RestVerticle() {
         // 读取远程书源文件
         router.post("/reader3/readRemoteSourceFile").coroutineHandlerWithoutRes { bookSourceController.readRemoteSourceFile(it) }
 
-        // 设置默认书源
+        // 设置默认书源与同步管理员书源
         router.post("/reader3/setAsDefaultBookSources").coroutineHandler { bookSourceController.setAsDefaultBookSources(it) }
+        router.post("/reader3/syncAdminBookSources").coroutineHandler { bookSourceController.syncAdminBookSources(it) }
+        router.get("/reader3/syncAdminBookSources").coroutineHandler { bookSourceController.syncAdminBookSources(it) }
         router.post("/reader3/deleteUserBookSource").coroutineHandler { bookSourceController.deleteUserBookSource(it) }
         router.post("/reader3/deleteBookSourcesFile").coroutineHandler { bookSourceController.deleteBookSourcesFile(it) }
 

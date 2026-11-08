@@ -180,7 +180,10 @@
     >
       <div v-if="currentCoverBook">
         <div style="margin-bottom: 12px; font-size: 14px;">
-          当前书籍：<strong style="color: #409EFF;">{{ currentCoverBook.name }}</strong> ({{ currentCoverBook.author }})
+          当前书籍：<strong style="color: #409EFF;">{{
+            currentCoverBook.name
+          }}</strong>
+          ({{ currentCoverBook.author }})
         </div>
         <div style="margin-bottom: 15px; display: flex; gap: 8px;">
           <el-input
@@ -197,7 +200,9 @@
             直接应用
           </el-button>
         </div>
-        <div style="font-size: 13px; color: #888; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <div
+          style="font-size: 13px; color: #888; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"
+        >
           <span>在线书源封面候选项 (点击即可设为新封面)：</span>
           <el-button
             type="text"
@@ -214,13 +219,26 @@
             v-for="(cover, idx) in candidateCovers"
             :key="idx"
             class="cover-card"
-            :class="{ active: currentCoverBook.customCoverUrl === cover.url || currentCoverBook.coverUrl === cover.url }"
+            :class="{
+              active:
+                currentCoverBook.customCoverUrl === cover.url ||
+                currentCoverBook.coverUrl === cover.url
+            }"
             @click="applyCover(cover.url)"
           >
-            <img :src="cover.url" class="cover-img" @error="onCoverImgError(cover)" />
-            <div class="cover-source-tag" :title="cover.sourceName">{{ cover.sourceName }}</div>
+            <img
+              :src="cover.url"
+              class="cover-img"
+              @error="onCoverImgError(cover)"
+            />
+            <div class="cover-source-tag" :title="cover.sourceName">
+              {{ cover.sourceName }}
+            </div>
           </div>
-          <div v-if="!loadingCovers && candidateCovers.length === 0" style="grid-column: 1/-1; text-align: center; color: #999; padding: 20px;">
+          <div
+            v-if="!loadingCovers && candidateCovers.length === 0"
+            style="grid-column: 1/-1; text-align: center; color: #999; padding: 20px;"
+          >
             暂未从书源匹配到高清封面，您可以直接在上方输入图片链接
           </div>
         </div>
@@ -437,7 +455,11 @@ export default {
               });
             }
             res.data.data.forEach(item => {
-              if (item.coverUrl && item.coverUrl.startsWith("http") && !seen.has(item.coverUrl)) {
+              if (
+                item.coverUrl &&
+                item.coverUrl.startsWith("http") &&
+                !seen.has(item.coverUrl)
+              ) {
                 seen.add(item.coverUrl);
                 covers.push({
                   url: item.coverUrl,

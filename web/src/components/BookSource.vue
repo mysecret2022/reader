@@ -40,7 +40,10 @@
         <div
           class="source-item"
           v-for="(searchBook, index) in displayedBookSource"
-          :class="{ selected: isSelected(searchBook), 'switching': switchingSourceUrl === searchBook.bookUrl }"
+          :class="{
+            selected: isSelected(searchBook),
+            switching: switchingSourceUrl === searchBook.bookUrl
+          }"
           :key="index"
           @click="changeBookSource(searchBook)"
           ref="source"
@@ -48,14 +51,27 @@
           <div class="source-title">
             <div class="source-name">
               {{ searchBook.originName }}
-              <span v-if="isSelected(searchBook)" class="source-badge current-badge">【当前】</span>
-              <span v-else-if="isHistoricalSource(searchBook)" class="source-badge used-badge">【已使用】</span>
+              <span
+                v-if="isSelected(searchBook)"
+                class="source-badge current-badge"
+                >【当前】</span
+              >
+              <span
+                v-else-if="isHistoricalSource(searchBook)"
+                class="source-badge used-badge"
+                >【已使用】</span
+              >
             </div>
             <div class="source-time">
-              <span v-if="switchingSourceUrl === searchBook.bookUrl" style="color: #409EFF; font-weight: bold;">
+              <span
+                v-if="switchingSourceUrl === searchBook.bookUrl"
+                style="color: #409EFF; font-weight: bold;"
+              >
                 <i class="el-icon-loading"></i> 正在换源...
               </span>
-              <span v-else>{{ searchBook.time ? "⏱ " + searchBook.time + "ms" : "" }}</span>
+              <span v-else>{{
+                searchBook.time ? "⏱ " + searchBook.time + "ms" : ""
+              }}</span>
             </div>
           </div>
           <div class="source-latest-chapter">
@@ -165,7 +181,11 @@ export default {
     },
     isHistoricalSource(searchBook) {
       const book = this.$store.getters.readingBook;
-      if (!book || !book.historicalSources || !Array.isArray(book.historicalSources)) {
+      if (
+        !book ||
+        !book.historicalSources ||
+        !Array.isArray(book.historicalSources)
+      ) {
         return false;
       }
       return book.historicalSources.includes(searchBook.origin);
@@ -204,6 +224,9 @@ export default {
         this.$message.info("当前已在使用该书源");
         return;
       }
+      if (this.switchingSourceUrl) {
+        return;
+      }
       const isInShelf = await this.$root.$children[0].isInShelf(
         this.$store.getters.readingBook,
         "加入书架之后才能切换书源, 是否加入书架?"
@@ -212,11 +235,12 @@ export default {
         return;
       }
       this.switchingSourceUrl = searchBook.bookUrl;
-      const loadingNotice = this.$message({
-        message: `正在切换至【${searchBook.originName}】并校准最新目录...`,
-        type: "info",
-        duration: 0
-      });
+      const timeoutId = setTimeout(() => {
+        if (this.switchingSourceUrl) {
+          this.switchingSourceUrl = "";
+        }
+      }, 10000);
+
       Axios.post(this.api + `/setBookSource`, {
         bookUrl: this.$store.getters.readingBook.bookUrl,
         newUrl: searchBook.bookUrl,
@@ -225,10 +249,10 @@ export default {
         author: this.$store.getters.readingBook.author
       }).then(
         res => {
+          clearTimeout(timeoutId);
           this.switchingSourceUrl = "";
-          loadingNotice.close();
           if (res.data.isSuccess) {
-            this.$message.success(`换源成功！已切至【${searchBook.originName}】`);
+            this.$message.success(`已切换至【${searchBook.originName}】`);
             var book = Object.assign({}, this.$store.getters.readingBook);
             book.bookUrl = searchBook.bookUrl;
             book.origin = searchBook.origin;
@@ -264,8 +288,8 @@ export default {
           }
         },
         error => {
+          clearTimeout(timeoutId);
           this.switchingSourceUrl = "";
-          loadingNotice.close();
           this.$message.error("换源失败 " + (error && error.toString()));
           throw error;
         }

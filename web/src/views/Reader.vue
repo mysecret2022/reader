@@ -1104,8 +1104,8 @@ export default {
       this.popBookSourceVisible = false;
       this.show = false;
       this.tryRefresh = false;
-      // 保持与 1.0.1 体验完全一致，换源后刷新目录与最新章节
-      this.loadCatalog(true, true);
+      // 换源后直接加载新源目录并直接阅读
+      this.loadCatalog(false, true);
     },
     loadCatalog(refresh, init) {
       if (!this.api) {
@@ -1118,7 +1118,7 @@ export default {
       }
       this.getCatalog(refresh).then(
         res => {
-          if (res.data.isSuccess) {
+          if (res && res.data && res.data.isSuccess) {
             var book = Object.assign({}, this.$store.getters.readingBook);
             book.catalog = res.data.data;
             this.$store.commit("setReadingBook", book);
@@ -1128,16 +1128,22 @@ export default {
           } else {
             if (init) {
               this.title = "";
-              this.content = "获取章节目录失败！\n" + res.data.errorMsg;
+              this.content =
+                "获取章节目录失败！\n" +
+                (res && res.data ? res.data.errorMsg : "");
               this.error = true;
               this.show = true;
               this.$emit("showContent");
             }
-            this.loading.close();
+            if (this.loading) {
+              this.loading.close();
+            }
           }
         },
         error => {
-          this.loading.close();
+          if (this.loading) {
+            this.loading.close();
+          }
           this.$message.error(
             "获取书籍目录列表 " + (error && error.toString())
           );
@@ -1145,8 +1151,13 @@ export default {
       );
     },
     getCatalog(refresh) {
-      if (!this.$store.getters.readingBook || !this.$store.getters.readingBook.bookUrl) {
-        return Promise.resolve({ data: { isSuccess: false, errorMsg: "未选择书籍" } });
+      if (
+        !this.$store.getters.readingBook ||
+        !this.$store.getters.readingBook.bookUrl
+      ) {
+        return Promise.resolve({
+          data: { isSuccess: false, errorMsg: "未选择书籍" }
+        });
       }
       const params = {
         url: this.$store.getters.readingBook.bookUrl,

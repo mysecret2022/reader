@@ -94,7 +94,7 @@ export const networkFirstRequest = async function(requestFunc, cacheKey) {
         throw err;
       });
   });
-  if (res.data && res.data.isSuccess) {
+  if (res && res.data && res.data.isSuccess) {
     // 使用新的异步存储
     window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
   }
@@ -130,7 +130,7 @@ export const cacheFirstRequest = async function(
     }
   }
   const res = await requestFunc();
-  if (res.data && res.data.isSuccess) {
+  if (res && res.data && res.data.isSuccess) {
     // 使用新的异步存储
     window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
   }

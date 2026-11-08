@@ -475,7 +475,8 @@
             class="title-btn"
             @click="showExplorePop"
             v-if="
-              $store.getters.isNormalPage && !(isSearchResult && !isExploreResult)
+              $store.getters.isNormalPage &&
+                !(isSearchResult && !isExploreResult)
             "
           >
             书海
@@ -494,28 +495,44 @@
           <el-dropdown
             v-if="
               $store.getters.isNormalPage &&
-                ($store.state.showManagerMode ||
-                  ($store.state.userInfo && ($store.state.userInfo.isAdmin || $store.state.userInfo.is_admin || $store.state.userInfo.username === 'admin')))
+                $store.state.userInfo &&
+                $store.state.userInfo.username
             "
             @command="handleAdminMenuCommand"
             trigger="click"
             class="title-btn-dropdown"
           >
-            <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: bold;">
+            <div
+              class="title-btn"
+              style="cursor: pointer; color: #409EFF; font-weight: bold;"
+            >
               <i class="el-icon-s-operation"></i> 管理
-              <span v-if="$store.state.userInfo && $store.state.userInfo.username" style="font-weight: normal; margin-left: 2px;">
+              <span style="font-weight: normal; margin-left: 2px;">
                 ({{ $store.state.userInfo.username }})
               </span>
-              <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+              <i
+                class="el-icon-arrow-down"
+                style="font-size: 10px; margin-left: 2px;"
+              ></i>
             </div>
             <el-dropdown-menu slot="dropdown">
               <el-dropdown-item command="admin" icon="el-icon-s-tools">
-                控制台与管理后台
+                {{
+                  $store.state.userInfo.isAdmin ||
+                  $store.state.userInfo.is_admin ||
+                  $store.state.userInfo.username === "admin"
+                    ? "控制台与管理后台"
+                    : "后台管理 (书源与书架)"
+                }}
               </el-dropdown-item>
               <el-dropdown-item command="changePassword" icon="el-icon-key">
                 修改账户密码
               </el-dropdown-item>
-              <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
+              <el-dropdown-item
+                command="logout"
+                divided
+                icon="el-icon-switch-button"
+              >
                 退出当前账号
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -530,15 +547,25 @@
             trigger="click"
             class="title-btn-dropdown"
           >
-            <div class="title-btn" style="cursor: pointer; color: #409EFF; font-weight: 500;">
+            <div
+              class="title-btn"
+              style="cursor: pointer; color: #409EFF; font-weight: 500;"
+            >
               <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
-              <i class="el-icon-arrow-down" style="font-size: 10px; margin-left: 2px;"></i>
+              <i
+                class="el-icon-arrow-down"
+                style="font-size: 10px; margin-left: 2px;"
+              ></i>
             </div>
             <el-dropdown-menu slot="dropdown">
               <el-dropdown-item command="changePassword" icon="el-icon-key">
                 修改密码
               </el-dropdown-item>
-              <el-dropdown-item command="logout" divided icon="el-icon-switch-button">
+              <el-dropdown-item
+                command="logout"
+                divided
+                icon="el-icon-switch-button"
+              >
                 退出登录
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -1077,7 +1104,9 @@
             保存封面
           </el-button>
         </div>
-        <div style="font-size: 13px; color: #606266; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <div
+          style="font-size: 13px; color: #606266; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;"
+        >
           <span>从可用书源自动聚合的封面图（点击即可一键设为封面）：</span>
           <el-button
             type="text"
@@ -1094,13 +1123,26 @@
             v-for="(cover, idx) in candidateCovers"
             :key="idx"
             class="cover-card"
-            :class="{ active: currentCoverBook.customCoverUrl === cover.url || currentCoverBook.coverUrl === cover.url }"
+            :class="{
+              active:
+                currentCoverBook.customCoverUrl === cover.url ||
+                currentCoverBook.coverUrl === cover.url
+            }"
             @click="applyCover(cover.url)"
           >
-            <img :src="cover.url" class="cover-img" @error="onCoverImgError(cover)" />
-            <div class="cover-source-tag" :title="cover.sourceName">{{ cover.sourceName }}</div>
+            <img
+              :src="cover.url"
+              class="cover-img"
+              @error="onCoverImgError(cover)"
+            />
+            <div class="cover-source-tag" :title="cover.sourceName">
+              {{ cover.sourceName }}
+            </div>
           </div>
-          <div v-if="!loadingCovers && candidateCovers.length === 0" style="grid-column: 1/-1; text-align: center; color: #999; padding: 25px;">
+          <div
+            v-if="!loadingCovers && candidateCovers.length === 0"
+            style="grid-column: 1/-1; text-align: center; color: #999; padding: 25px;"
+          >
             暂未从书源匹配到更多封面，您可以直接在上方输入图片链接
           </div>
         </div>
@@ -1339,7 +1381,11 @@ export default {
               });
             }
             res.data.data.forEach(item => {
-              if (item.coverUrl && item.coverUrl.startsWith("http") && !seen.has(item.coverUrl)) {
+              if (
+                item.coverUrl &&
+                item.coverUrl.startsWith("http") &&
+                !seen.has(item.coverUrl)
+              ) {
                 seen.add(item.coverUrl);
                 covers.push({
                   url: item.coverUrl,
@@ -3004,14 +3050,13 @@ export default {
         .catch(() => {});
     },
     logout(reload = true) {
-      Axios.post(this.api + "/logout")
-        .finally(() => {
-          this.$store.commit("setToken", "");
-          this.$store.commit("setUserInfo", {});
-          if (reload) {
-            window.location.reload(true);
-          }
-        });
+      Axios.post(this.api + "/logout").finally(() => {
+        this.$store.commit("setToken", "");
+        this.$store.commit("setUserInfo", {});
+        if (reload) {
+          window.location.reload(true);
+        }
+      });
     },
     getChapterListByRule() {
       return Axios.post("/getChapterListByRule", this.importBookInfo).then(
@@ -4030,12 +4075,12 @@ export default {
   padding: 4px;
 
   &:hover {
-    border-color: #409EFF;
+    border-color: #409eff;
     transform: translateY(-2px);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   }
   &.active {
-    border-color: #67C23A;
+    border-color: #67c23a;
     background: rgba(103, 194, 58, 0.08);
   }
   .cover-img {
