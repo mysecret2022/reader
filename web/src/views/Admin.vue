@@ -7,7 +7,9 @@
           <i class="el-icon-reading"></i>
           <span class="brand-title">Reader</span>
           <span class="brand-badge">{{
-            isAdmin ? "控制台 v1.0.3" : "个人后台"
+            isAdmin
+              ? `控制台 ${$store.state.version || ""}`.trim()
+              : `个人后台 ${$store.state.version || ""}`.trim()
           }}</span>
         </div>
       </div>
@@ -2636,7 +2638,7 @@ export default {
         cacheChapterContent: false,
         defaultVoice: "zh-CN-XiaoxiaoNeural",
         concurrentSearchCount: 24,
-        version: "1.0.2"
+        version: this.$store ? this.$store.state.version || "1.0.6" : "1.0.6"
       },
       savingCloudSync: false,
       triggeringSync: false,

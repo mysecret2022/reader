@@ -187,7 +187,7 @@
             >
             <span
               class="span-item"
-              :class="{ selected: config.font == 5 }"
+              :class="{ selected: config.font == 4 || config.font == 5 }"
               @click="selectCustomFont"
             >
               自定义
@@ -500,7 +500,7 @@ export default {
         { src: "bg/宁静夜色.jpg" },
         { src: "bg/边彩画布.jpg" }
       ],
-      fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
+      fonts: ["系统", "楷体", "宋体", "手写体"],
       readMethods: ["上下滑动", "左右滑动", "上下滚动", "上下滚动2"],
       clickMethods: ["下一页", "自动", "不翻页"],
       selectionActions: ["操作弹窗", "忽略"],
@@ -695,7 +695,7 @@ export default {
     },
     selectCustomFont() {
       if (this.hasCustomUserFont) {
-        this.setConfig("font", 5);
+        this.setConfig("font", 4);
       } else {
         this.uploadUserFont();
       }
@@ -733,7 +733,7 @@ export default {
               if (res.data.isSuccess) {
                 let config = { ...this.config };
                 delete config.customFontsMap[customFontName];
-                if (config.font === 5) {
+                if (config.font === 4 || config.font === 5) {
                   config.font = 0; // 恢复为系统默认
                 }
                 this.config = config;
@@ -775,7 +775,7 @@ export default {
             let config = { ...this.config };
             config.customFontsMap = config.customFontsMap || {};
             config.customFontsMap[this.customFontName] = res.data.data[0];
-            config.font = 5;
+            config.font = 4;
             this.config = config;
             this.$message.success("自定义字体上传成功并已应用！");
           }

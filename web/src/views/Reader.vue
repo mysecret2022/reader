@@ -465,6 +465,7 @@ import {
 } from "../plugins/helper";
 import { defaultReplaceRule, defaultBookmark } from "../plugins/config.js";
 import eventBus from "../plugins/eventBus";
+import { TTSQueuePlayer } from "../plugins/ttsQueuePlayer";
 // eslint-disable-next-line no-useless-escape
 const symboRegex = /[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&\(\)*+,-\./:;<=>?@\[\]^_`{\|}~，。？《》；：、«]/g;
 
@@ -719,6 +720,7 @@ export default {
       speechSpeaking: false,
       showSpeechConfig: true,
       edgeAudio: null,
+      ttsQueuePlayer: null,
       speechParagraphIndex: -1,
       audioPreloadCache: {},
 
@@ -2387,49 +2389,78 @@ export default {
       this.skipAutoNext = false;
 
       if (voice.isEdge) {
-        if (!this.edgeAudio) {
-          this.edgeAudio = new Audio();
-        }
-        const text = paragraph.innerText.trim();
-        const cacheKey = `${voice.id}_${this.speechRate}_${this.speechPitch}_${text}`;
-        const directUrl = `${this.api}/tts?text=${encodeURIComponent(
-          text
-        )}&voice=${encodeURIComponent(voice.id)}&rate=${
-          this.speechRate
-        }&pitch=${this.speechPitch}`;
-
-        const audioUrl = this.audioPreloadCache[cacheKey] || directUrl;
-        this.edgeAudio.src = audioUrl;
-
-        this.edgeAudio.onended = () => {
-          if (!this.skipAutoNext) {
-            this.speechNext();
-          } else {
-            this.skipAutoNext = false;
-            this.speechSpeaking = false;
-          }
-        };
-
-        this.edgeAudio.onerror = () => {
-          if (!this.skipAutoNext) {
-            setTimeout(() => {
-              if (this.speechSpeaking) this.speechNext();
-            }, 1000);
-          } else {
-            this.speechSpeaking = false;
-          }
-        };
-
-        this.edgeAudio
-          .play()
-          .then(() => {
-            this.speechSpeaking = true;
-          })
-          .catch(() => {
-            this.speechSpeaking = false;
+        if (!this.ttsQueuePlayer) {
+          this.ttsQueuePlayer = new TTSQueuePlayer({
+            apiBase: this.api,
+            voice: voice.id,
+            rate: this.speechRate,
+            pitch: this.speechPitch,
+            bookName: this.$store.getters.readingBook
+              ? this.$store.getters.readingBook.name
+              : "Reader",
+            title: this.title || "正文朗读",
+            onChunkStart: () => {
+              if (this.speechParagraphIndex < paragraphs.length) {
+                const curP = paragraphs[this.speechParagraphIndex];
+                if (curP) {
+                  paragraphs.forEach(p => {
+                    if (p !== curP && p.className.includes("reading")) {
+                      p.className = p.className
+                        .replace(/\breading\b/g, "")
+                        .trim();
+                    }
+                  });
+                  curP.className = "reading";
+                  this.showParagraph(curP, true);
+                }
+              }
+            },
+            onChunkEnd: () => {
+              if (this.speechParagraphIndex + 1 < paragraphs.length) {
+                this.speechParagraphIndex++;
+              }
+            },
+            onQueueEmpty: () => {
+              if (!this.skipAutoNext && this.speechSpeaking) {
+                this.$once("showContent", () => {
+                  setTimeout(() => {
+                    this.speechParagraphIndex = 0;
+                    this.startSpeech(0);
+                  }, 300);
+                });
+                this.toNextChapter();
+              }
+            },
+            onError: () => {
+              // 容错处理
+            }
           });
+        } else {
+          this.ttsQueuePlayer.voice = voice.id;
+          this.ttsQueuePlayer.rate = this.speechRate;
+          this.ttsQueuePlayer.pitch = this.speechPitch;
+          this.ttsQueuePlayer.title = this.title || "正文朗读";
+          this.ttsQueuePlayer.bookName = this.$store.getters.readingBook
+            ? this.$store.getters.readingBook.name
+            : "Reader";
+        }
 
-        this.preloadNextAudios(paragraphs, idx, voice);
+        // 收集从当前段落到本章末尾的文本进行分块朗读
+        const remainingParagraphs = paragraphs.slice(idx);
+        const fullChapterText = remainingParagraphs
+          .map(p => p.innerText.trim())
+          .filter(t => t.length > 0)
+          .join("\n");
+
+        this.ttsQueuePlayer.loadText(fullChapterText, {
+          title: this.title || "正文朗读",
+          bookName: this.$store.getters.readingBook
+            ? this.$store.getters.readingBook.name
+            : "Reader"
+        });
+
+        // 触发播放 (内部包含 iOS 瞬时静音帧解锁与 Chunk[0] 极速出声)
+        this.ttsQueuePlayer.play();
       } else {
         if (window.speechSynthesis && window.speechSynthesis.speaking) {
           window.speechSynthesis.cancel();
@@ -2463,6 +2494,9 @@ export default {
       try {
         this.skipAutoNext = true;
         this.speechSpeaking = false;
+        if (this.ttsQueuePlayer) {
+          this.ttsQueuePlayer.stop();
+        }
         if (this.edgeAudio) {
           this.edgeAudio.pause();
         }

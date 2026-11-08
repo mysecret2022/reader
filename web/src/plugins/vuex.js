@@ -502,7 +502,7 @@ export default new Vuex.Store({
               : getters.apiRoot + url
         };
       }
-      if (idx === 5 && state.config.customFontsMap) {
+      if ((idx === 4 || idx === 5) && state.config.customFontsMap) {
         const anyKey = state.config.customFontsMap["custom-user"]
           ? "custom-user"
           : Object.keys(state.config.customFontsMap)[0];

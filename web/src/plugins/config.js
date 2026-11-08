@@ -133,31 +133,27 @@ const settings = {
     }
   ],
   fonts: [
+    // 0: 系统
     {
       fontFamily:
         'custom-system, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif'
     },
-    // 黑体
-    {
-      fontFamily:
-        'custom-ht, reader-ht, "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei", SimHei, sans-serif'
-    },
-    // 楷体
+    // 1: 楷体 (霞鹜文楷切片 + 系统回退)
     {
       fontFamily:
         '"LXGW WenKai", custom-kt, reader-kt, "Kaiti SC", STKaiti, "KaiTi", "KaiTi_GB2312", "DFKai-SB", serif'
     },
-    // 宋体
+    // 2: 宋体 (思源宋体切片 + 系统回退)
     {
       fontFamily:
         '"Noto Serif SC", custom-st, reader-st, "Songti SC", STSong, "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif'
     },
-    // 仿宋
+    // 3: 手写体 (马善政手写毛笔切片 + 回退)
     {
       fontFamily:
-        'custom-fs, reader-fs, STFangsong, FangSong, FangSong_GB2312, "LXGW WenKai", "Songti SC", serif'
+        '"Ma Shan Zheng", custom-shouti, "LXGW WenKai", "Kaiti SC", STKaiti, cursive, serif'
     },
-    // 自定义字体
+    // 4: 自定义字体 (用户自行上传)
     {
       fontFamily:
         'custom-user, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
@@ -201,10 +197,9 @@ export const syncConfigFiled = Object.keys(defaultDayConfig).concat([
 ]);
 export const customFonts = [
   "custom-system",
-  "custom-ht",
   "custom-kt",
   "custom-st",
-  "custom-fs",
+  "custom-shouti",
   "custom-user"
 ];
 export default settings;
