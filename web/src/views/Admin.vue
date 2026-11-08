@@ -6,7 +6,9 @@
         <div class="brand-logo" @click="$router.push('/')">
           <i class="el-icon-reading"></i>
           <span class="brand-title">Reader</span>
-          <span class="brand-badge">控制台 v1.0.3</span>
+          <span class="brand-badge">{{
+            isAdmin ? "控制台 v1.0.3" : "个人后台"
+          }}</span>
         </div>
       </div>
       <div class="header-right">
@@ -18,7 +20,7 @@
         >
           <i class="el-icon-user"></i>
           {{ currentUser ? currentUser.username : "用户" }} ({{
-            isAdmin ? "系统管理员" : "普通用户"
+            isAdmin ? "系统管理员" : "账号设置"
           }})
         </el-tag>
         <el-button
@@ -1956,14 +1958,32 @@ export default {
     }
   },
   created() {
-    this.refreshAllData();
-    this.fetchSystemConfig();
+    if (this.isAdmin) {
+      this.refreshAllData();
+      this.fetchSystemConfig();
+    } else {
+      this.activeTab = "sources";
+      this.fetchSources();
+      this.fetchShelfBooks();
+      this.fetchBookGroups();
+      if (
+        this.currentUser &&
+        this.currentUser.username &&
+        this.$route.path === "/admin"
+      ) {
+        this.$router.replace("/" + this.currentUser.username).catch(() => {});
+      }
+    }
   },
   methods: {
     toggleTheme() {
       this.$store.commit("setNightTheme", !this.isNight);
     },
     handleTabSelect(index) {
+      if (!this.isAdmin && index !== "sources" && index !== "shelf") {
+        this.activeTab = "sources";
+        return;
+      }
       this.activeTab = index;
       if (index === "logs") {
         this.fetchLogs();
@@ -1975,14 +1995,24 @@ export default {
         this.fetchSystemConfig();
       } else if (index === "cloudSync") {
         this.fetchCloudSyncConfig();
+      } else if (index === "shelf") {
+        this.fetchShelfBooks();
+        this.fetchBookGroups();
       }
     },
     refreshAllData() {
-      this.fetchUsers();
-      this.fetchSources();
-      this.fetchSystemConfig();
-      this.fetchCloudSyncConfig();
-      this.$message.success("数据与系统状态已全部刷新");
+      if (this.isAdmin) {
+        this.fetchUsers();
+        this.fetchSources();
+        this.fetchSystemConfig();
+        this.fetchCloudSyncConfig();
+        this.$message.success("数据与系统状态已全部刷新");
+      } else {
+        this.fetchSources();
+        this.fetchShelfBooks();
+        this.fetchBookGroups();
+        this.$message.success("书源与书架数据已刷新");
+      }
     },
     async fetchSystemConfig() {
       try {

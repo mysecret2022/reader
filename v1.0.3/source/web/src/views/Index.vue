@@ -558,6 +558,9 @@
               ></i>
             </div>
             <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="userSpace" icon="el-icon-setting">
+                后台管理 (书源与书架)
+              </el-dropdown-item>
               <el-dropdown-item command="changePassword" icon="el-icon-key">
                 修改密码
               </el-dropdown-item>
@@ -607,12 +610,7 @@
             @click="toDetail(book)"
           >
             <div class="cover-img" @click.stop="showBookInfoDialog(book)">
-              <!-- 搜索时不拉取图片封面，采用极速轻量占位，大幅提高检索效率 -->
-              <div v-if="isSearchResult" class="cover search-cover-placeholder">
-                <i class="el-icon-reading"></i>
-              </div>
               <el-image
-                v-else
                 class="cover"
                 ref="bookCoverList"
                 :src="getCover(getBookCoverUrl(book), true)"
@@ -3092,8 +3090,10 @@ export default {
       }
     },
     handleUserMenuCommand(command) {
-      if (command === "admin") {
-        this.$router.push("/admin");
+      if (command === "userSpace" || command === "admin") {
+        const username =
+          this.$store.state.userInfo && this.$store.state.userInfo.username;
+        this.$router.push(username ? "/" + username : "/admin");
       } else if (command === "changePassword") {
         this.promptChangePassword();
       } else if (command === "logout") {
