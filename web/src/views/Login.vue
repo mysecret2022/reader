@@ -152,15 +152,6 @@
               loading ? "正在提交..." : isLogin ? "立即登录" : "注册账号"
             }}</span>
           </button>
-          <button
-            type="button"
-            class="btn-guest"
-            @click="cancel"
-            title="暂不登录，以访客身份直接体验书架"
-          >
-            <i class="el-icon-coffee-cup"></i>
-            <span>游客体验 / 直接进入书架</span>
-          </button>
         </div>
       </form>
 

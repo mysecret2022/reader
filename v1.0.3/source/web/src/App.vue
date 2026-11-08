@@ -353,8 +353,10 @@ export default {
       }
     },
     canCancelLogin() {
-      // 允许用户随时点击返回或游客模式
-      return true;
+      // 必须登录：未登录状态下严禁关闭登录界面，彻底关闭游客模式
+      return !!(
+        this.$store.state.userInfo && this.$store.state.userInfo.username
+      );
     },
     connected() {
       return this.$store.state.connected;
@@ -464,8 +466,9 @@ export default {
       this.cancelLogin();
     },
     cancelLogin() {
-      localStorage.setItem("reader_guest_mode", "true");
-      this.showLogin = false;
+      if (this.canCancelLogin) {
+        this.showLogin = false;
+      }
     },
     onLoginSuccess(payload) {
       localStorage.removeItem("reader_guest_mode");
@@ -553,12 +556,10 @@ export default {
                 this.$store.commit("setShowManagerMode", true);
               }
             } else {
-              // 若未登录且未选择游客模式，默认展示全新登录门面
-              const isGuest =
-                localStorage.getItem("reader_guest_mode") === "true";
-              if (!isGuest && !this.$store.state.userInfo.username) {
-                this.$store.commit("setShowLogin", true);
-              }
+              // 强制登录：未登录必须展示登录门面，彻底关闭游客模式与免登录浏览书架
+              localStorage.removeItem("reader_guest_mode");
+              this.$store.commit("setUserInfo", {});
+              this.$store.commit("setShowLogin", true);
             }
           }
         },
@@ -741,20 +742,26 @@ export default {
             return false;
           }
           // 加入书架
-          return Axios.post(this.api + "/saveBook", book).then(
-            res => {
-              if (res.data.isSuccess) {
-                return true;
-              }
-            },
-            () => {
-              this.$message.error("导入书籍失败");
+          try {
+            const saveRes = await Axios.post(this.api + "/saveBook", book);
+            if (saveRes.data && saveRes.data.isSuccess) {
+              this.$message.success("已成功加入书架");
+              await this.loadBookShelf(true);
+              return true;
+            } else {
+              this.$message.error(
+                (saveRes.data && saveRes.data.errorMsg) || "导入书籍失败"
+              );
               return false;
             }
-          );
+          } catch (e) {
+            this.$message.error("导入书籍失败: " + (e && e.message));
+            return false;
+          }
         }
+        return false;
       }
-      return !!isInShelf;
+      return true;
     },
     getBookContent(chapterIndex, options, refresh, cache, book) {
       book = book || {

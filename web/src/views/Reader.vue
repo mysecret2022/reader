@@ -1104,6 +1104,9 @@ export default {
       this.popBookSourceVisible = false;
       this.show = false;
       this.tryRefresh = false;
+      if (this.$route.query && this.$route.query.search) {
+        this.$router.replace({ path: "/reader" }).catch(() => {});
+      }
       // 换源后直接加载新源目录并直接阅读
       this.loadCatalog(false, true);
     },

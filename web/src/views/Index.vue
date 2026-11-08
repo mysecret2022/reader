@@ -1362,43 +1362,127 @@ export default {
       this.fetchBookCovers(book);
     },
     fetchBookCovers(book) {
-      if (!book) return;
+      if (!book || !book.name) return;
+      if (this.coverEventSource) {
+        try {
+          this.coverEventSource.close();
+        } catch (e) {
+          // ignore
+        }
+        this.coverEventSource = null;
+      }
       this.loadingCovers = true;
-      Axios.post(this.api + "/getAvailableBookSource", {
-        url: book.bookUrl,
-        refresh: 0
-      })
-        .then(res => {
-          this.loadingCovers = false;
-          if (res.data.isSuccess && Array.isArray(res.data.data)) {
-            const covers = [];
-            const seen = new Set();
-            if (book.coverUrl && !seen.has(book.coverUrl)) {
-              seen.add(book.coverUrl);
-              covers.push({
-                url: book.coverUrl,
-                sourceName: book.originName || "当前书源"
+      this.candidateCovers = [];
+      const seen = new Set();
+      const currentCover = book.customCoverUrl || book.coverUrl;
+      if (currentCover) {
+        seen.add(currentCover);
+        this.candidateCovers.push({
+          url: currentCover,
+          coverUrl: currentCover,
+          sourceName: "当前封面",
+          originName: "当前封面"
+        });
+      }
+      if (book.coverUrl && !seen.has(book.coverUrl)) {
+        seen.add(book.coverUrl);
+        this.candidateCovers.push({
+          url: book.coverUrl,
+          coverUrl: book.coverUrl,
+          sourceName: book.originName || "原书源封面",
+          originName: book.originName || "原书源封面"
+        });
+      }
+
+      // 1. 先尝试快速读取后端已缓存的书源
+      if (book.bookUrl) {
+        Axios.post(this.api + "/getAvailableBookSource", {
+          url: book.bookUrl,
+          refresh: 0
+        })
+          .then(res => {
+            if (
+              res.data &&
+              res.data.isSuccess &&
+              Array.isArray(res.data.data)
+            ) {
+              res.data.data.forEach(item => {
+                if (
+                  item.coverUrl &&
+                  item.coverUrl.startsWith("http") &&
+                  !seen.has(item.coverUrl)
+                ) {
+                  seen.add(item.coverUrl);
+                  const name = item.originName || item.origin || "本地源";
+                  this.candidateCovers.push({
+                    url: item.coverUrl,
+                    coverUrl: item.coverUrl,
+                    sourceName: name,
+                    originName: name
+                  });
+                }
               });
             }
-            res.data.data.forEach(item => {
-              if (
-                item.coverUrl &&
-                item.coverUrl.startsWith("http") &&
-                !seen.has(item.coverUrl)
-              ) {
-                seen.add(item.coverUrl);
-                covers.push({
-                  url: item.coverUrl,
-                  sourceName: item.originName || "书源候选项"
-                });
-              }
-            });
-            this.candidateCovers = covers;
+          })
+          .catch(() => {});
+      }
+
+      // 2. 启动 SSE 在线全网书源实时扫描拉取最新封面
+      const buildURL = require("axios/lib/helpers/buildURL");
+      const params = {
+        name: book.name,
+        author: book.author || "",
+        searchSize: 15
+      };
+      if (this.$store.state.token) {
+        params.accessToken = this.$store.state.token;
+      }
+      const sseUrl = buildURL(this.api + "/searchBookSourceSSE", params);
+      try {
+        const es = new EventSource(sseUrl);
+        this.coverEventSource = es;
+        es.addEventListener("message", e => {
+          try {
+            const res = JSON.parse(e.data);
+            if (res.data && Array.isArray(res.data)) {
+              res.data.forEach(item => {
+                if (
+                  item.coverUrl &&
+                  item.coverUrl.startsWith("http") &&
+                  !seen.has(item.coverUrl)
+                ) {
+                  seen.add(item.coverUrl);
+                  const name = item.originName || item.origin || "在线书源";
+                  this.candidateCovers.push({
+                    url: item.coverUrl,
+                    coverUrl: item.coverUrl,
+                    sourceName: name,
+                    originName: name
+                  });
+                }
+              });
+            }
+          } catch (err) {
+            // ignore
           }
-        })
-        .catch(() => {
-          this.loadingCovers = false;
         });
+        const stopSSE = () => {
+          this.loadingCovers = false;
+          if (this.coverEventSource) {
+            try {
+              this.coverEventSource.close();
+            } catch (e) {
+              // ignore
+            }
+            this.coverEventSource = null;
+          }
+        };
+        es.addEventListener("end", stopSSE);
+        es.addEventListener("error", stopSSE);
+        setTimeout(stopSSE, 10000);
+      } catch (err) {
+        this.loadingCovers = false;
+      }
     },
     onCoverImgError(cover) {
       const idx = this.candidateCovers.findIndex(c => c.url === cover.url);

@@ -1876,7 +1876,7 @@ export default {
   },
   computed: {
     api() {
-      return this.$store.state.api || "/reader3";
+      return this.$store.getters.api;
     },
     isAdmin() {
       return !!(
@@ -2658,12 +2658,32 @@ export default {
     },
     fetchBookCovers(book) {
       if (!book || !book.name) return;
+      if (this.coverEventSource) {
+        try {
+          this.coverEventSource.close();
+        } catch (e) {
+          // ignore
+        }
+        this.coverEventSource = null;
+      }
       this.loadingCovers = true;
       this.candidateCovers = [];
       const seen = new Set();
-      if (book.coverUrl) {
+      const currentCover = book.customCoverUrl || book.coverUrl;
+      if (currentCover) {
         this.candidateCovers.push({
+          url: currentCover,
+          coverUrl: currentCover,
+          sourceName: "当前封面",
+          originName: "当前封面"
+        });
+        seen.add(currentCover);
+      }
+      if (book.coverUrl && !seen.has(book.coverUrl)) {
+        this.candidateCovers.push({
+          url: book.coverUrl,
           coverUrl: book.coverUrl,
+          sourceName: "原书源封面",
           originName: "原书源封面"
         });
         seen.add(book.coverUrl);
@@ -2680,6 +2700,7 @@ export default {
       const sseUrl = buildURL(this.api + "/searchBookSourceSSE", params);
       try {
         const es = new EventSource(sseUrl);
+        this.coverEventSource = es;
         es.addEventListener("message", e => {
           try {
             const res = JSON.parse(e.data);
@@ -2687,9 +2708,12 @@ export default {
               res.data.forEach(item => {
                 if (item.coverUrl && !seen.has(item.coverUrl)) {
                   seen.add(item.coverUrl);
+                  const name = item.originName || item.origin || "在线书源";
                   this.candidateCovers.push({
+                    url: item.coverUrl,
                     coverUrl: item.coverUrl,
-                    originName: item.originName || item.origin || "在线书源"
+                    sourceName: name,
+                    originName: name
                   });
                 }
               });
@@ -2700,11 +2724,18 @@ export default {
         });
         const stopSSE = () => {
           this.loadingCovers = false;
-          es.close();
+          if (this.coverEventSource) {
+            try {
+              this.coverEventSource.close();
+            } catch (e) {
+              // ignore
+            }
+            this.coverEventSource = null;
+          }
         };
         es.addEventListener("end", stopSSE);
         es.addEventListener("error", stopSSE);
-        setTimeout(stopSSE, 8000);
+        setTimeout(stopSSE, 10000);
       } catch (err) {
         this.loadingCovers = false;
       }

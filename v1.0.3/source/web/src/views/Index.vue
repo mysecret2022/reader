@@ -1,0 +1,4186 @@
+<template>
+  <div
+    class="index-wrapper"
+    :class="{
+      night: isNight,
+      day: !isNight
+    }"
+  >
+    <div
+      class="navigation-wrapper"
+      :class="[
+        navigationClass,
+        isWebApp && !isNight ? 'status-bar-light-bg' : ''
+      ]"
+      :style="navigationStyle"
+      @touchstart="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend="handleTouchEnd"
+      v-if="$store.getters.isNormalPage"
+    >
+      <div class="navigation-inner-wrapper">
+        <div class="navigation-title">
+          阅读
+          <span class="version-text" @click="updateForce">{{
+            $store.state.version
+          }}</span>
+        </div>
+        <div class="navigation-sub-title">
+          清风不识字，何故乱翻书
+        </div>
+        <div class="search-wrapper">
+          <el-input
+            size="mini"
+            placeholder="搜索书籍"
+            v-model="search"
+            class="search-input"
+            @keyup.enter.native="searchBook(1)"
+          >
+            <i slot="prefix" class="el-input__icon el-icon-search"></i>
+          </el-input>
+        </div>
+        <div class="setting-wrapper search-setting">
+          <div class="setting-title">
+            搜索设置
+          </div>
+          <div class="setting-item">
+            <el-select
+              size="mini"
+              v-model="searchConfig.searchType"
+              class="setting-select"
+              filterable
+              placeholder="请选择搜索方式"
+            >
+              <el-option
+                v-for="(item, index) in searchTypeList"
+                :key="'search-type-' + index"
+                :label="item.name"
+                :value="item.value"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div
+            class="setting-item"
+            v-show="searchConfig.searchType === 'single'"
+          >
+            <el-select
+              size="mini"
+              v-model="searchConfig.bookSourceUrl"
+              class="setting-select"
+              filterable
+              placeholder="请选择搜索书源"
+            >
+              <el-option
+                v-for="(item, index) in bookSourceList"
+                :key="'source-' + index"
+                :label="item.bookSourceName"
+                :value="item.bookSourceUrl"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div
+            class="setting-item"
+            v-show="searchConfig.searchType !== 'single'"
+          >
+            <el-select
+              size="mini"
+              v-model="searchConfig.bookSourceGroup"
+              class="setting-select"
+              filterable
+              placeholder="请选择搜索书源分组"
+            >
+              <el-option
+                v-for="(item, index) in bookSourceGroupList"
+                :key="'source-group-' + index"
+                :label="item.name + ' (' + item.count + ')'"
+                :value="item.value"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div
+            class="setting-item"
+            v-show="searchConfig.searchType !== 'single'"
+          >
+            <el-select
+              size="mini"
+              v-model="searchConfig.concurrentCount"
+              class="setting-select"
+              filterable
+              placeholder="请选择并发线程"
+            >
+              <el-option
+                v-for="(item, index) in concurrentList"
+                :key="'source-' + index"
+                :label="item + '并发线程'"
+                :value="item"
+              >
+              </el-option>
+            </el-select>
+          </div>
+        </div>
+        <div class="recent-wrapper">
+          <div class="recent-title">
+            最近阅读
+          </div>
+          <div class="reading-recent">
+            <el-tag
+              type="warning"
+              :effect="isNight ? 'dark' : 'light'"
+              class="recent-book"
+              @click="toDetail(readingRecent)"
+              :class="{ 'no-point': readingRecent.bookUrl == '' }"
+            >
+              {{ readingRecent.name }}
+            </el-tag>
+          </div>
+        </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            后端设定
+          </div>
+          <div class="setting-item">
+            <el-tag
+              :type="connectType"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-connect"
+              :class="{ 'no-point': connecting }"
+              @click="setIP"
+            >
+              {{ connectStatus }}
+            </el-tag>
+          </div>
+        </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            书源设置
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showBookSourceManageDialog = true"
+            >
+              书源管理
+            </el-tag>
+            <el-popover
+              placement="right"
+              :width="popupWidth"
+              trigger="click"
+              :visible-arrow="false"
+              v-model="popExploreVisible"
+              popper-class="popper-component"
+            >
+              <Explore
+                ref="popExplore"
+                class="popup"
+                :visible="popExploreVisible"
+                :bookSourceList="bookSourceList"
+                @showSearchList="showSearchList"
+                @close="popExploreVisible = false"
+              />
+              <el-tag
+                type="info"
+                :effect="isNight ? 'dark' : 'light'"
+                slot="reference"
+                ref="exploreBtn"
+                class="setting-btn"
+                @click="showNavigation = false"
+              >
+                探索书源
+              </el-tag>
+            </el-popover>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="uploadBookSource"
+            >
+              导入书源
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="loadRemoteBookSource"
+            >
+              远程书源
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showFailureBookSource()"
+            >
+              失效书源
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="debugBookSource()"
+            >
+              调试书源
+            </el-tag>
+            <input
+              ref="fileRef"
+              type="file"
+              @change="onSourceFileChange"
+              style="display:none"
+            />
+          </div>
+        </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            书架设置
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showBookManage"
+            >
+              书籍管理
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showManageBookGroup"
+            >
+              分组管理
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="importLocalBook"
+            >
+              导入书籍
+            </el-tag>
+            <input
+              ref="bookRef"
+              type="file"
+              multiple="multiple"
+              @change="onBookFileChange"
+              style="display:none"
+            />
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showLocalStoreManageDialog = true"
+              v-if="
+                !$store.state.isSecureMode ||
+                  $store.state.userInfo.enableLocalStore
+              "
+            >
+              浏览书仓
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="init(true)"
+            >
+              刷新缓存
+            </el-tag>
+          </div>
+        </div>
+
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            用户空间
+            <span
+              class="right-text"
+              v-if="$store.state.isSecureMode && $store.state.userInfo.username"
+              @click="logoutConfirm()"
+              >注销</span
+            >
+            <span
+              class="right-text"
+              v-else
+              @click="$store.commit('setShowLogin', true)"
+              >登录</span
+            >
+          </div>
+          <div class="setting-item" v-if="$store.state.showManagerMode">
+            <el-select
+              size="mini"
+              v-model="userNS"
+              class="setting-select"
+              filterable
+              placeholder="请选择用户空间"
+            >
+              <el-option
+                v-for="(item, index) in userList"
+                :key="'source-' + index"
+                :label="item.username"
+                :value="item.userNS"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="saveUserConfig"
+              v-if="localStorageAvaliable"
+            >
+              备份用户配置
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="restoreUserConfig"
+              v-if="localStorageAvaliable"
+            >
+              同步用户配置
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="loadUserList"
+              v-if="$store.state.showManagerMode"
+            >
+              加载用户空间
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              v-if="$store.state.isManagerMode"
+              @click="showUserManageDialog()"
+            >
+              管理用户空间
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              v-if="$store.state.isManagerMode"
+              @click="exitSecureMode"
+            >
+              退出管理模式
+            </el-tag>
+          </div>
+        </div>
+        <div
+          class="setting-wrapper"
+          v-if="
+            !$store.state.isSecureMode || $store.state.userInfo.enableWebdav
+          "
+        >
+          <div class="setting-title">
+            WebDAV
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showWebDAVManageDialog = true"
+            >
+              文件管理
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="backupToWebdav"
+            >
+              保存备份
+            </el-tag>
+          </div>
+        </div>
+
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            本地缓存
+            <span class="right-text">{{ localCacheStats.total }}</span>
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="clearCache('bookSourceList')"
+            >
+              清空书源缓存
+              <span>{{ localCacheStats.bookSourceList }}</span>
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="clearCache('chapterList')"
+            >
+              清空章节列表缓存
+              <span>{{ localCacheStats.chapterList }}</span>
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="clearCache('chapterContent')"
+            >
+              清空章节内容缓存
+              <span>{{ localCacheStats.chapterContent }}</span>
+            </el-tag>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="shelf-wrapper"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
+      ref="shelfWrapper"
+      @click="showNavigation = false"
+    >
+      <div class="shelf-title">
+        <div class="shelf-title-left">
+          <i
+            class="el-icon-menu"
+            v-if="$store.getters.isNormalPage && collapseMenu"
+            @click.stop="toggleMenu"
+          ></i>
+          {{ isSearchResult ? (isExploreResult ? "探索" : "搜索") : "书架" }}
+          ({{ bookList.length }})
+        </div>
+        <div class="shelf-title-actions">
+          <div
+            class="title-btn"
+            v-if="$store.getters.isNormalPage && isSearchResult"
+            @click="backToShelf"
+          >
+            书架
+          </div>
+          <div
+            class="title-btn"
+            v-if="$store.getters.isNormalPage && isSearchResult"
+            @click="loadMore"
+          >
+            <i class="el-icon-loading" v-if="loadingMore"></i>
+            {{ loadingMore ? "加载中..." : "加载更多" }}
+          </div>
+          <div
+            class="title-btn"
+            @click="showExplorePop"
+            v-if="
+              $store.getters.isNormalPage &&
+                !(isSearchResult && !isExploreResult)
+            "
+          >
+            书海
+          </div>
+          <div class="title-btn" v-if="!isSearchResult" @click="refreshShelf">
+            <i class="el-icon-loading" v-if="refreshLoading"></i>
+            {{ refreshLoading ? "刷新中..." : "刷新" }}
+          </div>
+          <div
+            class="title-btn"
+            v-if="$store.getters.isNormalPage && !isSearchResult"
+            @click="showBookEditButton = !showBookEditButton"
+          >
+            {{ showBookEditButton ? "取消" : "编辑" }}
+          </div>
+          <el-dropdown
+            v-if="
+              $store.getters.isNormalPage &&
+                $store.state.userInfo &&
+                $store.state.userInfo.username
+            "
+            @command="handleAdminMenuCommand"
+            trigger="click"
+            class="title-btn-dropdown"
+          >
+            <div
+              class="title-btn"
+              style="cursor: pointer; color: #409EFF; font-weight: bold;"
+            >
+              <i class="el-icon-s-operation"></i> 管理
+              <span style="font-weight: normal; margin-left: 2px;">
+                ({{ $store.state.userInfo.username }})
+              </span>
+              <i
+                class="el-icon-arrow-down"
+                style="font-size: 10px; margin-left: 2px;"
+              ></i>
+            </div>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="admin" icon="el-icon-s-tools">
+                {{
+                  $store.state.userInfo.isAdmin ||
+                  $store.state.userInfo.is_admin ||
+                  $store.state.userInfo.username === "admin"
+                    ? "控制台与管理后台"
+                    : "后台管理 (书源与书架)"
+                }}
+              </el-dropdown-item>
+              <el-dropdown-item command="changePassword" icon="el-icon-key">
+                修改账户密码
+              </el-dropdown-item>
+              <el-dropdown-item
+                command="logout"
+                divided
+                icon="el-icon-switch-button"
+              >
+                退出当前账号
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+          <el-dropdown
+            v-else-if="
+              $store.getters.isNormalPage &&
+                $store.state.userInfo &&
+                $store.state.userInfo.username
+            "
+            @command="handleUserMenuCommand"
+            trigger="click"
+            class="title-btn-dropdown"
+          >
+            <div
+              class="title-btn"
+              style="cursor: pointer; color: #409EFF; font-weight: 500;"
+            >
+              <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
+              <i
+                class="el-icon-arrow-down"
+                style="font-size: 10px; margin-left: 2px;"
+              ></i>
+            </div>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="changePassword" icon="el-icon-key">
+                修改密码
+              </el-dropdown-item>
+              <el-dropdown-item
+                command="logout"
+                divided
+                icon="el-icon-switch-button"
+              >
+                退出登录
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+          <div
+            class="title-btn"
+            v-else-if="$store.getters.isNormalPage"
+            @click="$store.commit('setShowLogin', true)"
+            style="color: #409EFF; font-weight: bold;"
+          >
+            <i class="el-icon-user-solid"></i> 登录
+          </div>
+        </div>
+      </div>
+      <div class="book-group-wrapper" v-if="!isSearchResult">
+        <el-tabs class="book-group-tabs" v-model="showBookGroupString" stretch>
+          <el-tab-pane
+            v-for="group in bookGroupDisplayList"
+            :label="group.groupName"
+            :name="'' + group.groupId"
+            :key="'bookGroup-' + group.groupId"
+          ></el-tab-pane>
+        </el-tabs>
+      </div>
+      <div
+        class="books-wrapper"
+        ref="bookList"
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+        @scroll="scrollHandler"
+      >
+        <div class="wrapper">
+          <div
+            class="book"
+            :style="showNavigation ? { minWidth: '360px !important' } : {}"
+            v-for="book in bookList"
+            :key="book.bookUrl"
+            @click="toDetail(book)"
+          >
+            <div class="cover-img" @click.stop="showBookInfoDialog(book)">
+              <!-- 搜索时不拉取图片封面，采用极速轻量占位，大幅提高检索效率 -->
+              <div v-if="isSearchResult" class="cover search-cover-placeholder">
+                <i class="el-icon-reading"></i>
+              </div>
+              <el-image
+                v-else
+                class="cover"
+                ref="bookCoverList"
+                :src="getCover(getBookCoverUrl(book), true)"
+                fit="cover"
+                lazy
+              >
+              </el-image>
+            </div>
+            <div class="info" @click="toDetail(book)">
+              <div class="book-operation">
+                <i
+                  class="el-icon-close"
+                  v-if="!isSearchResult && showBookEditButton"
+                  @click.stop="deleteBook(book)"
+                  title="删除书籍"
+                ></i>
+                <i
+                  class="el-icon-picture"
+                  v-if="!isSearchResult && showBookEditButton"
+                  @click.stop="openCoverPicker(book)"
+                  title="修改书籍封面"
+                ></i>
+                <i
+                  class="el-icon-edit"
+                  v-if="!isSearchResult && showBookEditButton"
+                  @click.stop="editBook(book)"
+                  title="编辑书籍信息"
+                ></i>
+                <i
+                  class="el-icon-edit"
+                  v-if="isSearchResult"
+                  @click.stop="editBook(book, true)"
+                ></i>
+                <el-badge
+                  class="unread-num-badge"
+                  :max="99"
+                  :value="book.totalChapterNum - 1 - book.durChapterIndex"
+                  v-if="
+                    !isSearchResult &&
+                      !showBookEditButton &&
+                      book.totalChapterNum - 1 - book.durChapterIndex > 0
+                  "
+                />
+              </div>
+              <div
+                class="name"
+                slot="reference"
+                :class="showBookEditButton ? 'edit' : ''"
+              >
+                {{ book.name }}
+              </div>
+              <div class="sub">
+                <div class="author">
+                  {{ book.author || "" }}
+                </div>
+                <div class="dot" v-if="book.totalChapterNum">•</div>
+                <div class="size" v-if="book.totalChapterNum">
+                  共{{ book.totalChapterNum }}章
+                </div>
+              </div>
+              <div
+                class="dur-chapter"
+                v-if="!isSearchResult && book.durChapterTitle"
+              >
+                已读：{{ book.durChapterTitle }}
+              </div>
+              <div class="last-chapter" v-if="book.latestChapterTitle">
+                {{
+                  book.lastCheckTime ? dateFormat(book.lastCheckTime) : "最新"
+                }}：{{ book.latestChapterTitle }}
+              </div>
+              <div v-if="isSearchResult">
+                <el-tag
+                  type="success"
+                  :effect="isNight ? 'dark' : 'light'"
+                  class="setting-connect"
+                  @click.stop="addBookToShelf(book)"
+                >
+                  加入书架
+                </el-tag>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <el-dialog
+      title="导入书源"
+      :visible.sync="showImportSourceDialog"
+      :width="dialogWidth"
+      :top="this.collapseMenu ? '0' : '15vh'"
+      :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
+      v-if="$store.getters.isNormalPage"
+    >
+      <div
+        class="import-filter-bar"
+        style="margin-bottom: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.04); border-radius: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;"
+      >
+        <div
+          style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;"
+        >
+          <span style="font-size: 13px; font-weight: bold;"
+            >书源类型支持选项：</span
+          >
+          <el-checkbox
+            v-model="allowImportJs"
+            @change="onImportTypeToggle"
+            size="small"
+            border
+          >
+            @javascript ({{ importJsCount }})
+          </el-checkbox>
+          <el-checkbox
+            v-model="allowImportWebview"
+            @change="onImportTypeToggle"
+            size="small"
+            border
+          >
+            支持webview ({{ importWebviewCount }})
+          </el-checkbox>
+        </div>
+        <span style="font-size: 12px; color: #E6A23C;">
+          * 需勾选上方选项方可支持并导入对应类型书源
+        </span>
+      </div>
+      <div class="source-container source-list-container">
+        <el-checkbox-group
+          v-model="checkedSourceIndex"
+          @change="handleCheckedSourcesChange"
+        >
+          <el-checkbox
+            v-for="(source, index) in importSourceList"
+            :label="index"
+            :key="index"
+            :disabled="isSourceDisabled(source)"
+            class="source-checkbox"
+            >{{ source.bookSourceName }}
+            {{ source.bookSourceUrl }}
+            <span style="color: #409EFF; font-weight: bold;">{{
+              getSourceTag(source)
+            }}</span></el-checkbox
+          >
+        </el-checkbox-group>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-checkbox
+          :indeterminate="isIndeterminate"
+          v-model="checkAll"
+          @change="handleCheckAllChange"
+          border
+          size="medium"
+          class="float-left"
+          >全选</el-checkbox
+        >
+        <span class="check-tip">已选择 {{ checkedSourceIndex.length }} 个</span>
+        <el-button
+          size="medium"
+          @click="
+            showImportSourceDialog = false;
+            checkedSourceIndex = [];
+          "
+          >取消</el-button
+        >
+        <el-button size="medium" type="primary" @click="saveSourceList"
+          >确定</el-button
+        >
+      </div>
+    </el-dialog>
+    <el-dialog
+      :visible.sync="showBookSourceManageDialog"
+      :width="dialogWidth"
+      :top="dialogTop"
+      @closed="
+        isShowFailureBookSource = false;
+        showSourceGroup = '';
+      "
+      :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      v-if="$store.getters.isNormalPage"
+    >
+      <div class="custom-dialog-title" slot="title">
+        <span class="el-dialog__title"
+          >{{ isShowFailureBookSource ? "失效书源管理" : "书源管理" }}
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="deleteAllBookSource()"
+            >清空</span
+          >
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="deleteBookSourceFile()"
+            >恢复默认</span
+          >
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="exportBookSource()"
+            >导出</span
+          >
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="editBookSource(false)"
+            >新增</span
+          >
+        </span>
+      </div>
+      <div class="source-container table-container">
+        <div class="check-form" v-if="isShowFailureBookSource">
+          <span class="check-form-label">搜索词：</span>
+          <el-input v-model="checkBookSourceConfig.keyword" size="small">
+          </el-input>
+          <span class="check-form-label" style="min-width: 68px;">
+            超时(ms)：
+          </span>
+          <el-input-number
+            v-model="checkBookSourceConfig.timeout"
+            :min="1000"
+            :max="15000"
+            :step="500"
+            size="small"
+          >
+          </el-input-number>
+          <span class="check-form-label">并发数：</span>
+          <el-input-number
+            v-model="checkBookSourceConfig.concurrent"
+            :min="3"
+            :max="15"
+            :step="1"
+            size="small"
+          >
+          </el-input-number>
+        </div>
+        <div class="source-group-wrapper">
+          <el-tag
+            type="info"
+            :effect="$store.getters.isNight ? 'dark' : 'light'"
+            class="source-group-btn"
+            :class="showSourceGroup === name ? 'selected' : ''"
+            v-for="name in bookSourceShowGroup"
+            :key="'sourceGroup-' + name"
+            @click="setShowSourceGroup(name)"
+          >
+            {{ name }}
+          </el-tag>
+        </div>
+        <el-table
+          :data="bookSourceShowResultPageList"
+          :height="
+            dialogContentHeight - 42 - 42 - (isShowFailureBookSource ? 32 : 0)
+          "
+          @selection-change="manageSourceSelection = $event"
+          :key="isShowFailureBookSource"
+        >
+          <el-table-column
+            type="selection"
+            width="25"
+            :fixed="$store.state.miniInterface"
+            :selectable="isBookSourceSelectable"
+          >
+          </el-table-column>
+          <el-table-column
+            property="bookSourceName"
+            label="书源名称"
+            min-width="120"
+            :fixed="$store.state.miniInterface"
+          ></el-table-column>
+          <el-table-column
+            property="bookSourceUrl"
+            label="书源链接"
+            min-width="120"
+          >
+            <template slot-scope="scope">
+              <el-link
+                type="primary"
+                :href="scope.row.bookSourceUrl"
+                target="_blank"
+                >{{ scope.row.bookSourceUrl }}</el-link
+              >
+            </template>
+          </el-table-column>
+          <el-table-column
+            property="errorMsg"
+            label="错误信息"
+            min-width="120"
+            v-if="isShowFailureBookSource"
+          ></el-table-column>
+          <el-table-column label="书架书籍" min-width="120">
+            <template slot-scope="scope">
+              <pre>{{ showSourceBook(scope.row) }}</pre>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="操作"
+            width="100px"
+            v-if="!isShowFailureBookSource"
+          >
+            <template slot-scope="scope">
+              <el-button type="text" @click="editBookSource(scope.row)"
+                >编辑</el-button
+              >
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="source-pagination">
+          <el-pagination
+            :current-page.sync="bookSourcePagination.page"
+            :page-sizes="[25, 50, 100, 200, 300, 400]"
+            :page-size.sync="bookSourcePagination.size"
+            layout="total, sizes, prev, pager, next"
+            :total="bookSourceShowLength"
+            :pager-count="collapseMenu ? 5 : 7"
+          >
+          </el-pagination>
+        </div>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button
+          type="primary"
+          class="float-left"
+          size="medium"
+          @click="deleteBookSourceList"
+          >批量删除</el-button
+        >
+        <span class="check-tip"
+          >已选择 {{ manageSourceSelection.length }} 个</span
+        >
+        <el-button
+          @click="checkBookSource"
+          v-if="isShowFailureBookSource"
+          size="medium"
+          style="margin-bottom: 5px;"
+          :disabled="isCheckingBookSource"
+          >{{ isCheckingBookSource ? "正在" : "" }}检测书源
+          {{ checkBookSourceTip }}</el-button
+        >
+        <el-button @click="showBookSourceManageDialog = false" size="medium"
+          >取消</el-button
+        >
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      :title="'导入本地书籍' + importMultiBookTip"
+      :visible.sync="showImportBookDialog"
+      :width="dialogSmallWidth"
+      :top="dialogTop"
+      @closed="importBookDialogClosed"
+      :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      v-if="$store.getters.isNormalPage"
+    >
+      <div class="source-container table-container">
+        <div class="check-form">
+          <div class="book-cover">
+            <el-image
+              class="cover"
+              :src="getCover(getBookCoverUrl(importBookInfo), true)"
+              :key="getBookCoverUrl(importBookInfo)"
+              fit="cover"
+              lazy
+            >
+            </el-image>
+          </div>
+          <div class="book-info">
+            <div>
+              <span>书名：</span>
+              <el-input v-model="importBookInfo.name" size="small"> </el-input>
+            </div>
+            <div>
+              <span>作者：</span>
+              <el-input v-model="importBookInfo.author" size="small">
+              </el-input>
+            </div>
+            <div>
+              <span>分组：</span>
+              <el-select
+                size="mini"
+                v-model="importBookGroup"
+                filterable
+                multiple
+                placeholder="未分组"
+              >
+                <el-option
+                  v-for="(bookGroup, index) in bookGroupSetList"
+                  :key="'bookGroup-' + index"
+                  :label="bookGroup.groupName"
+                  :value="bookGroup.groupId"
+                >
+                </el-option>
+              </el-select>
+            </div>
+            <div v-if="isShowTocRule">
+              <span>规则：</span>
+              <el-select
+                size="mini"
+                v-model="importUsedTxtRule"
+                filterable
+                placeholder="内置规则"
+              >
+                <el-option
+                  v-for="(rule, index) in tocRuleList"
+                  :key="'txtTocRule-' + index"
+                  :label="rule.name"
+                  :value="rule.rule"
+                >
+                </el-option>
+              </el-select>
+              <el-button
+                class="toc-refresh-btn"
+                type="text"
+                @click="getChapterListByRule()"
+                >刷新目录</el-button
+              >
+            </div>
+            <div v-if="isShowTocRule">
+              <el-input
+                type="textarea"
+                :rows="2"
+                v-model="importBookInfo.tocUrl"
+                size="small"
+              >
+              </el-input>
+            </div>
+          </div>
+        </div>
+        <div class="chapter-title">
+          章节列表({{ importBookChapters.length }})
+        </div>
+        <div
+          class="chapter-list"
+          :style="{ maxHeight: dialogContentHeight - 40 - 35 + 'px' }"
+        >
+          <p v-for="(chapter, index) in importBookChapters" :key="index">
+            {{ index + 1 }}. {{ chapter.title }}
+          </p>
+        </div>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button
+          type="primary"
+          size="medium"
+          @click="saveBook(importBookInfo, true)"
+          >确定导入</el-button
+        >
+        <el-button size="medium" @click="showImportBookDialog = false"
+          >取消</el-button
+        >
+      </div>
+    </el-dialog>
+
+    <LocalStore
+      v-model="showLocalStoreManageDialog"
+      @importFromLocalPathPreview="importMultiBooks"
+    ></LocalStore>
+
+    <WebDAV
+      v-model="showWebDAVManageDialog"
+      @importFromLocalPathPreview="importMultiBooks"
+    ></WebDAV>
+
+    <!-- 修改书籍封面弹窗 -->
+    <el-dialog
+      title="修改书籍封面"
+      :visible.sync="showCoverPicker"
+      width="560px"
+      append-to-body
+      :before-close="() => (showCoverPicker = false)"
+    >
+      <div v-if="currentCoverBook" class="cover-picker-content">
+        <div style="margin-bottom: 14px; display: flex; gap: 8px;">
+          <el-input
+            v-model="customCoverInput"
+            size="small"
+            placeholder="输入或粘贴自定义封面图片链接 (http://...)"
+            clearable
+          >
+            <template slot="prepend">图片链接</template>
+          </el-input>
+          <el-button
+            type="primary"
+            size="small"
+            icon="el-icon-check"
+            @click="applyCover(customCoverInput)"
+          >
+            保存封面
+          </el-button>
+        </div>
+        <div
+          style="font-size: 13px; color: #606266; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;"
+        >
+          <span>从可用书源自动聚合的封面图（点击即可一键设为封面）：</span>
+          <el-button
+            type="text"
+            size="mini"
+            icon="el-icon-refresh"
+            :loading="loadingCovers"
+            @click="fetchBookCovers(currentCoverBook)"
+          >
+            重新拉取
+          </el-button>
+        </div>
+        <div class="cover-grid" v-loading="loadingCovers">
+          <div
+            v-for="(cover, idx) in candidateCovers"
+            :key="idx"
+            class="cover-card"
+            :class="{
+              active:
+                currentCoverBook.customCoverUrl === cover.url ||
+                currentCoverBook.coverUrl === cover.url
+            }"
+            @click="applyCover(cover.url)"
+          >
+            <img
+              :src="cover.url"
+              class="cover-img"
+              @error="onCoverImgError(cover)"
+            />
+            <div class="cover-source-tag" :title="cover.sourceName">
+              {{ cover.sourceName }}
+            </div>
+          </div>
+          <div
+            v-if="!loadingCovers && candidateCovers.length === 0"
+            style="grid-column: 1/-1; text-align: center; color: #999; padding: 25px;"
+          >
+            暂未从书源匹配到更多封面，您可以直接在上方输入图片链接
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import { mapGetters } from "vuex";
+import Explore from "../components/Explore.vue";
+import LocalStore from "../components/LocalStore.vue";
+import WebDAV from "../components/WebDAV.vue";
+import Axios from "../plugins/axios";
+import { errorTypeList } from "../plugins/config";
+import { setCache, getCache } from "../plugins/cache";
+import eventBus from "../plugins/eventBus";
+import { formatSize, LimitResquest } from "../plugins/helper";
+const buildURL = require("axios/lib/helpers/buildURL");
+import { isInContainer } from "element-ui/src/utils/dom";
+import Vue from "vue";
+
+export default {
+  components: {
+    Explore,
+    LocalStore,
+    WebDAV
+  },
+  data() {
+    return {
+      search: "",
+      searchTypeList: [
+        { name: "单源搜索", value: "single" },
+        { name: "多源搜索(过滤书名/作者名)", value: "multi" }
+      ],
+      isSearchResult: false,
+      isExploreResult: false,
+      searchResult: [],
+      searchPage: 1,
+      refreshLoading: false,
+      searchLastIndex: -1,
+
+      showBookEditButton: false,
+
+      popExploreVisible: false,
+      loadingMore: false,
+
+      importSourceList: [],
+      showImportSourceDialog: false,
+      checkAll: false,
+      isIndeterminate: false,
+      checkedSourceIndex: [],
+      allowImportJs: false,
+      allowImportWebview: false,
+
+      showBookSourceManageDialog: false,
+      manageSourceSelection: [],
+
+      showCoverPicker: false,
+      currentCoverBook: null,
+      customCoverInput: "",
+      candidateCovers: [],
+      loadingCovers: false,
+      isShowFailureBookSource: false,
+      checkBookSourceTip: "",
+      isCheckingBookSource: false,
+
+      showNavigation: false,
+
+      navigationClass: "",
+      navigationStyle: {},
+
+      popIntroVisible: {},
+
+      connecting: false,
+
+      lastScrollTop: 0,
+
+      localStorageAvaliable:
+        window.localStorage &&
+        window.localStorage.getItem &&
+        window.localStorage.setItem,
+
+      showSourceGroup: "",
+      bookSourcePagination: {
+        page: 1,
+        size: 25
+      },
+      checkBookSourceConfig: {
+        keyword: "斗罗大陆",
+        timeout: 5000,
+        concurrent: 5
+      },
+      importBookInfo: {},
+      importBookGroup: [],
+      importBookChapters: [],
+      showImportBookDialog: false,
+
+      importMultiBookTip: "",
+
+      concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60],
+
+      localCacheStats: {
+        total: "0 Bytes",
+        bookSourceList: "0 Bytes",
+        chapterList: "0 Bytes",
+        chapterContent: "0 Bytes"
+      },
+
+      showLocalStoreManageDialog: false,
+
+      showWebDAVManageDialog: false,
+
+      importUsedTxtRule: "",
+
+      showAddUser: false,
+      addUserForm: {
+        username: "",
+        password: ""
+      }
+    };
+  },
+  watch: {
+    searchConfig: {
+      handler(val) {
+        this.$store.commit("setSearchConfig", val);
+        if (this.isSearchResult) {
+          this.searchBook(1);
+        }
+      },
+      deep: true
+    },
+    searchResult(val) {
+      if (this.isSearchResult && val.length) {
+        this.$nextTick(() => {
+          this.$refs.bookList.scrollTop = this.lastScrollTop;
+        });
+      }
+    },
+    collapseMenu(val) {
+      if (!val) {
+        this.navigationClass = "";
+      } else if (!this.showNavigation) {
+        this.navigationClass = "navigation-hidden";
+      }
+    },
+    showNavigation(val) {
+      if (!val) {
+        this.navigationClass = "navigation-out";
+        setTimeout(() => {
+          this.navigationClass = "navigation-hidden";
+        }, 300);
+      } else {
+        this.navigationClass = "navigation-in";
+      }
+    },
+    loginAuth() {
+      this.init(true);
+    },
+    userNS() {
+      this.init(true);
+    },
+    importUsedTxtRule(val) {
+      if (val) {
+        this.importBookInfo.tocUrl = val;
+      }
+    },
+    importBookGroup(val) {
+      if (val && this.showImportBookDialog) {
+        let groupId = 0;
+        val.forEach(v => {
+          groupId |= v;
+        });
+        this.importBookInfo.group = groupId;
+      }
+    },
+    showBookGroup() {
+      this.$nextTick(() => {
+        // 手动处理 el-image 图片加载
+        setTimeout(this.ensureLoadBookCover);
+      });
+    }
+  },
+  mounted() {
+    document.title = "阅读";
+    this.navigationClass =
+      this.collapseMenu && !this.showNavigation ? "navigation-hidden" : "";
+    window.shelfPage = this;
+    this.init();
+    eventBus.$on("onSourceFileChange", event => {
+      if (this._inactive) {
+        return;
+      }
+      this.onSourceFileChange(event);
+    });
+    eventBus.$on("editBook", (book, isAdd, onSuccess) => {
+      if (this._inactive) {
+        return;
+      }
+      this.editBook(book, isAdd, onSuccess);
+    });
+    eventBus.$on("openCoverPicker", book => {
+      this.openCoverPicker(book);
+    });
+  },
+  activated() {
+    document.title = "阅读";
+    this.scanCacheStorage();
+  },
+  methods: {
+    openCoverPicker(book) {
+      if (!book) return;
+      this.currentCoverBook = book;
+      this.customCoverInput = book.customCoverUrl || book.coverUrl || "";
+      this.candidateCovers = [];
+      this.showCoverPicker = true;
+      this.fetchBookCovers(book);
+    },
+    fetchBookCovers(book) {
+      if (!book || !book.name) return;
+      if (this.coverEventSource) {
+        try {
+          this.coverEventSource.close();
+        } catch (e) {
+          // ignore
+        }
+        this.coverEventSource = null;
+      }
+      this.loadingCovers = true;
+      this.candidateCovers = [];
+      const seen = new Set();
+      const currentCover = book.customCoverUrl || book.coverUrl;
+      if (currentCover) {
+        seen.add(currentCover);
+        this.candidateCovers.push({
+          url: currentCover,
+          coverUrl: currentCover,
+          sourceName: "当前封面",
+          originName: "当前封面"
+        });
+      }
+      if (book.coverUrl && !seen.has(book.coverUrl)) {
+        seen.add(book.coverUrl);
+        this.candidateCovers.push({
+          url: book.coverUrl,
+          coverUrl: book.coverUrl,
+          sourceName: book.originName || "原书源封面",
+          originName: book.originName || "原书源封面"
+        });
+      }
+
+      // 1. 先尝试快速读取后端已缓存的书源
+      if (book.bookUrl) {
+        Axios.post(this.api + "/getAvailableBookSource", {
+          url: book.bookUrl,
+          refresh: 0
+        })
+          .then(res => {
+            if (
+              res.data &&
+              res.data.isSuccess &&
+              Array.isArray(res.data.data)
+            ) {
+              res.data.data.forEach(item => {
+                if (
+                  item.coverUrl &&
+                  item.coverUrl.startsWith("http") &&
+                  !seen.has(item.coverUrl)
+                ) {
+                  seen.add(item.coverUrl);
+                  const name = item.originName || item.origin || "本地源";
+                  this.candidateCovers.push({
+                    url: item.coverUrl,
+                    coverUrl: item.coverUrl,
+                    sourceName: name,
+                    originName: name
+                  });
+                }
+              });
+            }
+          })
+          .catch(() => {});
+      }
+
+      // 2. 启动 SSE 在线全网书源实时扫描拉取最新封面
+      const buildURL = require("axios/lib/helpers/buildURL");
+      const params = {
+        name: book.name,
+        author: book.author || "",
+        searchSize: 15
+      };
+      if (this.$store.state.token) {
+        params.accessToken = this.$store.state.token;
+      }
+      const sseUrl = buildURL(this.api + "/searchBookSourceSSE", params);
+      try {
+        const es = new EventSource(sseUrl);
+        this.coverEventSource = es;
+        es.addEventListener("message", e => {
+          try {
+            const res = JSON.parse(e.data);
+            if (res.data && Array.isArray(res.data)) {
+              res.data.forEach(item => {
+                if (
+                  item.coverUrl &&
+                  item.coverUrl.startsWith("http") &&
+                  !seen.has(item.coverUrl)
+                ) {
+                  seen.add(item.coverUrl);
+                  const name = item.originName || item.origin || "在线书源";
+                  this.candidateCovers.push({
+                    url: item.coverUrl,
+                    coverUrl: item.coverUrl,
+                    sourceName: name,
+                    originName: name
+                  });
+                }
+              });
+            }
+          } catch (err) {
+            // ignore
+          }
+        });
+        const stopSSE = () => {
+          this.loadingCovers = false;
+          if (this.coverEventSource) {
+            try {
+              this.coverEventSource.close();
+            } catch (e) {
+              // ignore
+            }
+            this.coverEventSource = null;
+          }
+        };
+        es.addEventListener("end", stopSSE);
+        es.addEventListener("error", stopSSE);
+        setTimeout(stopSSE, 10000);
+      } catch (err) {
+        this.loadingCovers = false;
+      }
+    },
+    onCoverImgError(cover) {
+      const idx = this.candidateCovers.findIndex(c => c.url === cover.url);
+      if (idx >= 0) {
+        this.candidateCovers.splice(idx, 1);
+      }
+    },
+    applyCover(coverUrl) {
+      if (!coverUrl) {
+        this.$message.error("请选择或输入封面图片链接");
+        return;
+      }
+      const updatedBook = Object.assign({}, this.currentCoverBook, {
+        customCoverUrl: coverUrl,
+        coverUrl: coverUrl
+      });
+      Axios.post(this.api + "/saveBook", updatedBook).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("书籍封面已更新成功！");
+            this.showCoverPicker = false;
+            this.currentCoverBook.customCoverUrl = coverUrl;
+            this.currentCoverBook.coverUrl = coverUrl;
+            this.loadBookshelf();
+          } else {
+            this.$message.error(res.data.errorMsg || "保存封面失败");
+          }
+        },
+        err => {
+          this.$message.error("保存封面异常: " + (err && err.toString()));
+        }
+      );
+    },
+    init(refresh) {
+      this.$root.$children[0].init(refresh);
+    },
+    setIP() {
+      this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        inputValue: this.api,
+        // inputPattern: /^((2[0-4]\d|25[0-5]|[1]?\d\d?)\.){3}(2[0-4]\d|25[0-5]|[1]?\d\d?):([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-6][0-5][0-5][0-3][0-5])$/,
+        // inputErrorMessage: "url 形式不正确",
+        beforeClose: (action, instance, done) => {
+          if (action === "confirm") {
+            this.connecting = true;
+            instance.confirmButtonLoading = true;
+            instance.confirmButtonText = "校验中……";
+            var inputUrl = instance.inputValue.replace(/\/*$/g, "");
+            this.loadBookshelf(inputUrl)
+              .then(() => {
+                this.connecting = false;
+                instance.confirmButtonLoading = false;
+                done();
+                setCache("api_prefix", inputUrl);
+                this.$store.commit("setApi", inputUrl);
+                // 初始化
+                this.init();
+              })
+              .catch(() => {
+                instance.confirmButtonLoading = false;
+                instance.confirmButtonText = "确定";
+              });
+          } else {
+            done();
+          }
+        }
+      })
+        .then(({ value }) => {
+          this.$message({
+            type: "success",
+            message: "与" + value + "连接成功"
+          });
+        })
+        .catch(() => {});
+    },
+    loadBookshelf(api, refresh) {
+      api = api || this.api;
+      if (!api) {
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
+        return Promise.reject(false);
+      }
+
+      if (!this.loading || !this.loading.visible) {
+        this.loading = this.$loading({
+          target: this.$refs.bookList,
+          lock: true,
+          text: refresh ? "正在刷新书籍信息" : "正在获取书籍信息",
+          spinner: "el-icon-loading",
+          background: this.isNight ? "#222" : "#fff"
+        });
+      }
+
+      if (
+        !api.startsWith("http://") &&
+        !api.startsWith("https://") &&
+        !api.startsWith("//")
+      ) {
+        api = "//" + api;
+      }
+
+      return this.$root.$children[0].loadBookShelf(refresh, api).then(() => {
+        this.loading.close();
+      });
+    },
+    refreshShelf() {
+      return this.loadBookshelf(null, true);
+    },
+    loadBookGroup(refresh) {
+      return this.$root.$children[0].loadBookGroup(refresh);
+    },
+    loadBookSource(refresh) {
+      return this.$root.$children[0].loadBookSource(refresh);
+    },
+    searchBook(page) {
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
+        return;
+      }
+      if (!this.search) {
+        this.$message.error("请输入关键词进行搜索");
+        return;
+      }
+      if (
+        this.searchConfig.searchType === "single" &&
+        !this.searchConfig.bookSourceUrl
+      ) {
+        this.$message.error("请选择书源进行搜索");
+        return;
+      }
+      if (page) {
+        this.searchPage = page;
+      }
+      page = this.searchPage;
+      if (page === 1) {
+        // 重新搜索
+        this.searchLastIndex = -1;
+      }
+      if (this.searchConfig.searchType === "multi" && window.EventSource) {
+        this.searchBookByEventStream(page);
+        return;
+      }
+      if (this.loadingMore) {
+        return;
+      }
+      this.isSearchResult = true;
+      this.isExploreResult = false;
+      this.loadingMore = true;
+      if (page === 1) {
+        this.searchResult = [];
+      }
+      Axios.post(
+        this.api +
+          (this.searchConfig.searchType === "single"
+            ? "/searchBook"
+            : "/searchBookMulti"),
+        {
+          key: this.search,
+          bookSourceUrl: this.searchConfig.bookSourceUrl,
+          bookSourceGroup: this.searchConfig.bookSourceGroup,
+          concurrentCount: this.searchConfig.concurrentCount,
+          lastIndex: this.searchLastIndex, // 多源搜索时的索引
+          page: page // 单源搜索时的page
+        },
+        {
+          timeout: this.searchConfig.searchType === "single" ? 30000 : 180000
+        }
+      ).then(
+        res => {
+          this.loadingMore = false;
+          if (res.data.isSuccess) {
+            //
+            let resultList = [];
+            if (this.searchConfig.searchType === "single") {
+              resultList = res.data.data;
+            } else {
+              this.searchLastIndex = res.data.data.lastIndex;
+              resultList = res.data.data.list;
+            }
+            var data = [].concat(this.searchResult);
+            var length = data.length;
+            resultList.forEach(v => {
+              if (!this.searchResultMap[v.bookUrl]) {
+                data.push(v);
+              }
+            });
+            this.searchResult = data;
+            if (data.length === length) {
+              this.$message.error("没有更多啦");
+            }
+          }
+        },
+        error => {
+          this.$message.error("搜索书籍失败 " + (error && error.toString()));
+        }
+      );
+    },
+    searchBookByEventStream(page) {
+      const tryClose = () => {
+        try {
+          if (
+            this.searchEventSource &&
+            this.searchEventSource.readyState != this.searchEventSource.CLOSED
+          ) {
+            this.searchEventSource.close();
+          }
+          this.searchEventSource = null;
+        } catch (error) {
+          //
+        }
+      };
+      if (this.loadingMore) {
+        tryClose();
+        this.loadingMore = false;
+        // page === 1 是重新搜索
+        if (page !== 1) {
+          // 停止搜索
+          return;
+        }
+      }
+      const params = {
+        accessToken: this.$store.state.token,
+        key: this.search,
+        bookSourceUrl: this.searchConfig.bookSourceUrl,
+        bookSourceGroup: this.searchConfig.bookSourceGroup,
+        concurrentCount: this.searchConfig.concurrentCount,
+        lastIndex: this.searchLastIndex, // 多源搜索时的索引
+        page: page // 单源搜索时的page
+      };
+
+      this.isSearchResult = true;
+      this.isExploreResult = false;
+      this.loadingMore = true;
+      if (page === 1) {
+        this.searchResult = [];
+      }
+      const url = buildURL(this.api + "/searchBookMultiSSE", params);
+
+      tryClose();
+
+      this.searchEventSource = new EventSource(url, {
+        withCredentials: true
+      });
+      this.searchEventSource.addEventListener("error", e => {
+        this.loadingMore = false;
+        tryClose();
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.errorMsg) {
+              this.$message.error(result.errorMsg);
+            }
+          }
+        } catch (error) {
+          //
+        }
+      });
+      let oldSearchResultLength = this.searchResult.length;
+      this.searchEventSource.addEventListener("end", e => {
+        this.loadingMore = false;
+        tryClose();
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.lastIndex) {
+              this.searchLastIndex = result.lastIndex;
+            }
+          }
+          if (this.searchResult.length === oldSearchResultLength) {
+            this.$message.error("没有更多啦");
+          }
+        } catch (error) {
+          //
+        }
+      });
+      this.searchEventSource.addEventListener("message", e => {
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.lastIndex) {
+              this.searchLastIndex = result.lastIndex;
+            }
+            if (result.data) {
+              var data = [].concat(this.searchResult);
+              result.data.forEach(v => {
+                if (!this.searchResultMap[v.bookUrl]) {
+                  data.push(v);
+                }
+              });
+              this.searchResult = data;
+            }
+          }
+        } catch (error) {
+          //
+        }
+      });
+    },
+    toDetail(book) {
+      if (!book.bookUrl) {
+        return;
+      }
+      if (this.isSearchResult) {
+        // this.$message.error("请先加入书架");
+        // return;
+      }
+      this.$store.commit("setReadingBook", {
+        name: book.name,
+        bookUrl: book.bookUrl,
+        index: book.index ?? book.durChapterIndex ?? 0,
+        type: book.type,
+        coverUrl: this.getBookCoverUrl(book),
+        tocUrl: book.tocUrl,
+        author: book.author,
+        origin: book.origin,
+        originName: book.originName,
+        latestChapterTitle: book.latestChapterTitle,
+        intro: book.intro
+      });
+      this.$router.push({
+        path: "/reader" + (this.isSearchResult ? "?search=1" : "")
+      });
+    },
+    async addBookToShelf(book) {
+      const customImportBookInfo = await this.customImportBookInfo({
+        title: "设置分组",
+        cancelButtonText: "暂不加入"
+      });
+      if (customImportBookInfo === false) {
+        return;
+      }
+      this.saveBook({ ...book, ...customImportBookInfo });
+    },
+    saveBook(book, isImport, isEdit) {
+      if (!book || !book.bookUrl || !book.origin) {
+        this.$message.error("书籍信息错误");
+        return Promise.reject(false);
+      }
+      return Axios.post(this.api + "/saveBook", book).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            if (isImport) {
+              this.showImportBookDialog = false;
+            }
+            this.$message.success(
+              isImport
+                ? "导入书籍成功"
+                : isEdit
+                ? "修改书籍成功"
+                : "加入书架成功"
+            );
+            if (!isEdit) {
+              this.loadBookshelf();
+              // 用户加入书架后，后台低并发(2线程)无感检索备用书源，至多保留10个备用源
+              this.triggerBackgroundSourceSearch(res.data.data || book);
+            } else {
+              this.$store.commit("updateShelfBook", res.data.data);
+            }
+            return res.data.data;
+          }
+        },
+        error => {
+          this.$message.error(
+            (isImport
+              ? "导入书籍失败"
+              : isEdit
+              ? "修改书籍失败"
+              : "加入书架失败 ") + (error && error.toString())
+          );
+        }
+      );
+    },
+    triggerBackgroundSourceSearch(book) {
+      if (!book || !book.bookUrl || book.origin === "loc_book") return;
+      const params = {
+        url: book.bookUrl,
+        name: book.name,
+        author: book.author,
+        searchSize: 10,
+        background: true
+      };
+      if (this.$store.state.token) {
+        params.accessToken = this.$store.state.token;
+      }
+      const sseUrl = buildURL(this.api + "/searchBookSourceSSE", params);
+      try {
+        const es = new EventSource(sseUrl);
+        es.addEventListener("end", () => {
+          es.close();
+        });
+        es.addEventListener("error", () => {
+          es.close();
+        });
+      } catch (e) {
+        // 后台静默处理，无感运行
+      }
+    },
+    async deleteBook(book) {
+      if (!book || (!book.name && !book.bookUrl)) {
+        this.$message.error("书籍信息错误");
+        return;
+      }
+      const res = await this.$confirm(
+        "此操作将删除书籍信息以及阅读进度, 是否继续?",
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteBook", book).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.$message.success("删除成功");
+            this.loadBookshelf();
+          }
+        },
+        error => {
+          this.$message.error("删除失败 " + (error && error.toString()));
+        }
+      );
+    },
+    editBook(book, isAdd, onSuccess) {
+      if (!book || !book.name || !book.bookUrl || !book.origin) {
+        this.$message.error("书籍信息错误");
+        return;
+      }
+      const bookInfo = { ...book };
+      delete bookInfo["variableMap$delegate"];
+      eventBus.$emit(
+        "showEditor",
+        isAdd ? "保存书籍" : "编辑书籍",
+        JSON.stringify(bookInfo, null, 4),
+        async (content, close) => {
+          try {
+            const newBook = JSON.parse(content);
+            if (!newBook.name) {
+              this.$message.error("书籍名称不能为空");
+              return;
+            }
+            if (!newBook.bookUrl) {
+              this.$message.error("书籍链接不能为空");
+              return;
+            }
+            if (!newBook.origin) {
+              this.$message.error("书籍来源不能为空");
+              return;
+            }
+            if (isAdd) {
+              const res = await this.$confirm(
+                "加入书架之后才能编辑书籍信息, 是否加入书架?",
+                "提示",
+                {
+                  confirmButtonText: "确定",
+                  cancelButtonText: "取消",
+                  type: "warning"
+                }
+              ).catch(() => {
+                return false;
+              });
+              if (!res) {
+                return;
+              }
+            }
+            this.saveBook(newBook, false, true).then(() => {
+              close();
+              if (onSuccess) {
+                onSuccess();
+              }
+            });
+          } catch (e) {
+            this.$message.error("书籍信息必须是JSON格式");
+          }
+        }
+      );
+    },
+    currentDateTime() {
+      const now = new Date();
+      const pad = a => (a < 10 ? "0" + a : a);
+      return (
+        now.getFullYear() +
+        pad(now.getMonth() + 1) +
+        pad(now.getDate()) +
+        "_" +
+        pad(now.getHours()) +
+        pad(now.getMinutes()) +
+        pad(now.getSeconds())
+      );
+    },
+    dateFormat(t) {
+      let time = new Date().getTime();
+      let int = parseInt((time - t) / 1000);
+      let str = "";
+
+      if (int <= 30) {
+        str = "刚刚";
+      } else if (int < 60) {
+        str = int + "秒前";
+      } else if (int < 3600) {
+        str = parseInt(int / 60) + "分钟前";
+      } else if (int < 86400) {
+        str = parseInt(int / 3600) + "小时前";
+      } else if (int < 2592000) {
+        str = parseInt(int / 86400) + "天前";
+      } else if (int < 31536000) {
+        str = parseInt(int / 2592000) + "月前";
+      } else {
+        str = parseInt(int / 31536000) + "年前";
+      }
+      return str;
+    },
+    backToShelf() {
+      this.isSearchResult = false;
+      this.isExploreResult = false;
+      this.searchResult = [];
+      this.loadingMore = false;
+    },
+    toogleNight() {
+      if (this.isNight) {
+        this.$store.commit("setNightTheme", false);
+      } else {
+        this.$store.commit("setNightTheme", true);
+      }
+    },
+    showSearchList(data) {
+      this.isSearchResult = true;
+      this.isExploreResult = true;
+      this.loadingMore = false;
+      this.searchResult = data;
+    },
+    loadMore() {
+      this.lastScrollTop = this.$refs.bookList.scrollTop;
+      if (this.isExploreResult) {
+        this.loadingMore = true;
+        this.$refs.popExplore.loadMore();
+      } else {
+        this.searchBook(this.searchPage + 1);
+      }
+    },
+    uploadBookSource() {
+      this.$refs.fileRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onSourceFileChange(event) {
+      const rawFile = event.target.files && event.target.files[0];
+      const reader = new FileReader();
+      const sourceTypeName = "书源";
+      reader.onload = e => {
+        const data = e.target.result;
+        try {
+          const sourceList = JSON.parse(data);
+          if (Array.isArray(sourceList) && sourceList.length) {
+            this.importSourceList = sourceList.map(v => {
+              if (v.headerMap) {
+                if (!v.header) {
+                  v.header =
+                    typeof v.headerMap === "string"
+                      ? v.headerMap
+                      : JSON.stringify(v.headerMap);
+                }
+                delete v.headerMap;
+              }
+              return v;
+            });
+            this.allowImportJs = false;
+            this.allowImportWebview = false;
+            this.checkedSourceIndex = [];
+            this.checkAll = false;
+            this.showImportSourceDialog = true;
+          } else {
+            this.$message.error(sourceTypeName + "文件错误");
+          }
+        } catch (error) {
+          this.$message.error(sourceTypeName + "文件错误");
+        }
+      };
+      reader.onerror = () => {
+        // FileReader 读取出错，只能上传读取了
+        let param = new FormData();
+        param.append("file", rawFile);
+        Axios.post(this.api + "/readSourceFile", param, {
+          headers: { "Content-Type": "multipart/form-data" }
+        }).then(
+          res => {
+            if (res.data.isSuccess) {
+              let sourceList = [];
+              res.data.data.forEach(v => {
+                try {
+                  const data = JSON.parse(v);
+                  if (Array.isArray(data)) {
+                    sourceList = sourceList.concat(data);
+                  }
+                } catch (error) {
+                  //
+                }
+              });
+              if (sourceList.length) {
+                this.importSourceList = sourceList.map(v => {
+                  if (v.headerMap) {
+                    if (!v.header) {
+                      v.header =
+                        typeof v.headerMap === "string"
+                          ? v.headerMap
+                          : JSON.stringify(v.headerMap);
+                    }
+                    delete v.headerMap;
+                  }
+                  return v;
+                });
+                this.allowImportJs = false;
+                this.allowImportWebview = false;
+                this.checkedSourceIndex = [];
+                this.checkAll = false;
+                this.showImportSourceDialog = true;
+              } else {
+                this.$message.error(sourceTypeName + "文件错误");
+              }
+            }
+          },
+          error => {
+            this.$message.error(
+              "读取" +
+                sourceTypeName +
+                "文件内容失败 " +
+                (error && error.toString())
+            );
+          }
+        );
+      };
+      reader.readAsText(rawFile);
+      this.$refs.fileRef.value = null;
+    },
+    async loadRemoteBookSource() {
+      const lastRemoteSourceUrl = getCache(
+        this.currentUserName + "@lastRemoteSourceUrl",
+        ""
+      );
+      const res = await this.$prompt("请输入远程书源链接", "导入远程书源文件", {
+        inputValue: lastRemoteSourceUrl || "",
+        confirmButtonText: "确定",
+        cancelButtonText: "取消"
+      }).catch(() => {
+        return false;
+      });
+      if (!res || !res.value) {
+        return;
+      }
+      Axios.post(this.api + "/readRemoteSourceFile", {
+        url: res.value
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            setCache(this.currentUserName + "@lastRemoteSourceUrl", res.value);
+            //
+            let sourceList = [];
+            res.data.data.forEach(v => {
+              try {
+                const data = JSON.parse(v);
+                if (Array.isArray(data)) {
+                  sourceList = sourceList.concat(data);
+                }
+              } catch (error) {
+                //
+              }
+            });
+            if (sourceList.length) {
+              this.importSourceList = sourceList;
+              this.allowImportJs = false;
+              this.allowImportWebview = false;
+              this.checkedSourceIndex = [];
+              this.checkAll = false;
+              this.showImportSourceDialog = true;
+            } else {
+              this.$message.error("远程书源文件错误");
+            }
+          }
+        },
+        error => {
+          this.$message.error(
+            "读取远程书源文件内容失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    isSourceJs(source) {
+      if (!source) return false;
+      const raw = typeof source === "string" ? source : JSON.stringify(source);
+      const lowerRaw = raw.toLowerCase();
+      return (
+        raw.indexOf("@js:") !== -1 ||
+        raw.indexOf("<js>") !== -1 ||
+        raw.indexOf("<+js>") !== -1 ||
+        lowerRaw.indexOf("javascript") !== -1
+      );
+    },
+    isSourceWebview(source) {
+      if (!source) return false;
+      const raw = typeof source === "string" ? source : JSON.stringify(source);
+      return raw.toLowerCase().indexOf("webview") !== -1;
+    },
+    isSourceDisabled(source) {
+      const isJs = this.isSourceJs(source);
+      const isWv = this.isSourceWebview(source);
+      if (isJs && !this.allowImportJs) return true;
+      if (isWv && !this.allowImportWebview) return true;
+      return false;
+    },
+    onImportTypeToggle() {
+      const currentSet = new Set(this.checkedSourceIndex);
+      this.importSourceList.forEach((v, i) => {
+        const isJs = this.isSourceJs(v);
+        const isWv = this.isSourceWebview(v);
+        if (isJs && !isWv) {
+          if (this.allowImportJs) currentSet.add(i);
+          else currentSet.delete(i);
+        } else if (isWv && !isJs) {
+          if (this.allowImportWebview) currentSet.add(i);
+          else currentSet.delete(i);
+        } else if (isJs && isWv) {
+          if (this.allowImportJs && this.allowImportWebview) currentSet.add(i);
+          else currentSet.delete(i);
+        }
+      });
+      this.checkedSourceIndex = Array.from(currentSet);
+      this.handleCheckedSourcesChange(this.checkedSourceIndex);
+    },
+    handleCheckAllChange(val) {
+      if (!val) {
+        this.checkedSourceIndex = [];
+        this.isIndeterminate = false;
+        return;
+      }
+      const newChecked = [];
+      let skippedCount = 0;
+      this.importSourceList.forEach((v, i) => {
+        if (this.isSourceDisabled(v)) {
+          skippedCount++;
+        } else {
+          newChecked.push(i);
+        }
+      });
+      this.checkedSourceIndex = newChecked;
+      if (skippedCount > 0) {
+        this.$message.info(
+          `已自动跳过未勾选支持类型的 ${skippedCount} 个书源（勾选上方 @javascript 或 支持webview 选项即可支持）`
+        );
+      }
+      this.isIndeterminate = false;
+    },
+    handleCheckedSourcesChange(value) {
+      let checkedCount = value.length;
+      let availableCount = this.importSourceList.filter(
+        v => !this.isSourceDisabled(v)
+      ).length;
+      this.checkAll = availableCount > 0 && checkedCount === availableCount;
+      this.isIndeterminate = checkedCount > 0 && checkedCount < availableCount;
+    },
+    getSourceTag(source) {
+      const tags = [];
+      if (this.isSourceJs(source)) {
+        tags.push("@javascript");
+      }
+      if (this.isSourceWebview(source)) {
+        tags.push("支持webview");
+      }
+      return tags.length ? "   [" + tags.join(" / ") + "]" : "";
+    },
+    saveSourceList() {
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
+        return;
+      }
+      if (!this.checkedSourceIndex.length) {
+        this.$message.error("请选择需要导入的源");
+        return;
+      }
+      const sourceList = this.checkedSourceIndex.map(
+        v => this.importSourceList[v]
+      );
+      Axios.post(this.api + "/saveBookSources", sourceList).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("导入书源成功");
+            this.loadBookSource(true);
+            this.showImportSourceDialog = false;
+            this.checkedSourceIndex = [];
+          }
+        },
+        error => {
+          this.$message.error("导入书源失败 " + (error && error.toString()));
+        }
+      );
+    },
+    isBookSourceSelectable(bookSource) {
+      const res = [];
+      (this.$store.state.shelfBooks || []).forEach(v => {
+        if (v.origin === bookSource.bookSourceUrl) {
+          res.push(v.name);
+        }
+      });
+      return !res.length;
+    },
+    showSourceBook(bookSource) {
+      const res = [];
+      (this.$store.state.shelfBooks || []).forEach(v => {
+        if (v.origin === bookSource.bookSourceUrl) {
+          res.push(v.name);
+        }
+      });
+      return res.join("\n");
+    },
+    getInvalidBookSources() {
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
+        return;
+      }
+      Axios.post(this.api + "/getInvalidBookSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            res.data.data.forEach(v => {
+              this.$store.commit("addFailureBookSource", {
+                bookSourceUrl: v.sourceUrl,
+                errorMsg: v.error
+              });
+            });
+          }
+        },
+        () => {
+          //
+        }
+      );
+    },
+    async checkBookSource() {
+      if (!this.checkBookSourceConfig.keyword) {
+        this.$message.error("请输入搜索关键词");
+        return;
+      }
+      this.isCheckingBookSource = true;
+      this.$store.commit("setFailureIncludeTimeout", true);
+      const limitFunc = LimitResquest(
+        this.checkBookSourceConfig.concurrent,
+        handler => {
+          this.checkBookSourceTip =
+            handler.requestCount + "/" + this.bookSourceList.length;
+          if (handler.isEnd()) {
+            this.isCheckingBookSource = false;
+            this.$store.commit("setFailureIncludeTimeout", false);
+          }
+        }
+      );
+      this.bookSourceList.forEach(v => {
+        limitFunc(() => {
+          return Axios.post(
+            this.api + "/searchBook",
+            {
+              key: this.checkBookSourceConfig.keyword,
+              bookSourceUrl: v.bookSourceUrl
+            },
+            {
+              timeout: this.checkBookSourceConfig.timeout,
+              silent: true
+            }
+          );
+        });
+      });
+    },
+    async deleteBookSourceList() {
+      if (!this.manageSourceSelection.length) {
+        this.$message.error("请选择需要删除的源");
+        return;
+      }
+      const res = await this.$confirm("确认要删除所选择的书源吗?", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(
+        this.api + "/deleteBookSources",
+        this.manageSourceSelection
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit(
+              "removeFailureBookSource",
+              this.manageSourceSelection
+            );
+            this.manageSourceSelection = [];
+            this.$message.success("删除书源成功");
+            this.loadBookSource(true);
+          }
+        },
+        error => {
+          this.$message.error("删除书源失败 " + (error && error.toString()));
+        }
+      );
+    },
+    toggleMenu() {
+      if (this.collapseMenu) {
+        this.showNavigation = !this.showNavigation;
+      }
+    },
+    showExplorePop() {
+      setTimeout(() => {
+        this.popExploreVisible = true;
+      }, 100);
+    },
+    showBookInfoDialog(book) {
+      eventBus.$emit("showBookInfoDialog", book);
+    },
+    async saveUserConfig() {
+      if (!window.localStorage) {
+        this.$message.error("当前终端不支持localStorage");
+        return;
+      }
+      const res = await this.$confirm(
+        "确认要备份当前终端的阅读配置、书架设置、搜索设置、自定义配置方案吗?",
+        "提示"
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      const userConfig = {};
+      ["config", "shelfConfig", "searchConfig", "customConfigList"].forEach(
+        key => {
+          const val = getCache(key);
+          if (val) {
+            userConfig[key] = val;
+          }
+        }
+      );
+      Axios.post(this.api + "/saveUserConfig", userConfig).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("备份成功");
+          }
+        },
+        error => {
+          this.$message.error("备份失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async restoreUserConfig() {
+      if (!window.localStorage) {
+        this.$message.error("当前终端不支持localStorage");
+        return;
+      }
+      const res = await this.$confirm(
+        "确认要从备份文件中恢复当前终端的阅读配置、书架设置、搜索设置、自定义配置方案吗?",
+        "提示"
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.get(this.api + "/getUserConfig").then(
+        res => {
+          if (res.data.isSuccess) {
+            for (const key in res.data.data) {
+              if (Object.hasOwnProperty.call(res.data.data, key)) {
+                setCache(key, res.data.data[key]);
+              }
+            }
+            this.$store.dispatch("syncFromLocalStorage");
+            this.$message.success("恢复成功");
+          }
+        },
+        error => {
+          this.$message.error("恢复失败 " + (error && error.toString()));
+        }
+      );
+    },
+    loadUserList() {
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
+        return;
+      }
+      Axios.get(this.api + "/getUserList").then(
+        res => {
+          if (res.data.isSuccess) {
+            this.userNS = this.$store.state.userInfo.username;
+            this.userList = res.data.data.map(v => ({
+              ...v,
+              userNS: v.username
+            }));
+            this.$store.commit("setIsManagerMode", true);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载用户空间失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    formatTableField(row, column, cellValue) {
+      switch (column.property) {
+        case "createdAt":
+        case "lastLoginAt":
+        case "lastModified":
+          return cellValue ? new Date(cellValue).format("yy-MM-dd hh:mm") : "";
+        case "size":
+          return row.isDirectory ? "" : formatSize(cellValue);
+        default:
+          return cellValue;
+      }
+    },
+    exitSecureMode() {
+      this.userNS = "default";
+      this.userList = [];
+      this.$store.commit("setIsManagerMode", false);
+      this.init(true);
+    },
+    async backupToWebdav() {
+      const res = await this.$confirm(
+        `确认要用当前书源和书架信息覆盖备份文件中的书源、书架和分组数据吗?`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/backupToWebdav").then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("备份成功");
+          }
+        },
+        error => {
+          this.$message.error("备份失败 " + (error && error.toString()));
+        }
+      );
+    },
+    handleTouchStart(e) {
+      this.lastTouch = false;
+      this.lastMoveX = false;
+      this.touchMoveTimes = 0;
+      // 边缘 20px 以内禁止触摸
+      if (
+        e.touches &&
+        e.touches[0] &&
+        e.touches[0].clientX > 20 &&
+        e.touches[0].clientX < window.innerWidth - 20 &&
+        e.touches[0].clientY > 20 &&
+        e.touches[0].clientY < window.innerHeight - 20
+      ) {
+        this.lastTouch = e.touches[0];
+      }
+    },
+    handleTouchMove(e) {
+      if (e.touches && e.touches[0] && this.lastTouch) {
+        if (this.collapseMenu) {
+          const moveX = e.touches[0].clientX - this.lastTouch.clientX;
+          const moveY = e.touches[0].clientY - this.lastTouch.clientY;
+          if (Math.abs(moveY) > Math.abs(moveX)) {
+            this.navigationStyle = {};
+            this.lastMoveX = 0;
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          if (!this.showNavigation && moveX > 0 && moveX <= 270) {
+            // 往右拉，打开目录
+            if (this.touchMoveTimes % 3 === 0) {
+              this.navigationStyle = {
+                marginLeft: moveX - 270 + "px"
+              };
+            }
+            this.lastMoveX = moveX;
+          } else if (this.showNavigation && moveX < 0 && moveX >= -270) {
+            // 往左拉，关闭目录
+            if (this.touchMoveTimes % 3 === 0) {
+              this.navigationStyle = {
+                marginLeft: moveX + "px"
+              };
+            }
+            this.lastMoveX = moveX;
+          }
+          this.touchMoveTimes++;
+        }
+      }
+    },
+    handleTouchEnd() {
+      if (this.collapseMenu) {
+        if (this.lastMoveX > 0) {
+          this.showNavigation = true;
+          this.navigationStyle = {};
+        } else if (this.lastMoveX < 0) {
+          this.showNavigation = false;
+          this.navigationStyle = {};
+        }
+      }
+    },
+    showFailureBookSource() {
+      this.getInvalidBookSources();
+      this.isShowFailureBookSource = true;
+      this.showBookSourceManageDialog = true;
+    },
+    debugBookSource() {
+      window.open(
+        window.location.origin +
+          window.location.pathname +
+          "bookSourceDebug/#domain=" +
+          this.api,
+        "_target"
+      );
+    },
+    setShowSourceGroup(group) {
+      if (this.showSourceGroup === group) {
+        this.showSourceGroup = "";
+      } else {
+        this.showSourceGroup = group;
+      }
+    },
+    importLocalBook() {
+      this.$refs.bookRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onBookFileChange(event) {
+      if (!event.target || !event.target.files || !event.target.files.length) {
+        return;
+      }
+      let param = new FormData();
+      for (let i = 0; i < event.target.files.length; i++) {
+        const file = event.target.files[i];
+        param.append("file" + i, file);
+      }
+      Axios.post(this.api + "/importBookPreview", param, {
+        headers: { "Content-Type": "multipart/form-data" }
+      }).then(
+        res => {
+          if (res.data.isSuccess && res.data.data.length) {
+            if (res.data.data.length > 1) {
+              // 批量导入
+              this.importMultiBooks(res.data.data);
+            } else {
+              //
+              this.importBookInfo = res.data.data[0].book;
+              this.importBookGroup = [];
+              this.importBookChapters = res.data.data[0].chapters;
+              this.showImportBookDialog = true;
+            }
+          }
+        },
+        error => {
+          this.$message.error("上传书籍 " + (error && error.toString()));
+        }
+      );
+      this.$refs.bookRef.value = null;
+    },
+    async importMultiBooks(books) {
+      if (!books || !books.length) {
+        return;
+      }
+      if (books.length == 1) {
+        this.importBookInfo = books[0].book;
+        this.importBookGroup = [];
+        this.importBookChapters = books[0].chapters;
+        this.showImportBookDialog = true;
+        return;
+      }
+      const res = await this.$confirm(
+        `你选择导入多本书籍，请选择导入方式?`,
+        "提示",
+        {
+          confirmButtonText: "批量导入",
+          cancelButtonText: "逐一确认导入",
+          type: "warning",
+          closeOnClickModal: false,
+          closeOnPressEscape: false,
+          distinguishCancelAndClose: true
+        }
+      ).catch(action => {
+        return action === "close" ? "close" : false;
+      });
+      if (res === "close") {
+        return;
+      }
+      if (res) {
+        const customImportBookInfo = await this.customImportBookInfo();
+        if (customImportBookInfo === false) {
+          return;
+        }
+        for (let i = 0; i < books.length; i++) {
+          const book = books[i];
+          await this.saveBook(
+            { ...book.book, ...customImportBookInfo },
+            true
+          ).catch(() => {});
+        }
+      } else {
+        for (let i = 0; i < books.length; i++) {
+          const book = books[i];
+          this.importMultiBookTip = `（${i + 1}/${books.length}）`;
+          await this.waitForImportBook(book);
+        }
+        this.importMultiBookTip = "";
+      }
+    },
+    waitForImportBook(bookInfo) {
+      return new Promise(resolve => {
+        this.importBookInfo = bookInfo.book;
+        this.importBookGroup = [];
+        this.importBookChapters = bookInfo.chapters;
+        this.showImportBookDialog = true;
+        this.$once("importEnd", resolve);
+      });
+    },
+    importBookDialogClosed() {
+      const url = this.importBookInfo.bookUrl;
+      this.importBookInfo = {};
+      this.importBookGroup = [];
+      this.importBookChapters = [];
+      this.importUsedTxtRule = "";
+      this.$nextTick(() => {
+        this.$emit("importEnd");
+      });
+
+      Axios.post(
+        this.api + "/deleteFile",
+        {
+          url
+        },
+        {
+          silent: true
+        }
+      ).then(
+        () => {
+          //
+        },
+        () => {
+          //
+        }
+      );
+    },
+    async customImportBookInfo(options) {
+      this.importBookGroup = [];
+      const res = await this.$msgbox({
+        title: "统一设置分组",
+        message: this.renderComp(),
+        showCancelButton: true,
+        confirmButtonText: "确定",
+        cancelButtonText: "取消导入",
+        ...(options || {})
+      }).catch(action => {
+        return action === "close" ? "close" : false;
+      });
+      if (res === "confirm") {
+        return {
+          group: this.importBookGroup.reduce((v, c) => v | c, 0)
+        };
+      } else {
+        return false;
+      }
+    },
+    renderComp() {
+      var bookGroupList = this.bookGroupSetList;
+      var shelf = this;
+      Vue.component("custComp", {
+        render() {
+          return (
+            <div style={{ textAlign: "center" }}>
+              <span>请选择分组：</span>
+              <el-select
+                size="mini"
+                vModel={this.importBookGroup}
+                ref="bookGroupSelect"
+                filterable={true}
+                multiple={true}
+                placeholder="未分组"
+                vOn:change={this.change}
+              >
+                {bookGroupList.map((bookGroup, index) => {
+                  return (
+                    <el-option
+                      key={"bookGroup-" + index}
+                      label={bookGroup.groupName}
+                      value={bookGroup.groupId}
+                    ></el-option>
+                  );
+                })}
+              </el-select>
+            </div>
+          );
+        },
+        data() {
+          return {
+            importBookGroup: []
+          };
+        },
+        methods: {
+          change() {
+            shelf.importBookGroup = this.importBookGroup;
+          }
+        }
+      });
+      var custComp = Vue.component("custComp");
+      return this.$createElement(custComp);
+    },
+    showBookManage() {
+      eventBus.$emit("showBookManageDialog");
+    },
+    showManageBookGroup() {
+      this.loadBookGroup(true);
+      eventBus.$emit("showBookGroupDialog", false);
+    },
+    getShowShelfBooks(bookGroup) {
+      // 处理特殊分组
+      if (bookGroup === -1) {
+        // 全部
+        return this.shelfBooks;
+      } else if (bookGroup === -2) {
+        // 本地
+        return this.shelfBooks.filter(v => v.origin === "loc_book");
+      } else if (bookGroup === -3) {
+        // 音频
+        return this.shelfBooks.filter(v => v.type === 1);
+      } else if (bookGroup === -4) {
+        // 未分组
+        return this.shelfBooks.filter(v => v.group === 0);
+      }
+
+      return this.shelfBooks.filter(v =>
+        bookGroup === 0 ? true : v.group & bookGroup
+      );
+    },
+    noop() {},
+    exportBookSource() {
+      Axios.get(this.api + "/getBookSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            const aEle = document.createElement("a");
+            const blob = new Blob([
+              JSON.stringify(res.data.data || [], null, 4)
+            ]);
+
+            aEle.download = "reader书源-" + this.currentDateTime() + ".json";
+            aEle.href = URL.createObjectURL(blob);
+            aEle.click();
+          }
+        },
+        error => {
+          this.$message.error("导出书源失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async deleteAllBookSource() {
+      const res = await this.$confirm(`确认要清空所有书源吗?`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteAllBookSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.$message.success("清空书源成功");
+            this.loadBookSource(true);
+          }
+        },
+        error => {
+          this.$message.error("清空书源失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async deleteBookSourceFile() {
+      const res = await this.$confirm(`确认要恢复默认书源吗?`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteBookSourcesFile").then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.$message.success("恢复默认书源成功");
+            this.loadBookSource(true);
+          }
+        },
+        error => {
+          this.$message.error("操作失败 " + (error && error.toString()));
+        }
+      );
+    },
+    editBookSource(bookSource) {
+      const editHandler = data => {
+        eventBus.$emit(
+          "showEditor",
+          "编辑书源",
+          JSON.stringify(data, null, 4),
+          (content, close) => {
+            try {
+              const source = JSON.parse(content);
+              if (!source.bookSourceName) {
+                this.$message.error("书源名称不能为空");
+                return;
+              }
+              if (!source.bookSourceUrl) {
+                this.$message.error("书源链接不能为空");
+                return;
+              }
+              Axios.post(this.api + "/saveBookSource", source).then(
+                res => {
+                  if (res.data.isSuccess) {
+                    //
+                    close();
+                    this.$message.success("保存书源成功");
+                    this.loadBookSource(true);
+                  }
+                },
+                error => {
+                  this.$message.error(
+                    "保存书源失败 " + (error && error.toString())
+                  );
+                }
+              );
+            } catch (e) {
+              this.$message.error("书源必须是JSON格式");
+            }
+          }
+        );
+      };
+      if (!bookSource) {
+        editHandler({
+          bookSourceComment: "",
+          bookSourceGroup: "",
+          bookSourceName: "新增书源",
+          bookSourceType: 0,
+          bookSourceUrl: "",
+          bookUrlPattern: "",
+          enabled: true,
+          enabledExplore: true,
+          exploreUrl: "",
+          ruleBookInfo: {},
+          ruleContent: {
+            content: ""
+          },
+          ruleExplore: {},
+          ruleSearch: {
+            author: "",
+            bookList: "",
+            bookUrl: "",
+            coverUrl: "",
+            intro: "",
+            kind: "",
+            lastChapter: "",
+            name: ""
+          },
+          ruleToc: {
+            chapterList: "",
+            chapterName: "",
+            chapterUrl: ""
+          },
+          searchUrl: ""
+        });
+        return;
+      }
+      Axios.post(this.api + "/getBookSource", {
+        bookSourceUrl: bookSource.bookSourceUrl
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            editHandler(res.data.data);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载书源信息失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    updateForce() {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then(async function(registrations) {
+            /* eslint-disable-next-line no-console */
+            console.log("registrations", registrations);
+            for (let i = 0; i < registrations.length; i++) {
+              await registrations[i].update();
+            }
+
+            /* eslint-disable-next-line no-console */
+            console.log("Try to clear home cache");
+            navigator.serviceWorker.controller &&
+              navigator.serviceWorker.controller.postMessage({
+                type: "CLEAR_HOME_CACHE"
+              });
+
+            /* eslint-disable-next-line no-console */
+            console.log("Try to skip waiting");
+            navigator.serviceWorker.controller &&
+              navigator.serviceWorker.controller.postMessage({
+                type: "SKIP_WAITING"
+              });
+
+            setTimeout(() => {
+              /* eslint-disable-next-line no-console */
+              console.log("Try to reload force");
+              window.location.reload(true);
+            }, 50);
+          });
+      }
+    },
+    async scanCacheStorage() {
+      this.localCacheStats = {
+        total: (await this.analyseLocalStorage()).totalBytes,
+        bookSourceList: (await this.analyseLocalStorage("bookSourceList"))
+          .totalBytes,
+        chapterList: (await this.analyseLocalStorage("chapterList")).totalBytes,
+        chapterContent: (await this.analyseLocalStorage("chapterContent"))
+          .totalBytes
+      };
+    },
+    analyseLocalStorage(match) {
+      let totalBytes = 0;
+      let cacheBytes = 0;
+      return window.$cacheStorage
+        .iterate(function(value, key) {
+          if (!match || key.indexOf(match) >= 0) {
+            totalBytes += JSON.stringify(value).getBytesLength();
+            if (key.startsWith("localCache@")) {
+              cacheBytes += JSON.stringify(value).getBytesLength();
+            }
+          }
+        })
+        .then(() => {
+          return {
+            totalBytes: formatSize(totalBytes),
+            cacheBytes: formatSize(cacheBytes)
+          };
+        })
+        .catch(function() {
+          // 当出错时，此处代码运行
+          // console.log(err);
+        });
+    },
+    clearCache(match) {
+      let cacheBytes = 0;
+      window.$cacheStorage
+        .iterate(function(value, key) {
+          if (!match || key.indexOf(match) >= 0) {
+            if (key.startsWith("localCache@")) {
+              cacheBytes += JSON.stringify(value).getBytesLength();
+              window.$cacheStorage.removeItem(key);
+            }
+          }
+        })
+        .then(() => {
+          this.scanCacheStorage();
+
+          return {
+            cacheBytes: formatSize(cacheBytes)
+          };
+        })
+        .catch(function() {
+          // 当出错时，此处代码运行
+          // console.log(err);
+        });
+    },
+    scrollHandler() {
+      this.lastScrollTop = this.$refs.bookList.scrollTop;
+    },
+    getBookCoverUrl(book) {
+      return book.customCoverUrl || book.coverUrl;
+    },
+    handleAdminMenuCommand(command) {
+      if (command === "admin") {
+        this.$router.push("/admin");
+      } else if (command === "changePassword") {
+        this.promptChangePassword();
+      } else if (command === "logout") {
+        this.logoutConfirm();
+      }
+    },
+    handleUserMenuCommand(command) {
+      if (command === "admin") {
+        this.$router.push("/admin");
+      } else if (command === "changePassword") {
+        this.promptChangePassword();
+      } else if (command === "logout") {
+        this.logoutConfirm();
+      }
+    },
+    promptChangePassword() {
+      this.$prompt("请输入新密码 (不少于4位):", "修改当前用户密码", {
+        confirmButtonText: "确定修改",
+        cancelButtonText: "取消",
+        inputType: "password",
+        inputPattern: /^.{4,}$/,
+        inputErrorMessage: "密码不能少于4位"
+      })
+        .then(({ value }) => {
+          Axios.post(this.api + "/resetPassword", {
+            username: this.$store.state.userInfo.username,
+            password: value
+          }).then(res => {
+            if (res.data.isSuccess) {
+              this.$message.success("密码修改成功，请重新登录");
+              this.logout(true);
+            } else {
+              this.$message.error(res.data.errorMsg || "密码修改失败");
+            }
+          });
+        })
+        .catch(() => {});
+    },
+    logoutConfirm() {
+      this.$confirm("确定要退出登录吗？", "提示", {
+        confirmButtonText: "确定退出",
+        cancelButtonText: "取消",
+        type: "warning"
+      })
+        .then(() => {
+          this.logout(true);
+        })
+        .catch(() => {});
+    },
+    logout(reload = true) {
+      Axios.post(this.api + "/logout").finally(() => {
+        this.$store.commit("setToken", "");
+        this.$store.commit("setUserInfo", {});
+        if (reload) {
+          window.location.reload(true);
+        }
+      });
+    },
+    getChapterListByRule() {
+      return Axios.post("/getChapterListByRule", this.importBookInfo).then(
+        res => {
+          if (res.data.isSuccess && res.data.data.book) {
+            this.importBookInfo = res.data.data.book;
+            this.importBookChapters = res.data.data.chapters;
+          }
+        },
+        error => {
+          this.$message.error("注销失败 " + (error && error.toString()));
+        }
+      );
+    },
+    showUserManageDialog() {
+      eventBus.$emit("showUserManageDialog");
+    },
+    showMPCode() {
+      eventBus.$emit("showMPCodeDialog");
+    },
+    joinTGChannel() {
+      window.open("https://t.me/facker_channel", "_target");
+    },
+    ensureLoadBookCover() {
+      // 手动触发滚动事件，显示书籍封面图片
+      this.$refs.bookList.dispatchEvent(new MouseEvent("scroll"));
+
+      // 上面一步应该能搞定，下面再确认一下
+      this.$refs.bookCoverList.forEach(v => {
+        if (!v.show && isInContainer(v.$el, this.$refs.bookList)) {
+          // console.log("not show ", v);
+          v.show = true;
+        }
+      });
+    }
+  },
+  computed: {
+    ...mapGetters([
+      "collapseMenu",
+      "dialogWidth",
+      "dialogSmallWidth",
+      "dialogTop",
+      "dialogContentHeight",
+      "popupWidth"
+    ]),
+    config() {
+      return this.$store.getters.config;
+    },
+    isNight() {
+      return this.$store.getters.isNight;
+    },
+    themeColor() {
+      if (this.$store.getters.isNight) {
+        return {
+          background: "#f7f7f7"
+        };
+      } else {
+        return {
+          background: "#222"
+        };
+      }
+    },
+    bookList() {
+      return this.isSearchResult ? this.searchResult : this.showShelfBooks;
+    },
+    bookCoverList() {
+      return this.bookList
+        .filter(v => this.getBookCoverUrl(v))
+        .map(v => this.getCover(this.getBookCoverUrl(v), true));
+    },
+    shelfBooks() {
+      return this.$store.getters.shelfBooks;
+    },
+    showShelfBooks() {
+      return this.getShowShelfBooks(this.showBookGroup);
+    },
+    searchResultMap() {
+      return this.searchResult.reduce((c, v) => {
+        c[v.bookUrl] = v;
+        return c;
+      }, {});
+    },
+    connectStatus() {
+      return this.$store.state.connected
+        ? `后端已连接`
+        : this.connecting
+        ? "正在连接后端服务器……"
+        : "点击设置后端接口前缀";
+    },
+    connectType() {
+      return this.$store.state.connected ? "success" : "danger";
+    },
+    importJsCount() {
+      if (!this.importSourceList) return 0;
+      return this.importSourceList.filter(v => this.isSourceJs(v)).length;
+    },
+    importWebviewCount() {
+      if (!this.importSourceList) return 0;
+      return this.importSourceList.filter(v => this.isSourceWebview(v)).length;
+    },
+    readingRecent() {
+      return this.$store.getters.readingBook &&
+        this.$store.getters.readingBook.name
+        ? this.$store.getters.readingBook
+        : {
+            name: "尚无阅读记录",
+            bookUrl: "",
+            index: 0
+          };
+    },
+    loginAuth() {
+      return this.$store.state.loginAuth;
+    },
+    bookSourceList() {
+      return this.$store.state.bookSourceList;
+    },
+    userNS: {
+      get() {
+        return this.$store.state.userNS;
+      },
+      set(val) {
+        this.$store.commit("setUserNS", val);
+        if (val) {
+          this.$store.commit("setIsManagerMode", true);
+        }
+      }
+    },
+    userList: {
+      get() {
+        return this.$store.state.userList;
+      },
+      set(val) {
+        this.$store.commit("setUserList", val);
+      }
+    },
+    bookSourceShowList() {
+      return this.isShowFailureBookSource
+        ? this.$store.state.failureBookSource
+        : this.bookSourceList;
+    },
+    bookSourceGroupList() {
+      return this.$store.getters.bookSourceGroupList;
+    },
+    bookSourceShowGroup() {
+      if (!this.isShowFailureBookSource) {
+        const groups = new Set();
+        this.bookSourceShowList.forEach(v => {
+          v.bookSourceGroup && groups.add(v.bookSourceGroup);
+        });
+        groups.add("@javascript");
+        groups.add("支持webview");
+        groups.add("普通格式");
+        groups.add("未分组");
+        return Array.from(groups);
+      } else {
+        return [].concat(errorTypeList).concat(["timeout"]);
+      }
+    },
+    bookSourceShowLength() {
+      return this.bookSourceShowResult.length;
+    },
+    bookSourceShowResult() {
+      if (!this.showSourceGroup) {
+        return this.bookSourceShowList;
+      }
+      if (this.isShowFailureBookSource) {
+        return this.bookSourceShowList.filter(v =>
+          this.showSourceGroup
+            ? v.errorMsg.indexOf(this.showSourceGroup) >= 0
+            : true
+        );
+      } else {
+        return this.bookSourceShowList.filter(v => {
+          const raw = JSON.stringify(v);
+          const lowerRaw = raw.toLowerCase();
+          const isJs =
+            raw.includes("@js:") ||
+            raw.includes("<js>") ||
+            raw.includes("<+js>") ||
+            lowerRaw.includes("javascript");
+          const isWebView = lowerRaw.includes("webview");
+          if (this.showSourceGroup === "@javascript") {
+            return isJs;
+          }
+          if (this.showSourceGroup === "支持webview") {
+            return isWebView;
+          }
+          if (this.showSourceGroup === "普通格式") {
+            return !isJs && !isWebView;
+          }
+          if (this.showSourceGroup === "未分组") {
+            return !v.bookSourceGroup;
+          }
+          return v.bookSourceGroup === this.showSourceGroup;
+        });
+      }
+    },
+    bookSourceShowResultPageList() {
+      const start =
+        (this.bookSourcePagination.page - 1) * this.bookSourcePagination.size;
+      if (start > this.bookSourceShowResult.length) {
+        return [];
+      }
+      return this.bookSourceShowResult.slice(
+        start,
+        Math.min(
+          start + this.bookSourcePagination.size,
+          this.bookSourceShowResult.length
+        )
+      );
+    },
+    showBookGroup: {
+      get() {
+        if (!this.bookGroupDisplayList.length) return -1;
+        return this.$store.state.shelfConfig.showBookGroup;
+      },
+      set(val) {
+        this.$store.commit("setShelfConfig", {
+          ...this.$store.state.shelfConfig,
+          showBookGroup: val
+        });
+      }
+    },
+    showBookGroupString: {
+      get() {
+        return "" + this.showBookGroup;
+      },
+      set(val) {
+        this.showBookGroup = +val;
+      }
+    },
+    bookGroupSetList() {
+      return this.$store.state.bookGroupList.filter(v => v.groupId > 0);
+    },
+    bookGroupDisplayList() {
+      return this.$store.state.bookGroupList
+        .filter(v => this.getShowShelfBooks(v.groupId).length && v.show)
+        .sort((a, b) => a.order - b.order);
+    },
+    searchConfig: {
+      get() {
+        return this.$store.state.searchConfig;
+      },
+      set(val) {
+        this.$store.commit("setSearchConfig", val);
+      }
+    },
+    isShowTocRule() {
+      try {
+        return (
+          this.importBookInfo &&
+          this.importBookInfo.originName &&
+          (this.importBookInfo.originName.toLowerCase().endsWith(".txt") ||
+            this.importBookInfo.originName.toLowerCase().endsWith(".epub"))
+        );
+      } catch (e) {
+        // console.log(e);
+      }
+      return false;
+    },
+    tocRuleList() {
+      if (!this.importBookInfo || !this.importBookInfo.originName) {
+        return [];
+      }
+      if (this.importBookInfo.originName.toLowerCase().endsWith(".txt")) {
+        // txt
+        return this.$store.state.txtTocRules;
+      } else {
+        // epub
+        return [
+          { name: "根据 Spin 获取章节，使用 Toc 补充章节名", rule: "spin+toc" },
+          { name: "根据 Spin 获取章节，强制使用 Toc 章节名", rule: "spin<toc" },
+          { name: "根据 Spin 获取章节", rule: "spin" },
+          { name: "根据 Toc 获取章节，使用 Spin 补充章节名", rule: "toc+spin" },
+          { name: "根据 Toc 获取章节，强制使用 Spin 章节名", rule: "toc<spin" },
+          { name: "根据 Toc 获取章节", rule: "toc" }
+        ];
+      }
+    }
+  }
+};
+</script>
+
+<style lang="stylus" scoped>
+.index-wrapper {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+
+  .navigation-wrapper {
+    width: 260px;
+    min-width: 260px;
+    height: 100%;
+    box-sizing: border-box;
+    background-color: #F7F7F7;
+    position: relative;
+    padding-top: 0;
+    padding-top: constant(safe-area-inset-top) !important;
+    padding-top: env(safe-area-inset-top) !important;
+
+    .navigation-inner-wrapper {
+      padding: 48px 36px 66px 36px;
+      height: 100%;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+
+    .navigation-title {
+      font-size: 24px;
+      font-weight: 600;
+      font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
+
+      .version-text {
+        float: right;
+        font-size: 14px;
+        line-height: 33px;
+        font-weight: 400;
+        color: #b1b1b1;
+        display: inline-block;
+        cursor: pointer;
+      }
+    }
+
+    .navigation-sub-title {
+      font-size: 16px;
+      font-weight: 500;
+      font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
+      margin-top: 16px;
+      color: #b1b1b1;
+    }
+
+    .search-wrapper {
+      .search-input {
+        border-radius: 50%;
+        margin-top: 24px;
+
+        >>> .el-input__inner {
+          border-radius: 50px;
+          border-color: #E3E3E3;
+        }
+      }
+    }
+
+    .recent-wrapper {
+      margin-top: 36px;
+
+      .recent-title {
+        font-size: 14px;
+        color: #b1b1b1;
+        font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
+      }
+
+      .reading-recent {
+        margin: 18px 0;
+
+        .recent-book {
+          cursor: pointer;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+    }
+
+    .setting-wrapper {
+      margin-top: 36px;
+
+      .setting-title {
+        font-size: 14px;
+        color: #b1b1b1;
+        font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
+
+        .right-text {
+          float: right;
+          display: inline-block;
+          height: 20px;
+          line-height: 20px;
+          cursor: pointer;
+          user-select: none;
+        }
+      }
+
+      .no-point {
+        pointer-events: none;
+      }
+
+      .setting-connect {
+        cursor: pointer;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .setting-item {
+        padding-top: 16px;
+      }
+
+      .setting-btn {
+        margin-right: 15px;
+        margin-bottom: 15px;
+        cursor: pointer;
+      }
+
+      .setting-select {
+        width: 100%;
+      }
+    }
+
+    .search-setting {
+      margin-top: 28px;
+    }
+
+    .bottom-icons {
+      position: absolute;
+      bottom: 30px;
+      width: 188px;
+      left: 36px;
+      align-items: center;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      pointer-events: none;
+
+      .bottom-icon {
+        height: 36px;
+        pointer-events: all;
+        img {
+          width: 36px;
+          height: 36px;
+        }
+      }
+
+      .theme-item {
+        line-height: 32px;
+        width: 36px;
+        height: 36px;
+        border-radius: 100%;
+        display: inline-block;
+        cursor: pointer;
+        text-align: center;
+        vertical-align: middle;
+        pointer-events: all;
+
+        .el-icon-moon {
+          color: #f7f7f7;
+          line-height: 34px;
+        }
+        .el-icon-sunny {
+          color: #121212;
+          line-height: 34px;
+        }
+      }
+    }
+
+    .setting-wrapper:nth-last-child(1) {
+      padding-bottom: 20px;
+    }
+  }
+
+  .shelf-wrapper {
+    padding: 48px 48px;
+    height: 100%;
+    max-height: 100%;
+    width: 100%;
+    background-color: #fff;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+
+    .shelf-title {
+      font-size: 20px;
+      font-weight: 600;
+      font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
+      margin-bottom: 5px;
+      min-width: 320px;
+      box-sizing: border-box;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .shelf-title-left {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .shelf-title-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .el-icon-menu {
+        cursor: pointer;
+      }
+
+      .title-btn {
+        font-size: 14px;
+        line-height: 28px;
+        float: none;
+        cursor: pointer;
+        user-select: none;
+        margin-left: 0;
+        display: inline-flex;
+        align-items: center;
+
+        >>>.el-icon-loading {
+          font-size: 16px;
+        }
+      }
+
+      .title-btn-dropdown {
+        display: inline-flex;
+        align-items: center;
+      }
+    }
+
+    >>>.el-icon-loading {
+      font-size: 36px;
+      color: #B5B5B5;
+    }
+
+    >>>.el-loading-text {
+      font-weight: 500;
+      color: #B5B5B5;
+    }
+
+    .book-group-wrapper {
+      padding: 5px 0;
+      margin-bottom: 10px;
+
+      .book-group-tabs {
+        width: 100%;
+      }
+
+      .book-group-btn {
+        margin-right: 10px;
+        cursor: pointer;
+      }
+
+      .book-group-btn.selected {
+        color: #fff;
+        background: #409EFF;
+        border-color: #409EFF;
+      }
+    }
+
+    .books-wrapper {
+      flex: 1;
+      overflow-x: hidden;
+      overflow-y: scroll;
+
+      .wrapper {
+        display: grid ;
+        grid-template-columns: repeat(auto-fill, 380px);
+        justify-content: space-around;
+        grid-gap: 10px;
+
+        .book {
+          user-select: none;
+          display: flex;
+          cursor: pointer;
+          margin-bottom: 18px;
+          padding: 24px 24px;
+          width: 360px;
+          flex-direction: row;
+          justify-content: space-around;
+
+          .cover-img {
+            width: 84px;
+            height: 112px;
+
+            .cover {
+              width: 84px;
+              height: 112px;
+            }
+          }
+
+          .info {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: left;
+            height: 112px;
+            margin-left: 20px;
+            flex: 1;
+
+            .book-operation {
+              position: absolute;
+              right: 5px;
+              top: 0px;
+              font-size: 24px;
+              color: #969ba3;
+
+              i {
+                margin-left: 10px;
+              }
+            }
+
+            .name {
+              width: fit-content;
+              font-size: 16px;
+              font-weight: 700;
+              color: #33373D;
+              margin-right: 38px;
+              max-height: 45px;
+              word-wrap: break-word;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              display: -webkit-box;
+              -webkit-box-orient: vertical;
+              -webkit-line-clamp: 2;
+            }
+
+            .name.edit {
+              margin-right: 62px;
+            }
+
+            .sub {
+              display: flex;
+              flex-direction: row;
+              font-size: 12px;
+              font-weight: 600;
+              color: #969ba3;
+
+              .dot {
+                margin: 0 7px;
+              }
+            }
+
+            .intro, .dur-chapter, .last-chapter {
+              color: #6b6b6b;
+              font-size: 13px;
+              margin-top: 3px;
+              font-weight: 500;
+              word-wrap: break-word;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              display: -webkit-box;
+              -webkit-box-orient: vertical;
+              -webkit-line-clamp: 1;
+              text-align: left;
+            }
+          }
+        }
+      }
+
+      .wrapper:last-child {
+        margin-right: auto;
+      }
+    }
+
+    .books-wrapper::-webkit-scrollbar {
+      width: 0 !important;
+    }
+  }
+}
+
+.unread-num-badge {
+  >>>.el-badge__content {
+    border: none;
+  }
+}
+
+.night {
+  >>>.navigation-wrapper {
+    background-color: #121212;
+    border-right: 1px solid #555;
+  }
+  >>>.navigation-title {
+    color: #bbb;
+  }
+  >>>.shelf-title {
+    color: #bbb;
+  }
+  >>>.shelf-wrapper {
+    background-color: #222;
+  }
+  >>>.el-input__inner {
+    background-color: #444;
+    border: 1px solid #444 !important;
+    color: #aaa;
+  }
+  .book .info .name {
+    color: #bbb !important;
+  }
+  .book .info .book-operation {
+    color: #6b6b6b !important;
+  }
+  .book .info .sub {
+    color: #6b6b6b !important;
+  }
+  .book .info .intro, .book .info .dur-chapter, .book .info .last-chapter {
+    color: #969ba3 !important;
+  }
+
+  >>>.check-tip {
+    color: #bbb;
+  }
+}
+
+.source-container {
+  // max-height: 400px;
+  // overflow-y: auto;
+  padding: 0 10px;
+
+  &.table-container {
+    padding: 0;
+  }
+
+  .check-form {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    align-items: center;
+
+    .check-form-label {
+      min-width: 60px;
+    }
+
+    .el-input {
+      width: auto;
+      min-width: 100px;
+      margin-right: 10px;
+    }
+
+    .el-input-number {
+      min-width: 130px;
+      margin-right: 10px;
+    }
+
+    .book-cover {
+      width: 84px;
+      height: 112px;
+
+      .cover {
+        width: 84px;
+        height: 112px;
+      }
+    }
+
+    .book-info {
+      display: flex;
+      flex-direction: column;
+      margin-left: 30px;
+      justify-content: space-between;
+      min-height: 100px;
+
+      .toc-refresh-btn {
+        margin-left: 5px;
+      }
+
+      span {
+        display: inline-block;
+        min-width: 56px;
+        text-align-last: justify;
+      }
+      .el-input {
+        width: auto;
+        min-width: 100px;
+        margin-right: 10px;
+      }
+      .el-input-number {
+        min-width: 130px;
+        margin-right: 10px;
+      }
+    }
+  }
+
+  .chapter-title {
+    font-size: 15px;
+    padding: 5px 0;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+
+  .chapter-list {
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 0 5px;
+
+    p {
+      margin-top: 0.4em;
+      margin-bottom: 0.4em;
+    }
+  }
+
+  .source-group-wrapper {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 5px 0;
+
+    .source-group-btn {
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    .source-group-btn.selected {
+      color: #fff;
+      background: #409EFF;
+      border-color: #409EFF;
+    }
+  }
+
+  .el-pagination {
+    margin-top: 8px;
+    float: right;
+    max-width: 100%;
+    overflow-x: auto;
+    box-sizing: border-box;
+  }
+
+  >>>.source-checkbox {
+    display: block;
+    padding: 8px 0;
+    width: 100%;
+  }
+
+  pre {
+    margin: 0;
+  }
+
+  .source-pagination::after {
+    display: table;
+    content: "";
+    clear: both;
+  }
+}
+
+.source-list-container {
+  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px - 66px);
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.night {
+  .source-container {
+    .source-group-wrapper {
+      .source-group-btn.selected {
+        color: #fff;
+        background: #185798;
+        border-color: #185798;
+      }
+    }
+  }
+  .book-group-wrapper {
+    .book-group-btn.selected {
+      color: #fff;
+      background: #185798 !important;
+      border-color: #185798 !important;
+    }
+  }
+}
+
+.source-container::-webkit-scrollbar {
+  width: 0 !important;
+}
+.navigation-inner-wrapper::-webkit-scrollbar {
+  width: 0 !important;
+}
+>>> .el-table__body-wrapper::-webkit-scrollbar {
+  width: 0 !important;
+}
+>>> .el-dialog__wrapper::-webkit-scrollbar {
+  width: 0 !important;
+}
+@media screen and (max-width: 750px) {
+  .index-wrapper {
+    overflow-x: hidden;
+
+    >>>.navigation-wrapper {
+      .navigation-inner-wrapper {
+        padding: 20px 36px 66px 36px;
+      }
+    }
+    >>>.shelf-wrapper {
+      padding: 0;
+      padding-top: constant(safe-area-inset-top) !important;
+      padding-top: env(safe-area-inset-top) !important;
+
+      .shelf-title {
+        padding: 20px 24px 0 24px;
+      }
+
+      .book-group-wrapper {
+        margin-left: 24px;
+        margin-right: 24px;
+      }
+
+      .books-wrapper {
+        .wrapper {
+          display: flex;
+          flex-direction: column;
+
+          .book {
+            box-sizing: border-box;
+            width: 100%;
+            margin-bottom: 0;
+            padding: 10px 20px;
+          }
+        }
+      }
+    }
+  }
+  .source-list-container  {
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px - 66px);
+  }
+}
+@media screen and (max-width: 480px) {
+  .source-container.table-container {
+    margin: -15px -5px;
+  }
+}
+</style>
+<style>
+.navigation-hidden {
+  margin-left: -260px;
+}
+.navigation-in {
+  margin-left: 0px;
+  transition: margin-left 0.3s;
+}
+.navigation-out {
+  margin-left: -260px;
+  transition: margin-left 0.3s;
+}
+.popper-intro {
+  padding: 15px;
+}
+.book-kind span {
+  display: inline-block;
+  margin-left: 5px;
+  margin-right: 5px;
+}
+.night-theme .popper-intro {
+  background: #121212;
+  color: #bbb !important;
+  border: none;
+}
+.night-theme .popper-intro.el-popper[x-placement^="bottom"] .popper__arrow,
+.night-theme
+  .popper-intro.el-popper[x-placement^="bottom"]
+  .popper__arrow::after {
+  border-bottom-color: #121212 !important;
+}
+.night-theme .popper-intro.el-popper[x-placement^="top"] .popper__arrow,
+.night-theme .popper-intro.el-popper[x-placement^="top"] .popper__arrow::after {
+  border-top-color: #121212 !important;
+}
+.night-theme .el-popover__title {
+  color: #ddd !important;
+}
+.status-bar-light-bg {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0,
+    transparent 36px
+  ) !important;
+}
+.status-bar-light-bg-dialog .el-dialog.is-fullscreen {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0,
+    transparent 36px
+  ) !important;
+}
+@media (hover: hover) {
+  .book:hover {
+    background: rgba(0, 0, 0, 0.1);
+    transition-duration: 0.5s;
+  }
+  .el-icon-close:hover {
+    color: #409eff;
+  }
+  .el-icon-edit:hover {
+    color: #409eff;
+  }
+}
+
+.mini-interface .el-dialog__body {
+  padding: 15px 20px;
+}
+.book-group-tabs .el-tabs__header {
+  margin-bottom: 0px;
+}
+.search-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  color: #64748b;
+  font-size: 32px;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+.cover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.cover-card {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: center;
+  transition: all 0.2s ease;
+  background: #f8fafc;
+  padding: 4px;
+
+  &:hover {
+    border-color: #409eff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
+  &.active {
+    border-color: #67c23a;
+    background: rgba(103, 194, 58, 0.08);
+  }
+  .cover-img {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+  }
+  .cover-source-tag {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+</style>

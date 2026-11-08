@@ -32,7 +32,18 @@
      - 用户点击加入书架后，后台低并发（2线程）静默并发搜索最多10个备用源并自动终止。
   7. **书籍封面在线替换**：
      - 书架管理与书籍编辑均支持在线拉取各书源封面并实时替换，支持输入自定义封面 URL。
-  8. **GitHub Actions 自动化集成**：
+  8. **控制台 404 故障根因与彻底修复**：
+     - **根因**：`Admin.vue` 中定义了私有的 `api() { return this.$store.state.api || "/reader3"; }`，而 Vuex 中 `state.api` 默认为 `location.host + "/reader3"`（无 `//` 协议头）。在缺少协议头时，浏览器将 Axios 请求处理为当前页面的相对路径，拼接成 `http://192.168.0.30:8080/192.168.0.30:8080/reader3/...`，导致“系统运行异常记录 (`/getInvalidBookSources`)”、“添加用户 (`/addUser`)”、“诊断运行日志 (`/getSystemLogs`)”全部触发 404。
+     - **修复**：将 `Admin.vue` 的 `api()` 计算属性统一调整为 `return this.$store.getters.api`，自动补充协议头 `//`，彻底恢复所有管理端接口正常调用。
+  9. **强制登录与彻底关闭游客模式**：
+     - 前端 `App.vue` 将 `canCancelLogin` 严格绑定为当前用户登录状态（`!!userInfo.username`），未登录状态下严禁关闭登录界面。
+     - 彻底移除 `Login.vue` 中的“游客体验 / 直接进入书架”按钮与 `reader_guest_mode` 免登录分支，所有用户必须验证登录才可访问书架与阅读功能。
+  10. **书籍封面“重新拉取”实时多源扫描**：
+     - 重构 `BookManage.vue`、`Index.vue` 与 `Admin.vue` 中的 `fetchBookCovers` 方法，不再仅依赖本地缓存的 `getAvailableBookSource`（无缓存时返回空数组），而是启动 `searchBookSourceSSE` 实时通过全网可用书源流式并发拉取高清封面，并在前端统一规范为 `{ url, coverUrl, sourceName, originName }` 数据模型。
+  11. **搜索后换源强校验先加书架**：
+     - 恢复经典防呆逻辑：搜索完书籍直接阅读时，若要进行换源操作，必须先通过 `isInShelf` 弹出确认提示加入书架。
+     - 强化 `App.vue` 的 `isInShelf` 流程：在用户确认后，先请求 `/saveBook`，成功后自动刷新 Vuex 书架状态，再继续执行换源并清除临时搜索路由参数；若用户取消加入书架，则立即终止换源。
+  12. **GitHub Actions 自动化集成**：
      - `.github/workflows/docker-publish.yml` 新增 `dev` 分支触发支持，直接推送即可在云端触发全自动多架构编译与镜像发布。
 
 ---
