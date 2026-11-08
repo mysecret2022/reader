@@ -2283,14 +2283,86 @@ export default {
       ];
       let localVoices = [];
       if (window.speechSynthesis && window.speechSynthesis.getVoices) {
-        localVoices = window.speechSynthesis.getVoices().map(v => ({
-          name: v.name + " (系统本地)",
-          nativeVoice: v,
-          isEdge: false,
-          lang: v.lang
-        }));
+        // 本地系统语音仅保留：中文普通话、粤语、英语各精选语音，其他外语一概过滤
+        const allVoices = window.speechSynthesis.getVoices();
+        const filtered = allVoices.filter(v => {
+          const l = (v.lang || "").toLowerCase();
+          // 中文普通话/国语
+          if (
+            l.startsWith("zh-cn") ||
+            l.startsWith("zh_cn") ||
+            l === "zh" ||
+            l.startsWith("zh-hans")
+          )
+            return true;
+          // 粤语 (香港/广东)
+          if (
+            l.startsWith("zh-hk") ||
+            l.startsWith("zh_hk") ||
+            l.startsWith("zh-yue") ||
+            l.startsWith("yue")
+          )
+            return true;
+          // 英语 (精选美式或英式)
+          if (
+            l.startsWith("en-us") ||
+            l.startsWith("en_us") ||
+            l.startsWith("en-gb") ||
+            l.startsWith("en_gb") ||
+            l === "en"
+          )
+            return true;
+          return false;
+        });
+
+        // 细分归类：中文优先、粤语次之、英语其后
+        const zhList = [];
+        const yueList = [];
+        const enList = [];
+        filtered.forEach(v => {
+          const l = (v.lang || "").toLowerCase();
+          if (
+            l.startsWith("zh-hk") ||
+            l.startsWith("zh_hk") ||
+            l.startsWith("zh-yue") ||
+            l.startsWith("yue")
+          ) {
+            yueList.push(v);
+          } else if (l.startsWith("en")) {
+            enList.push(v);
+          } else {
+            zhList.push(v);
+          }
+        });
+
+        // 合并精选本地语音 (英语只保留前1~2个代表语音，避免英文语音占满)
+        const selectedLocal = [...zhList, ...yueList, ...enList.slice(0, 2)];
+        localVoices = selectedLocal.map(v => {
+          let label = v.name;
+          const l = (v.lang || "").toLowerCase();
+          if (
+            l.startsWith("zh-hk") ||
+            l.startsWith("zh_hk") ||
+            l.startsWith("zh-yue") ||
+            l.startsWith("yue")
+          ) {
+            label += " (本地粤语)";
+          } else if (l.startsWith("en")) {
+            label += " (本地英语)";
+          } else {
+            label += " (本地中文)";
+          }
+          return {
+            name: label,
+            nativeVoice: v,
+            isEdge: false,
+            lang: v.lang
+          };
+        });
       }
-      this.voiceList = [...msVoices, ...localVoices];
+
+      // 本地语音置顶排在最前作为默认首选，Edge 在线语音紧随其后
+      this.voiceList = [...localVoices, ...msVoices];
       if (!this.voiceName && this.voiceList.length) {
         this.voiceName = this.voiceList[0].name;
       }

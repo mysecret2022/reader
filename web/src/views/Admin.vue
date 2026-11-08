@@ -4850,25 +4850,177 @@ export default {
 
 /* 移动端与自适应优化 */
 @media (max-width: 768px) {
+  .admin-container {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+    overflow-x: hidden;
+  }
+  .admin-header {
+    height: 52px;
+    padding: 0 12px;
+  }
+  .brand-logo i {
+    font-size: 22px;
+  }
+  .brand-title {
+    font-size: 17px;
+  }
+  .brand-badge {
+    display: none;
+  }
+  .header-right {
+    gap: 8px;
+  }
+  .user-badge {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 6px;
+    font-size: 11px;
+  }
   .admin-body {
     flex-direction: column;
+    overflow-y: auto;
   }
   .admin-sidebar {
     width: 100%;
+    flex-shrink: 0;
     border-right: none;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    background: inherit;
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
   .sidebar-nav-list {
     flex-direction: row;
     overflow-x: auto;
-    padding: 8px;
+    -webkit-overflow-scrolling: touch;
+    padding: 6px 10px;
+    gap: 8px;
+    scrollbar-width: none;
+  }
+  .sidebar-nav-list::-webkit-scrollbar {
+    display: none;
   }
   .sidebar-nav-item {
-    height: 38px;
+    height: 34px;
     padding: 0 12px;
+    border-radius: 20px;
+    flex-shrink: 0;
+    font-size: 13px;
+    gap: 6px;
   }
   .admin-main {
-    padding: 16px;
+    padding: 12px;
+    overflow-x: hidden;
+  }
+  .pane-title {
+    font-size: 17px;
+    margin-bottom: 14px;
+  }
+  .stat-cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+  .stat-value {
+    font-size: 18px;
+  }
+  .dashboard-box {
+    padding: 14px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .box-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+  }
+  .pane-header-group,
+  .pane-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .pane-actions,
+  .pane-search-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pane-actions .el-button,
+  .pane-search-actions .el-button {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    flex: 1 1 auto;
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+  .pane-actions .el-input,
+  .pane-search-actions .el-input,
+  .pane-actions .el-select,
+  .pane-search-actions .el-select {
+    width: 100% !important;
+    margin-right: 0 !important;
+    margin-bottom: 4px;
+  }
+  .form-row-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .el-form-item {
+    margin-bottom: 12px;
+  }
+  .el-form-item__label {
+    float: none;
+    display: block;
+    text-align: left;
+    padding-bottom: 4px;
+    line-height: 20px;
+    font-size: 13px;
+  }
+  .el-form-item__content {
+    margin-left: 0 !important;
+  }
+  .el-table {
+    font-size: 12px;
+  }
+  .el-table .cell {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .el-dialog {
+    width: 92% !important;
+    margin-top: 5vh !important;
+  }
+  .el-dialog__body {
+    padding: 14px 16px !important;
+  }
+  .action-toolbox .action-buttons {
+    flex-direction: column;
+  }
+  .action-toolbox .action-buttons .el-button {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+  .pagination-bar {
+    justify-content: center;
+    overflow-x: auto;
   }
 }
 
