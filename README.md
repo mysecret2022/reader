@@ -7,34 +7,29 @@
 ## 📖 项目简介
 
 **reader** 是一款功能强大、体验舒适的**阅读 3.0 服务器版 Web 阅读器**。
-无需依赖手机端 App，即可在浏览器、平板、电子墨水屏 (Kindle) 等任意设备上畅享小说阅读，支持书源管理、在线并发搜书、进度云端同步与 WebDAV 备份。
+无需依赖手机端 App，即可在浏览器、手机、平板、电视盒子、电子墨水屏 (Kindle) 等任意设备上畅享小说阅读，支持书源管理、在线并发搜书、进度多端同步与云端备份。
 
-### 🌟 本分支专属改进与特性
-- **免弹窗全屏拟态登录页**：彻底移除原生简易弹窗，引入沉浸式高质感毛玻璃拟态登录/注册界面（视觉设计参考 [XCQ0607/lxserver](https://github.com/XCQ0607/lxserver)）；
-- **全套预构建前端资源集成**：源码仓库内直接内置编译好的 Web 资源，无论是服务器还是个人电脑，**仅需 Java 运行环境即可一键启动，无需安装 Node.js、npm 或 yarn**；
-- **支持 Docker / Docker Compose 一键部署**：容器化持久运行，数据安全可靠。
-
----
-
-## ✨ 核心功能
-
-- 📚 **书架与书源**：支持导入主流阅读 3.0 JSON 书源、书源失效检测、分组管理、书架定时更新。
-- 🔍 **智能搜索**：多书源并发快速搜书、书籍换源、目录重载、章节正文智能排版。
-- 📱 **多端全设备适配**：桌面大屏、手机移动端适配，专门提供针对 Kindle / 墨水屏优化的 `simple-web` 模式。
-- 🎨 **高度个性化**：预设多种雅致阅读背景（羊皮纸、边彩画布、墨水屏黑白等），支持自定义字体大小、行距、翻页方式与 CSS 样式。
-- ☁️ **数据同步与多用户**：支持 WebDAV 进度自动备份与还原、多用户隔离与鉴权管理机制。
-- 🎧 **多媒体与本地书仓**：支持本地导入 TXT、EPUB、UMD、PDF 格式书籍，支持音频书籍与部分浏览器听书功能。
+### 🌟 本分支全新特性 (v1.0.3)
+- 🚀 **极速无感换源**：重构换源与目录解析逻辑，引入单源 4 秒自动熔断机制，彻底告别传统换源“一直转圈读条卡死”的通病；清晰展示【当前】与【已使用】书源标签。
+- 👥 **分权管理后台**：
+  - **管理员控制台**：全站状态概览、配额治理、用户鉴权分配、WebDAV/GitHub AES 加密云同步与定时备份、诊断运行日志、全盘维护。
+  - **普通用户专属子后台**：支持书源管理、失效源并发检测与一键清理、导入书源、**一键同步管理员优质默认书源**；支持书架书籍管理、**在线修改各源封面**、本地书仓浏览导入、书架与缓存刷新。
+- 🎙️ **微软 Edge 神经语音 TTS 听书**：内置集成微软高保真 Edge TTS 语音引擎（晓晓、云希等多种自然语音），无需复杂配置即可随时听书。
+- 🔒 **全数据密码加密云同步**：支持将书架、书源、配置增量加密同步到 GitHub 仓库（强制 AES 密码加密保护）及 WebDAV 网盘，确保数据安全无泄露风险。
+- 🖼️ **极速轻量图书搜索**：搜索时不强制加载外部高分辨率图片封面，大幅节省流量与加载耗时；书籍加入书架后后台低并发自动无感补充 10 个备用源。
+- 🖥️ **免弹窗拟态全屏登录**：高质感磨砂毛玻璃卡片设计，支持自主注册策略与邀请码开关。
 
 ---
 
-## 🚀 快速启动指南
+## 🚀 安装部署指南
 
 ### 方式一：Docker Compose 极速部署（推荐 🌟）
 
-适合部署在 Linux / VPS / NAS 服务器上。新建 `docker-compose.yml` 文件：
+适合部署在 Linux VPS、云服务器或群晖/威联通/绿联/极空间等各类 NAS 设备上。
 
-#### 1. 直接拉取本仓库 GitHub 编译好的全新镜像（即拉即用 🌟）
-无需本地编译环境，直接使用 GitHub Actions 自动编译构建并推送到 GHCR 的镜像：
+#### 1. 创建配置文件
+在宿主机新建目录（如 `reader`），并在该目录下创建 `docker-compose.yml` 文件：
+
 ```yaml
 version: '3.8'
 
@@ -44,73 +39,129 @@ services:
     container_name: reader
     restart: always
     ports:
-      - "4396:8080" # 访问端口，可按需修改
+      - "4396:8080" # 外部访问端口，可按需修改为任意未占用端口
     volumes:
-      - ./storage:/storage # 数据持久化目录（书源、书架、缓存及配置）
-      - ./logs:/logs       # 日志输出目录
+      - ./storage:/app/storage # 数据持久化目录（书源、书架、缓存及用户配置）
+      - ./logs:/app/logs       # 系统运行日志输出目录
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
-      # ================= 权限模式配置 =================
-      - READER_APP_SECURE=true                  # 开启多用户登录鉴权
-      - READER_APP_SECUREKEY=admin_password_123 # 管理员密码（必改）
-      # - READER_APP_INVITECODE=register_code   # 注册邀请码（可选；如需开放自由注册请注释掉本行）
-      - READER_APP_CACHECHAPTERCONTENT=true     # 开启章节内容本地缓存
-      - READER_APP_USERLIMIT=50                 # 最大用户限制
+      # ================= 权限与系统配置 =================
+      - READER_APP_SECURE=true                  # 开启多用户登录鉴权（推荐）
+      - READER_APP_SECUREKEY=admin_password_123 # 初始默认管理员密码（强烈建议修改）
+      # - READER_APP_INVITECODE=invite888       # 注册邀请码（可选；开启后仅持邀请码可注册）
+      - READER_APP_CACHECHAPTERCONTENT=true     # 开启章节内容本地高速缓存
+      - READER_APP_USERLIMIT=50                 # 系统最大注册用户数限制
 ```
 
-启动命令：
+#### 2. 启动服务
+在包含 `docker-compose.yml` 的目录下执行：
 ```bash
 docker compose up -d
 ```
-启动后在浏览器打开 `http://<服务器IP>:4396` 即可开始阅读。
+启动完成后，在浏览器访问 `http://<服务器IP>:4396` 即可进入登录界面。
+- **默认管理员账号**：`admin`
+- **默认管理员密码**：您在 `READER_APP_SECUREKEY` 中设置的密码
 
 ---
 
-### 方式二：直接运行编译好的 JAR 包
+### 方式二：Docker 命令行一键运行
 
-仅需安装 **Java 11 (JRE 或 JDK 均可)**：
-
-1. 前往本仓库 [Releases 页面](https://github.com/mysecret2022/reader/releases) 下载最新的 `reader-2.5.4.jar`。
-2. 在终端/命令行中执行启动：
-   ```bash
-   # 单用户自用模式
-   java -jar reader-2.5.4.jar --reader.server.port=8080
-
-   # 多用户登录模式（安全模式）
-   java -jar reader-2.5.4.jar --reader.server.port=8080 --reader.app.secure=true --reader.app.secureKey=你的管理密码
-   ```
-
----
-
-### 方式三：从本仓库源码运行 / 重新编译
-
-由于本项目已包含内置 Web 资源，编译极为简便：
+如果您习惯使用纯 Docker 命令：
 
 ```bash
-# 1. 克隆代码
-git clone https://github.com/mysecret2022/reader.git
-cd reader
-
-# 2. 一键编译并运行后端服务（端口 8080）
-./build.sh cli serve 8080
-
-# 或仅编译出可执行 JAR 包
-./build.sh cli assemble
-# 编译产物位于 build/libs/reader-2.5.4.jar
+docker run -d \
+  --name reader \
+  --restart always \
+  -p 4396:8080 \
+  -v $(pwd)/storage:/app/storage \
+  -v $(pwd)/logs:/app/logs \
+  -e TZ=Asia/Shanghai \
+  -e READER_APP_SECURE=true \
+  -e READER_APP_SECUREKEY=admin_password_123 \
+  -e READER_APP_CACHECHAPTERCONTENT=true \
+  ghcr.io/mysecret2022/reader:latest
 ```
+
+---
+
+### 方式三：群晖 / 威联通 / 绿联 / 极空间 NAS 图形化部署
+
+1. **拉取镜像**：在 NAS 的 Docker/Container 应用中搜索并拉取：
+   `ghcr.io/mysecret2022/reader:latest`
+2. **端口设置**：
+   - 容器端口：`8080`
+   - 本地端口：`4396`（或任意未占用端口）
+3. **文件夹映射 (存储卷)**：
+   - 本地 `docker/reader/storage` -> 容器内 `/app/storage`
+   - 本地 `docker/reader/logs` -> 容器内 `/app/logs`
+4. **环境参数添加**：
+   - `TZ` = `Asia/Shanghai`
+   - `READER_APP_SECURE` = `true`
+   - `READER_APP_SECUREKEY` = `你的自定义管理员密码`
+5. 点击创建并运行容器即可。
+
+---
+
+### 方式四：Java JAR 包直接运行 (Windows / Linux / macOS)
+
+仅需环境安装 **Java 11 (JRE 或 JDK 均可)**：
+
+1. 前往本仓库 [Releases 页面](https://github.com/mysecret2022/reader/releases) 或 GitHub Actions 下载最新的 `reader-1.0.3.jar`。
+2. 在终端或命令行执行启动：
+
+```bash
+# 1. 简易自用模式（免登录）
+java -jar reader-1.0.3.jar --reader.server.port=8080
+
+# 2. 多用户安全模式（推荐）
+java -jar reader-1.0.3.jar \
+  --reader.server.port=8080 \
+  --reader.app.secure=true \
+  --reader.app.secureKey=你的管理员密码 \
+  --reader.app.cacheChapterContent=true
+```
+
+#### Windows 一键启动脚本 (.bat)
+在 `reader-1.0.3.jar` 同目录下新建 `启动阅读.bat`（请确保保存编码为 ANSI/GBK）：
+```cmd
+@echo off
+chcp 936 >nul
+title Reader 服务端
+echo 正在启动 Reader 阅读服务器，请稍候...
+java -jar reader-1.0.3.jar --reader.server.port=8080 --reader.app.secure=true --reader.app.secureKey=admin123456
+pause
+```
+双击 `启动阅读.bat` 即可开机即用，浏览器打开 `http://localhost:8080`。
+
+---
+
+## ⚙️ 环境变量与核心参数一览表
+
+| 环境变量参数 | 命令行对应参数 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `READER_APP_SECURE` | `--reader.app.secure` | `false` | 是否开启用户登录鉴权（`true`/`false`） |
+| `READER_APP_SECUREKEY` | `--reader.app.secureKey` | 无 | 初始系统管理员 `admin` 的密码 |
+| `READER_APP_INVITECODE` | `--reader.app.inviteCode` | 空 | 注册邀请码。若设置，新用户注册必须填写该码 |
+| `READER_APP_USERLIMIT` | `--reader.app.userLimit` | `50` | 允许注册的最大用户数上限 |
+| `READER_APP_USERBOOKLIMIT`| `--reader.app.userBookLimit` | `200` | 单个用户书架最大收藏图书数量 |
+| `READER_APP_CACHECHAPTERCONTENT` | `--reader.app.cacheChapterContent` | `false` | 是否在服务端本地缓存章节正文内容 |
+| `READER_SERVER_PORT` | `--reader.server.port` | `8080` | 服务端监听端口号 |
 
 ---
 
 ## 🛠️ 数据目录结构说明
 
-所有书架、书源与用户设置均保存在本地 `storage` 目录下（Docker 部署时挂载在容器 `/storage`）：
+所有书架、书源、用户账户与缓存均保存在本地 `storage` 目录下（容器内挂载至 `/app/storage`）：
 ```text
 storage/
-├── assets/       # 自定义阅读背景、封面与样式
-├── cache/        # 搜索缓存与封面图片缓存
-├── data/         # 用户书源 (bookSource.json)、书架 (bookshelf.json)、用户信息
-└── localStore/   # 本地集中书仓（可在此放入本地 txt/epub 书籍）
+├── assets/       # 自定义阅读背景图、个性化样式文件
+├── cache/        # 搜索缓存与封面图片高速缓存
+├── data/         # 用户书源、书架、加密配置与用户信息
+│   ├── admin/    # 管理员个人书架与默认书源 (供全站用户一键同步)
+│   ├── users.json# 用户鉴权与加密凭据数据库
+│   └── systemConfig.json # 全局动态配置
+└── localStore/   # 共享本地书仓（可存放 txt/epub/cbz 书籍，前台一键入架）
 ```
 
 ---
@@ -127,8 +178,6 @@ storage/
    - 本项目免弹窗全屏拟态登录页面的极光渐变、磨砂玻璃与现代卡片式交互设计灵感来源于该项目的 Web 登录界面设计。
 4. **[celetor/web-yuedu3](https://github.com/celetor/web-yuedu3)**
    - 为阅读 Web 端初期提供了优秀的交互设计与组件化实现借鉴。
-5. **[lightink-小说API](https://github.com/lightink-qingmo/lightink-server)**
-   - 为项目早期小说 API 设计思路提供了重要参考。
 
 ---
 
