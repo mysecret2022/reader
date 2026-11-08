@@ -1138,7 +1138,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     // 记录超时失败
                     com.htmake.reader.utils.SourceCircuitBreaker.recordFailure(bookSource.bookSourceUrl)
                 }
-            } catch(e: Exception) {
+            } catch(e: Throwable) {
                 // 记录异常失败并递增熔断器状态
                 com.htmake.reader.utils.SourceCircuitBreaker.recordFailure(bookSource.bookSourceUrl)
                 val info = mutableMapOf<String, Any>("sourceUrl" to bookSource.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString())

@@ -45,12 +45,14 @@
    - 第二梯队（1500ms ~ 6000ms）：海外正常源，居中调度正常检索；
    - 熔断红线：连续 3 次超时或故障才进入 30 分钟冷却池。
 
-### 2.5 Rhino JS 沙箱死循环看门狗 (`AppConst.kt`)
-- **根因**：不可信书源编写死循环 JS 或灾难性正则回溯时，CPU 密集自旋无法响应 Kotlin 协程的挂起点协作式取消，导致工作线程永久卡死。
+### 2.5 Rhino JS 引擎冲突修复与并发通道死锁根治
+- **根因分析**：
+  1. `RhinoScriptEngine` 内部自带静态初始化块调用了 `ContextFactory.initGlobal(new RhinoScriptEngine.1())`，若在 `AppConst.kt` 的 `init` 块中重复调用 `ContextFactory.initGlobal` 会导致抛出 `IllegalStateException: ContextFactory already initialized`，使 `RhinoScriptEngine` 类的加载直接崩毁（`ExceptionInInitializerError`），所有书源在解析搜索规则执行 JS 与正则时全面抛出致命类链接错误。
+  2. `limitConcurrent` 原先在协程内部只捕获了 `Exception`，未捕获致命链接错误（`LinkageError`/`Error`），导致工作协程静默崩溃而未向通道发送完成信号，消费端通道陷入永久挂起等待；同时 `loopCount` 递增粒度过细，单源执行即触发早退。
 - **解决方案**：
-  - 自定义 `ContextFactory.initGlobal(...)`；
-  - 启用 `instructionObserverThreshold = 50000`；
-  - 重写 `observeInstructionCount()`：当脚本累计执行指令超过 1,000,000 条时直接抛出 `RuntimeException` 强行击穿中断脚本，杜绝占用 CPU 100%。
+  1. 彻底移除 `AppConst.kt` 中与 `RhinoScriptEngine` 内置冲突的重复全局初始化，恢复 Rhino 引擎原生的 ES6 沙箱配置。
+  2. `limitConcurrent` 的工作协程全面统一捕获 `Throwable`，确保任务异常无论何种情况均能安全向通道交付信号，永不悬挂；`loopCount` 精确对齐批次进度（`totalCompleted / concurrentCount`），保障多轮搜索正常跑满。
+  3. `searchBookWithSource` 异常捕获升级为 `Throwable`。
 
 ### 2.6 Token 掉电持久化与云备份白名单防 OOM
 1. **Token 掉电持久化 (`BaseController.kt`)**：

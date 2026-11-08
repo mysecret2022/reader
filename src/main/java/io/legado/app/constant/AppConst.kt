@@ -5,29 +5,6 @@ import com.script.javascript.RhinoScriptEngine
 
 object AppConst {
 
-    init {
-        try {
-            if (!org.mozilla.javascript.ContextFactory.hasExplicitGlobal()) {
-                org.mozilla.javascript.ContextFactory.initGlobal(object : org.mozilla.javascript.ContextFactory() {
-                    override fun makeContext(): org.mozilla.javascript.Context {
-                        val cx = super.makeContext()
-                        cx.optimizationLevel = -1
-                        cx.instructionObserverThreshold = 50000
-                        return cx
-                    }
-
-                    override fun observeInstructionCount(cx: org.mozilla.javascript.Context, instructionCount: Int) {
-                        if (instructionCount > 1000000) {
-                            throw RuntimeException("Rhino JS 脚本指令超限(>1,000,000条)，判定为死循环已强行中断")
-                        }
-                    }
-                })
-            }
-        } catch (e: Throwable) {
-            // Already initialized or ignored
-        }
-    }
-
     const val UA_NAME = "User-Agent"
 
     val userAgent: String by lazy {

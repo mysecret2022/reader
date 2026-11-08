@@ -380,6 +380,7 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
     ) {
         if (startIndex >= endIndex || concurrentCount <= 0) return
         var currentIndex = startIndex
+        var totalCompleted = 0
         var loopCount = 0
         val channel = Channel<Any>(Channel.UNLIMITED)
         var activeJobs = 0
@@ -387,11 +388,11 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         while (currentIndex < endIndex && activeJobs < concurrentCount) {
             val idx = currentIndex++
             activeJobs++
-            launch {
+            launch(Dispatchers.IO) {
                 try {
                     val res = handler(idx)
                     channel.send(res)
-                } catch (e: Exception) {
+                } catch (t: Throwable) {
                     channel.send(Unit)
                 }
             }
@@ -400,7 +401,8 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         while (activeJobs > 0) {
             val item = channel.receive()
             activeJobs--
-            loopCount++
+            totalCompleted++
+            loopCount = totalCompleted / concurrentCount
 
             val resultList = arrayListOf<Any>()
             if (item != Unit) {
@@ -410,6 +412,8 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
             while (true) {
                 val pollItem = channel.poll() ?: break
                 activeJobs--
+                totalCompleted++
+                loopCount = totalCompleted / concurrentCount
                 if (pollItem != Unit) {
                     resultList.add(pollItem)
                 }
@@ -423,11 +427,11 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
             while (currentIndex < endIndex && activeJobs < concurrentCount) {
                 val idx = currentIndex++
                 activeJobs++
-                launch {
+                launch(Dispatchers.IO) {
                     try {
                         val res = handler(idx)
                         channel.send(res)
-                    } catch (e: Exception) {
+                    } catch (t: Throwable) {
                         channel.send(Unit)
                     }
                 }
