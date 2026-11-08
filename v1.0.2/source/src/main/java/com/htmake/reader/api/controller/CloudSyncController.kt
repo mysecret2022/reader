@@ -211,13 +211,26 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
                     } else {
                         var ghSuccess = 0
                         var ghFail = 0
-                        syncFiles.forEach { (relPath, bytes) ->
+                        var authFailed = false
+                        for ((relPath, bytes) in syncFiles) {
                             val encryptedBytes = encryptBytes(bytes, encPassword)
                             val remoteFilePath = if (basePath.isEmpty()) "sync/${relPath}.enc" else "$basePath/sync/${relPath}.enc"
-                            val ok = uploadFileToGitHub(owner, repo, branch, remoteFilePath, encryptedBytes, "Encrypted incremental sync: $relPath", token)
-                            if (ok) ghSuccess++ else ghFail++
+                            val code = uploadFileToGitHub(owner, repo, branch, remoteFilePath, encryptedBytes, "Encrypted incremental sync: $relPath", token)
+                            if (code == 200 || code == 201) {
+                                ghSuccess++
+                            } else {
+                                ghFail++
+                                if (code == 401 || code == 403) {
+                                    authFailed = true
+                                    break
+                                }
+                            }
                         }
-                        details.add("GitHub增量同步(AES-256已加密): 成功 ${ghSuccess} 个, 失败 ${ghFail} 个")
+                        if (authFailed) {
+                            details.add("GitHub增量同步失败: Token认证未通过(HTTP 401/403)")
+                        } else {
+                            details.add("GitHub增量同步(AES-256已加密): 成功 ${ghSuccess} 个, 失败 ${ghFail} 个")
+                        }
                     }
                 } else {
                     details.add("GitHub增量同步跳过: 配置不完整")
@@ -302,11 +315,13 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
                         val encryptedBytes = encryptBytes(zipBytes, encPassword)
                         val encryptedFileName = backupFileName.replace(".zip", ".enc")
                         val remotePath = if (basePath.isEmpty()) "backups/$encryptedFileName" else "$basePath/backups/$encryptedFileName"
-                        val ok = uploadFileToGitHub(owner, repo, branch, remotePath, encryptedBytes, "Encrypted full site backup: $encryptedFileName", token)
-                        if (ok) {
+                        val code = uploadFileToGitHub(owner, repo, branch, remotePath, encryptedBytes, "Encrypted full site backup: $encryptedFileName", token)
+                        if (code == 200 || code == 201) {
                             details.add("GitHub全量备份(AES-256已加密): 成功 ($encryptedFileName, ${(encryptedBytes.size / 1024)} KB)")
+                        } else if (code == 401 || code == 403) {
+                            details.add("GitHub全量备份失败: Token认证未通过(HTTP 401/403)")
                         } else {
-                            details.add("GitHub全量备份: 上传失败")
+                            details.add("GitHub全量备份: 上传失败(HTTP $code)")
                         }
                     }
                 } else {
@@ -352,7 +367,7 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
     /**
      * 上传文件到 GitHub 仓库 (REST API: PUT /repos/{owner}/{repo}/contents/{path})
      */
-    private fun uploadFileToGitHub(owner: String, repo: String, branch: String, path: String, content: ByteArray, message: String, token: String): Boolean {
+    private fun uploadFileToGitHub(owner: String, repo: String, branch: String, path: String, content: ByteArray, message: String, token: String): Int {
         try {
             val getUrl = "https://api.github.com/repos/$owner/$repo/contents/$path?ref=$branch"
             val getReq = Request.Builder()
@@ -394,15 +409,15 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
 
             httpClient.newCall(putReq).execute().use { response ->
                 if (response.isSuccessful || response.code == 201 || response.code == 200) {
-                    return true
+                    return response.code
                 } else {
                     logger.warn("GitHub upload failed: code={}, body={}", response.code, response.body?.string())
-                    return false
+                    return response.code
                 }
             }
         } catch (e: Exception) {
             logger.error("uploadFileToGitHub exception", e)
-            return false
+            return -1
         }
     }
 

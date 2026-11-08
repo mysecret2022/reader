@@ -1145,6 +1145,9 @@ export default {
       );
     },
     getCatalog(refresh) {
+      if (!this.$store.getters.readingBook || !this.$store.getters.readingBook.bookUrl) {
+        return Promise.resolve({ data: { isSuccess: false, errorMsg: "未选择书籍" } });
+      }
       const params = {
         url: this.$store.getters.readingBook.bookUrl,
         refresh: refresh ? 1 : 0

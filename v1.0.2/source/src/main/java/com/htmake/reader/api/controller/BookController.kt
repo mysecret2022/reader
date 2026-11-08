@@ -142,7 +142,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var bookUrl: String
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
-            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook").getString("bookUrl") ?: ""
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook")?.getString("bookUrl") ?: ""
         } else {
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
@@ -336,7 +336,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var refresh: Int = 0
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
-            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("book").getString("bookUrl") ?: ""
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("book")?.getString("bookUrl") ?: ""
             refresh = context.bodyAsJson.getInteger("refresh", 0)
         } else {
             // get 请求
@@ -397,7 +397,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var chapterIndex: Int
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
-            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook").getString("bookUrl") ?: ""
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook")?.getString("bookUrl") ?: ""
             chapterIndex = context.bodyAsJson.getInteger("index", -1)
         } else {
             // get 请求
