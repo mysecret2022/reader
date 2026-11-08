@@ -178,12 +178,38 @@ export const loadFont = function(fontName, fontUrl) {
     !window.customFonts[fontName] ||
     window.customFonts[fontName] !== fontUrl
   ) {
-    // 动态插入CSS
+    // 1. 标准 FontFace API（iOS Safari 10+ 与现代浏览器强支持）
+    if (typeof FontFace !== "undefined") {
+      try {
+        const fontFace = new FontFace(
+          fontName,
+          `url("${fontUrl}") format("truetype")`
+        );
+        fontFace
+          .load()
+          .then(loaded => {
+            if (document.fonts) {
+              document.fonts.add(loaded);
+            }
+          })
+          .catch(() => {
+            // ignore font loading error
+          });
+      } catch (e) {
+        // ignore
+      }
+    }
+    // 2. 动态插入 CSS @font-face 规则
+    const existing = document.getElementById("custom-font-" + fontName);
+    if (existing) {
+      existing.remove();
+    }
     const style = document.createElement("style");
     style.textContent = `
     @font-face {
       font-family: "${fontName}";
-      src: url("${fontUrl}");
+      src: url("${fontUrl}") format("truetype");
+      font-display: swap;
     }`;
     style.id = "custom-font-" + fontName;
     document.head.appendChild(style);

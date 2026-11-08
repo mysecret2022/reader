@@ -481,10 +481,12 @@ export default new Vuex.Store({
       return false;
     },
     currentFontFamily: state => {
-      return settings.fonts[state.config.font];
+      const idx = typeof state.config.font === "number" ? state.config.font : 0;
+      return settings.fonts[idx] || settings.fonts[0];
     },
     currentCustomFontFamily: (state, getters) => {
-      const customFontName = customFonts[state.config.font];
+      const idx = typeof state.config.font === "number" ? state.config.font : 0;
+      const customFontName = customFonts[idx] || "custom-user";
       if (
         state.config.customFontsMap &&
         state.config.customFontsMap[customFontName]
@@ -499,6 +501,23 @@ export default new Vuex.Store({
               ? url
               : getters.apiRoot + url
         };
+      }
+      if (idx === 5 && state.config.customFontsMap) {
+        const anyKey = state.config.customFontsMap["custom-user"]
+          ? "custom-user"
+          : Object.keys(state.config.customFontsMap)[0];
+        if (anyKey && state.config.customFontsMap[anyKey]) {
+          let url = state.config.customFontsMap[anyKey];
+          return {
+            name: "custom-user",
+            url:
+              url.startsWith("http://") ||
+              url.startsWith("https://") ||
+              url.startsWith("//")
+                ? url
+                : getters.apiRoot + url
+          };
+        }
       }
       return null;
     },

@@ -3381,11 +3381,7 @@ export default {
     },
     bookGroupDisplayList() {
       return this.$store.state.bookGroupList
-        .filter(
-          v =>
-            (v.groupId > 0 || this.getShowShelfBooks(v.groupId).length) &&
-            v.show
-        )
+        .filter(v => this.getShowShelfBooks(v.groupId).length && v.show)
         .sort((a, b) => a.order - b.order);
     },
     searchConfig: {

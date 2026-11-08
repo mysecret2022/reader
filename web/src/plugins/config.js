@@ -134,37 +134,33 @@ const settings = {
   ],
   fonts: [
     {
-      fontFamily: "custom-system"
+      fontFamily:
+        'custom-system, -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif'
     },
     // 黑体
     {
-      // fontFamily:
-      //   '-apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif'
-      fontFamily: "custom-ht, reader-ht"
+      fontFamily:
+        'custom-ht, reader-ht, "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei", SimHei, sans-serif'
     },
     // 楷体
     {
-      // fontFamily:
-      // 'Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, DFKai-SB, "TW-Kai", serif',
-      fontFamily: "custom-kt, reader-kt"
-      // fontFamily: "STKaiti",
-      // "-fx-font-family": "STKaiti"
+      fontFamily:
+        'custom-kt, reader-kt, "Kaiti SC", STKaiti, "KaiTi", "KaiTi_GB2312", "DFKai-SB", serif'
     },
     // 宋体
     {
-      // fontFamily:
-      // 'Georgia, "Nimbus Roman No9 L", "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "Source Han Serif CN", STSong, "AR PL New Sung", "AR PL SungtiL GB", NSimSun, SimSun, "TW-Sung", "WenQuanYi Bitmap Song", "AR PL UMing CN", "AR PL UMing HK", "AR PL UMing TW", "AR PL UMing TW MBE", PMingLiU, MingLiU, serif',
-      fontFamily: "custom-st, reader-st"
-      // fontFamily: "'Source Han Serif CN'",
-      // "-fx-font-family": "'Source Han Serif CN'"
+      fontFamily:
+        'custom-st, reader-st, "Songti SC", STSong, "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", serif'
     },
     // 仿宋
     {
-      // fontFamily:
-      //   'Baskerville, "Times New Roman", "Liberation Serif", STFangsong, FangSong, FangSong_GB2312, "CWTEX-F", serif',
-      fontFamily: "custom-fs, reader-fs"
-      // fontFamily: "STFangsong",
-      // "-fx-font-family": "STFangsong"
+      fontFamily:
+        'custom-fs, reader-fs, STFangsong, FangSong, FangSong_GB2312, "Songti SC", serif'
+    },
+    // 自定义字体
+    {
+      fontFamily:
+        'custom-user, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
     }
   ]
 };
@@ -208,6 +204,7 @@ export const customFonts = [
   "custom-ht",
   "custom-kt",
   "custom-st",
-  "custom-fs"
+  "custom-fs",
+  "custom-user"
 ];
 export default settings;

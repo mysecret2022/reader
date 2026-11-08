@@ -183,16 +183,22 @@
               :key="index"
               :class="{ selected: config.font == index }"
               @click="setConfig('font', index)"
-              >{{ font }}
+              >{{ font }}</span
+            >
+            <span
+              class="span-item"
+              :class="{ selected: config.font == 5 }"
+              @click="selectCustomFont"
+            >
+              自定义
               <i
                 :class="{
                   'el-icon-upload': true,
                   'upload-font-icon': true,
-                  active:
-                    config.customFontsMap &&
-                    config.customFontsMap[customFonts[index]]
+                  active: hasCustomUserFont
                 }"
-                @click.stop="uploadFontFile(customFonts[index], font)"
+                title="上传或更换自定义字体"
+                @click.stop="uploadUserFont"
               ></i>
             </span>
             <input
@@ -549,6 +555,13 @@ export default {
       return this.$store.state.customConfigList.find(
         v => v.name === this.$store.state.config.customConfig
       );
+    },
+    hasCustomUserFont() {
+      return !!(
+        this.config.customFontsMap &&
+        (this.config.customFontsMap["custom-user"] ||
+          this.config.customFontsMap["custom-system"])
+      );
     }
   },
   watch: {
@@ -680,6 +693,16 @@ export default {
       );
       this.$refs.bgFileRef.value = null;
     },
+    selectCustomFont() {
+      if (this.hasCustomUserFont) {
+        this.setConfig("font", 5);
+      } else {
+        this.uploadUserFont();
+      }
+    },
+    uploadUserFont() {
+      this.uploadFontFile("custom-user", "自定义");
+    },
     async uploadFontFile(customFontName, fontName) {
       if (
         this.config.customFontsMap &&
@@ -710,8 +733,12 @@ export default {
               if (res.data.isSuccess) {
                 let config = { ...this.config };
                 delete config.customFontsMap[customFontName];
+                if (config.font === 5) {
+                  config.font = 0; // 恢复为系统默认
+                }
                 this.config = config;
                 removeFont(customFontName);
+                this.$message.success("已恢复为系统默认字体");
               }
             },
             error => {
@@ -728,7 +755,7 @@ export default {
     },
     onFontFileChange(event) {
       const rawFile = event.target.files && event.target.files[0];
-      // console.log("rawFile", rawFile);
+      if (!rawFile) return;
       if (!rawFile.name.toLowerCase().endsWith(".ttf")) {
         this.$message.error("只支持 TTF 字体文件");
         return;
@@ -748,7 +775,9 @@ export default {
             let config = { ...this.config };
             config.customFontsMap = config.customFontsMap || {};
             config.customFontsMap[this.customFontName] = res.data.data[0];
+            config.font = 5;
             this.config = config;
+            this.$message.success("自定义字体上传成功并已应用！");
           }
         },
         error => {
