@@ -232,6 +232,11 @@ class TTSRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Audio generation failed")
 
     def _send_audio_file(self, filepath, cache_status):
+        try:
+            # 显式更新 mtime 为当前时间，在 Linux/Docker (relatime/noatime) 环境下保证 LRU 准确性
+            os.utime(filepath, None)
+        except OSError:
+            pass
         file_size = os.path.getsize(filepath)
         self.send_response(200)
         self.send_header("Content-Type", "audio/mpeg")

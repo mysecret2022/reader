@@ -472,11 +472,19 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
             fun addFileToZip(file: File, parentPath: String) {
                 val entryPath = if (parentPath.isEmpty()) file.name else "$parentPath/${file.name}"
                 if (file.isDirectory) {
-                    if (file.name == "tmp" || file.name == "cache") return
+                    // 严格白名单与排除：排除缓存、日志、TTS音频、章节正文小文件目录，防止内存暴增与 OOM
+                    val name = file.name.lowercase()
+                    if (name == "tmp" || name == "cache" || name == "logs" || name == "tts" || 
+                        name == "bookinfocache" || name == "invalidbooksourcelache" || name.contains("_")) {
+                        return
+                    }
                     file.listFiles()?.forEach { child ->
                         addFileToZip(child, entryPath)
                     }
                 } else if (file.isFile) {
+                    // 仅备份配置与规则 JSON，忽略超大二进制文件与零散缓存
+                    if (!file.name.endsWith(".json", ignoreCase = true)) return
+                    if (file.length() > 10 * 1024 * 1024) return
                     val entry = ZipEntry(entryPath)
                     zos.putNextEntry(entry)
                     FileInputStream(file).use { fis ->

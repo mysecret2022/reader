@@ -68,6 +68,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import io.legado.app.help.coroutine.Coroutine
 
@@ -105,6 +106,24 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         userMap.put(user.username, user.toMap())
         saveStorage("data", "users", value = userMap)
 
+        // 持久化 Token 映射表，支持重启后无感保活
+        try {
+            val tokensMap = asJsonObject(getStorage("data", "tokens"))?.map?.toMutableMap() ?: mutableMapOf<String, Any>()
+            if (user.token.isNotEmpty()) {
+                tokensMap[user.token] = user.username
+            }
+            user.token_map?.let { tm ->
+                (tm as? Map<*, *>)?.forEach { (t, exp) ->
+                    if (t is String && exp is Number && exp.toLong() > System.currentTimeMillis()) {
+                        tokensMap[t] = user.username
+                    }
+                }
+            }
+            saveStorage("data", "tokens", value = tokensMap)
+        } catch (e: Exception) {
+            logger.warn("Save tokens map error", e)
+        }
+
         val loginData = formatUser(user)
 
         context.session().put("username", user.username)
@@ -135,9 +154,13 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         if (accessToken.isNotEmpty()) {
             var userMap = getUserMap()
             var tmp = accessToken.split(":", limit=2)
-            if (tmp.size >= 2) {
-                var _username = tmp[0]
-                var token = tmp[1]
+            var _username = if (tmp.size >= 2) tmp[0] else ""
+            var token = if (tmp.size >= 2) tmp[1] else tmp[0]
+            if (_username.isEmpty() && token.isNotEmpty()) {
+                val tokensJson = asJsonObject(getStorage("data", "tokens"))
+                _username = tokensJson?.getString(token) ?: ""
+            }
+            if (_username.isNotEmpty() && token.isNotEmpty()) {
                 var existedUser: User? = userMap.getOrDefault(_username, null)?.toDataClass()
                 if (existedUser != null && token.isNotEmpty()) {
                     var isLogin = false
@@ -348,83 +371,68 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         }
     }
 
-    suspend fun limitConcurrent(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any, needContinue: (ArrayList<Any>, Int) -> Boolean) {
-        var lastIndex = startIndex
+    suspend fun limitConcurrent(
+        concurrentCount: Int,
+        startIndex: Int,
+        endIndex: Int,
+        handler: suspend CoroutineScope.(Int) -> Any,
+        needContinue: (ArrayList<Any>, Int) -> Boolean
+    ) {
+        if (startIndex >= endIndex || concurrentCount <= 0) return
+        var currentIndex = startIndex
         var loopCount = 0
-        var resultCount = 0
-        var loopStart = System.currentTimeMillis()
-        var costTime = 0L
-        var deferredList = arrayListOf<Deferred<Any>>()
-        while(true) {
-            var croutineCount = deferredList.size;
-            if (croutineCount < concurrentCount) {
-                for(i in lastIndex until endIndex) {
-                    croutineCount += 1;
-                    deferredList.add(async {
-                        handler(i)
-                    })
+        val channel = Channel<Any>(Channel.UNLIMITED)
+        var activeJobs = 0
 
-                    lastIndex = i
-                    if (croutineCount >= concurrentCount) {
-                        break;
-                    }
+        while (currentIndex < endIndex && activeJobs < concurrentCount) {
+            val idx = currentIndex++
+            activeJobs++
+            launch {
+                try {
+                    val res = handler(idx)
+                    channel.send(res)
+                } catch (e: Exception) {
+                    channel.send(Unit)
                 }
             }
-            var resultList = arrayListOf<Any>()
-
-            // 等待任何一个完成
-            while (resultList.size <= 0) {
-                delay(10)
-                var stillDeferredList = arrayListOf<Deferred<Any>>()
-                for (i in 0 until deferredList.size) {
-                    try {
-                        var deferred = deferredList.get(i)
-                        if (deferred.isCompleted) {
-                            resultCount++
-                            resultList.add(deferred.getCompleted())
-                        } else if (!deferred.isCancelled) {
-                            stillDeferredList.add(deferred)
-                        } else {
-                            resultCount++
-                        }
-                    } catch(e: Exception) {
-
-                    }
-                }
-                deferredList.clear()
-                deferredList.addAll(stillDeferredList)
-            }
-
-            if (resultCount / concurrentCount > loopCount) {
-                loopCount = resultCount / concurrentCount
-                costTime = System.currentTimeMillis() - loopStart
-                logger.info("Loop: {} concurrentCount: {} lastIndex: {} endIndex: {} costTime: {} ms deferredList size: {}", loopCount, croutineCount, lastIndex, endIndex, costTime, deferredList.size)
-            }
-
-            if (lastIndex >= endIndex - 1) {
-                // 搞完了，等待所有结束
-                for (i in 0 until deferredList.size) {
-                    try {
-                        resultList.add(deferredList.get(i).await())
-                    } catch(e: Exception) {
-
-                    }
-                }
-                deferredList.clear()
-                needContinue(resultList, loopCount)
-                break;
-            }
-            if (resultList.size > 0) {
-                if (!needContinue(resultList, loopCount)) {
-                    break;
-                }
-            }
-            lastIndex = lastIndex + 1
         }
 
-        // for (i in 0 until concurrentCount) {
-        //     runBlocking(concurrentCount, startIndex + i , endIndex, handler, needContinue)
-        // }
+        while (activeJobs > 0) {
+            val item = channel.receive()
+            activeJobs--
+            loopCount++
+
+            val resultList = arrayListOf<Any>()
+            if (item != Unit) {
+                resultList.add(item)
+            }
+
+            while (true) {
+                val pollItem = channel.poll() ?: break
+                activeJobs--
+                if (pollItem != Unit) {
+                    resultList.add(pollItem)
+                }
+            }
+
+            val shouldContinue = needContinue(resultList, loopCount)
+            if (!shouldContinue) {
+                break
+            }
+
+            while (currentIndex < endIndex && activeJobs < concurrentCount) {
+                val idx = currentIndex++
+                activeJobs++
+                launch {
+                    try {
+                        val res = handler(idx)
+                        channel.send(res)
+                    } catch (e: Exception) {
+                        channel.send(Unit)
+                    }
+                }
+            }
+        }
     }
 
     suspend fun runBlocking(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any, needContinue: (ArrayList<Any>, Int) -> Boolean) {

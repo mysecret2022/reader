@@ -602,7 +602,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             }
             try {
-                content = WebBook(bookSource ?: "", appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
+                content = withTimeoutOrNull(15000L) {
+                    WebBook(bookSource ?: "", appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
+                } ?: throw Exception("获取章节正文超时(15秒)")
                 if (appConfig.cacheChapterContent && chapterCacheFile != null) {
                     chapterCacheFile.writeText(content)
                     // 保存图片
@@ -1110,8 +1112,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         withContext(Dispatchers.IO) {
             try {
-                // 单源严格硬超时：3500ms
-                val searchTimeoutMs = 3500L
+                // 单源超时：6000ms（放宽海外慢源容错）
+                val searchTimeoutMs = 6000L
                 val start = System.currentTimeMillis()
                 val completed = withTimeoutOrNull(searchTimeoutMs) {
                     var result = WebBook(bookSourceString, false).searchBook(book.name, 1)
@@ -1909,7 +1911,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 newChapterList = LocalBook.getChapterList(book)
             } else {
                 try {
-                    newChapterList = WebBook(bookSource, debugLog).getChapterList(book)
+                    newChapterList = withTimeoutOrNull(15000L) {
+                        WebBook(bookSource, debugLog).getChapterList(book)
+                    } ?: throw Exception("获取目录超时(15秒)")
                 } catch(e: Exception) {
                     if (!bookSource.isNullOrEmpty()) {
                         var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)
@@ -2839,7 +2843,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         var nextChapterInfo = chapterList.get(chapterIndex + 1)
                         nextChapterUrl = nextChapterInfo.url
                     }
-                    var content = WebBook(bookSource, appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
+                    var content = withTimeoutOrNull(15000L) {
+                        WebBook(bookSource, appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
+                    } ?: throw Exception("预缓存章节超时(15秒)")
                     var chapterCacheFile = File(localCacheDir.absolutePath + File.separator + chapterIndex + ".txt")
                     chapterCacheFile.writeText(content)
                     // 保存图片

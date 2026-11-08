@@ -21,6 +21,11 @@ import kotlin.reflect.full.memberProperties
 import io.legado.app.data.entities.Book
 import io.legado.app.utils.MD5Utils
 
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantReadWriteLock
+
 /**
  * @Auther: zoharSoul
  * @Date: 2019-05-21 16:17
@@ -30,6 +35,12 @@ val logger = KotlinLogging.logger {}
 
 val gson = GsonBuilder().disableHtmlEscaping().create()
 val prettyGson = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
+
+private val fileLocks = ConcurrentHashMap<String, ReentrantReadWriteLock>()
+private fun getLock(file: File): ReentrantReadWriteLock {
+    val path = file.canonicalPath
+    return fileLocks.computeIfAbsent(path) { ReentrantReadWriteLock() }
+}
 
 var storageFinalPath = ""
 var workDirPath = ""
@@ -142,17 +153,25 @@ fun saveStorage(vararg name: String, value: Any, pretty: Boolean = false) {
 
     val filename = name.last()
     val file = File(getRelativePath(storagePath, *name.copyOfRange(0, name.size - 1), "${filename}.json"))
-    // val file = File(storagePath + "/${name}.json")
     logger.info("Save file to storage name: {} path: {}", name, file.absoluteFile)
 
     if (!file.parentFile.exists()) {
         file.parentFile.mkdirs()
     }
 
-    if (!file.exists()) {
-        file.createNewFile()
+    val lock = getLock(file).writeLock()
+    lock.lock()
+    try {
+        val tempFile = File(file.parentFile, "${file.name}.${System.nanoTime()}.tmp")
+        tempFile.writeText(toJson)
+        try {
+            Files.move(tempFile.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (e: Exception) {
+            Files.move(tempFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    } finally {
+        lock.unlock()
     }
-    file.writeText(toJson)
 }
 
 fun getStorage(vararg name: String): String?  {
@@ -165,10 +184,17 @@ fun getStorage(vararg name: String): String?  {
     val filename = name.last()
     val file = File(getRelativePath(storagePath, *name.copyOfRange(0, name.size - 1), "${filename}.json"))
     logger.info("Read file from storage name: {} path: {}", name, file.absoluteFile)
-    if (!file.exists()) {
-        return null
+    
+    val lock = getLock(file).readLock()
+    lock.lock()
+    try {
+        if (!file.exists()) {
+            return null
+        }
+        return file.readText()
+    } finally {
+        lock.unlock()
     }
-    return file.readText()
 }
 
 fun asJsonArray(value: Any?): JsonArray? {
