@@ -39,4 +39,5 @@ object AppConst {
         )
     }
 
+    const val JS_INJECT_HELPERS = """function getVariable(k){try{if(k!==undefined&&k!==null){if(typeof java!=='undefined'&&java&&java.getVariable)return java.getVariable(k)||'';if(typeof source!=='undefined'&&source&&source.getVariable)return source.getVariable(k)||'';}else{if(typeof java!=='undefined'&&java&&java.getVariable)return java.getVariable()||'';if(typeof source!=='undefined'&&source&&source.getVariable)return source.getVariable()||'';}}catch(e){}return '';};function setVariable(a,b){try{if(b!==undefined){if(typeof java!=='undefined'&&java&&java.putVariable)return java.putVariable(a,b);if(typeof source!=='undefined'&&source&&source.putVariable)return source.putVariable(a,b);}else{if(typeof java!=='undefined'&&java&&java.setVariable)return java.setVariable(a);if(typeof source!=='undefined'&&source&&source.setVariable)return source.setVariable(a);}}catch(e){}};function putVariable(k,v){try{if(typeof java!=='undefined'&&java&&java.putVariable)return java.putVariable(k,v);if(typeof source!=='undefined'&&source&&source.putVariable)return source.putVariable(k,v);}catch(e){}return v;};"""
 }

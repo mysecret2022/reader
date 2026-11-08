@@ -143,7 +143,18 @@ interface BaseSource : JsExtensions {
     }
 
     fun getVariable(): String? {
-        return CacheManager.get("sourceVariable_${getKey()}")
+        return CacheManager.get("sourceVariable_${getKey()}") ?: ""
+    }
+
+    fun getVariable(key: String): String? {
+        return CacheManager.get("sourceVariable_${getKey()}_$key")
+            ?: CacheManager.get("sourceVariable_${getKey()}")
+            ?: ""
+    }
+
+    fun putVariable(key: String, value: String): String {
+        CacheManager.put("sourceVariable_${getKey()}_$key", value)
+        return value
     }
 
     /**
@@ -158,6 +169,7 @@ interface BaseSource : JsExtensions {
         bindings["baseUrl"] = getKey()
         bindings["cookie"] = CookieStore
         bindings["cache"] = CacheManager
-        return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
+        val fullJs: String = AppConst.JS_INJECT_HELPERS + "\n" + jsStr
+        return AppConst.SCRIPT_ENGINE.eval(fullJs as String, bindings)
     }
 }

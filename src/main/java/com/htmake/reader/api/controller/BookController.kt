@@ -137,6 +137,17 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return returnData.setData(invalidBookSourceList)
     }
 
+    suspend fun clearInvalidBookSources(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val userNameSpace = getUserNameSpace(context)
+        val invalidBookSourceCache = getInvalidBookSourceCache(userNameSpace)
+        invalidBookSourceCache.clear()
+        return returnData.setData(true)
+    }
+
     suspend fun getBookInfo(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         var bookUrl: String
@@ -1489,7 +1500,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("书籍信息错误")
         }
 
-        if (groupId <= 0) {
+        if (groupId < 0) {
             return returnData.setErrorMsg("分组信息错误")
         }
 
@@ -1509,7 +1520,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
         val groupId: Int = context.bodyAsJson.getInteger("groupId", 0)
-        if (groupId <= 0) {
+        if (groupId < 0) {
             return returnData.setErrorMsg("分组信息错误")
         }
         var userNameSpace = getUserNameSpace(context)
@@ -1532,7 +1543,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
         val groupId: Int = context.bodyAsJson.getInteger("groupId", 0)
-        if (groupId <= 0) {
+        if (groupId < 0) {
             return returnData.setErrorMsg("分组信息错误")
         }
         var userNameSpace = getUserNameSpace(context)

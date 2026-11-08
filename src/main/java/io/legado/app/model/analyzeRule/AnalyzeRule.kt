@@ -1,6 +1,7 @@
 package io.legado.app.model.analyzeRule
 
 import com.script.SimpleBindings
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
@@ -638,6 +639,22 @@ class AnalyzeRule(
             ?: ""
     }
 
+    fun getVariable(): String? {
+        return source?.getVariable() ?: ""
+    }
+
+    fun getVariable(key: String): String? {
+        return get(key)
+    }
+
+    fun setVariable(variable: String?) {
+        source?.setVariable(variable)
+    }
+
+    fun putVariable(key: String, value: String): String {
+        return put(key, value)
+    }
+
     /**
      * 执行JS
      */
@@ -654,7 +671,8 @@ class AnalyzeRule(
         bindings["title"] = chapter?.title
         bindings["src"] = content
         bindings["nextChapterUrl"] = nextChapterUrl
-        return SCRIPT_ENGINE.eval(jsStr, bindings)
+        val fullJs: String = AppConst.JS_INJECT_HELPERS + "\n" + jsStr
+        return SCRIPT_ENGINE.eval(fullJs as String, bindings)
     }
 
     override fun getSource(): BaseSource? {

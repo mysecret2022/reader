@@ -191,6 +191,9 @@ class YueduApi : RestVerticle() {
 
         // 失效书源
         router.post("/reader3/getInvalidBookSources").coroutineHandler { bookController.getInvalidBookSources(it) }
+        router.post("/getInvalidBookSources").coroutineHandler { bookController.getInvalidBookSources(it) }
+        router.post("/reader3/clearInvalidBookSources").coroutineHandler { bookController.clearInvalidBookSources(it) }
+        router.post("/clearInvalidBookSources").coroutineHandler { bookController.clearInvalidBookSources(it) }
 
         // 探索
         router.post("/reader3/exploreBook").coroutineHandler { bookController.exploreBook(it) }

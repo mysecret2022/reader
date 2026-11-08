@@ -1350,6 +1350,9 @@ export default {
   activated() {
     document.title = "阅读";
     this.scanCacheStorage();
+    if (this.$root && this.$root.loadBookGroup) {
+      this.$root.loadBookGroup(true);
+    }
   },
   methods: {
     openCoverPicker(book) {
@@ -3378,7 +3381,11 @@ export default {
     },
     bookGroupDisplayList() {
       return this.$store.state.bookGroupList
-        .filter(v => this.getShowShelfBooks(v.groupId).length && v.show)
+        .filter(
+          v =>
+            (v.groupId > 0 || this.getShowShelfBooks(v.groupId).length) &&
+            v.show
+        )
         .sort((a, b) => a.order - b.order);
     },
     searchConfig: {

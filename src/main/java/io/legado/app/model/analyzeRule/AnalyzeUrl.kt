@@ -244,7 +244,8 @@ class AnalyzeUrl(
         bindings["book"] = ruleData as? Book
         bindings["source"] = source
         bindings["result"] = result
-        return SCRIPT_ENGINE.eval(jsStr, bindings)
+        val fullJs: String = AppConst.JS_INJECT_HELPERS + "\n" + jsStr
+        return SCRIPT_ENGINE.eval(fullJs as String, bindings)
     }
 
     fun put(key: String, value: String): String {
@@ -265,6 +266,22 @@ class AnalyzeUrl(
         return chapter?.getVariable(key)
             ?: ruleData?.getVariable(key)
             ?: ""
+    }
+
+    fun getVariable(): String? {
+        return source?.getVariable() ?: ""
+    }
+
+    fun getVariable(key: String): String? {
+        return get(key)
+    }
+
+    fun setVariable(variable: String?) {
+        source?.setVariable(variable)
+    }
+
+    fun putVariable(key: String, value: String): String {
+        return put(key, value)
     }
 
     /**

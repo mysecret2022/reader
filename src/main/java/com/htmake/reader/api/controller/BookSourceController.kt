@@ -43,6 +43,7 @@ import io.vertx.core.json.JsonArray
 import io.vertx.core.http.HttpMethod
 import com.htmake.reader.api.ReturnData
 import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.ACache
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.URL;
@@ -299,30 +300,42 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         val bookSourceJsonArray = context.bodyAsJsonArray
 
         var userNameSpace = getUserNameSpace(context)
-        var bookSourceList = getUserBookSourceJson(userNameSpace)
-        if (bookSourceList == null) {
-            bookSourceList = JsonArray()
-        }
+        var bookSourceList = getUserBookSourceJson(userNameSpace) ?: JsonArray()
+
+        val urlsToDelete = HashSet<String>()
         for (k in 0 until bookSourceJsonArray.size()) {
-            var bookSource = bookSourceJsonArray.getJsonObject(k).mapTo(BookSource::class.java)
-            // 遍历判断书本是否存在
-            var existIndex: Int = -1
-            for (i in 0 until bookSourceList.size()) {
-                var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
-                if (_bookSource.bookSourceUrl.equals(bookSource.bookSourceUrl)) {
-                    existIndex = i
-                    break;
-                }
-            }
-            if (existIndex >= 0) {
-                bookSourceList.remove(existIndex)
+            val item = bookSourceJsonArray.getValue(k)
+            if (item is JsonObject) {
+                val url = item.getString("bookSourceUrl") ?: item.getString("sourceUrl")
+                if (!url.isNullOrEmpty()) urlsToDelete.add(url)
+            } else if (item is String && item.isNotEmpty()) {
+                urlsToDelete.add(item)
             }
         }
 
-        // logger.info("bookSourceList: {}", bookSourceList)
-        saveUserStorage(userNameSpace, "bookSource", bookSourceList)
+        val newBookSourceList = JsonArray()
+        for (i in 0 until bookSourceList.size()) {
+            val obj = bookSourceList.getJsonObject(i)
+            val url = obj?.getString("bookSourceUrl") ?: ""
+            if (!urlsToDelete.contains(url)) {
+                newBookSourceList.add(obj)
+            }
+        }
+
+        // 同步清理失效书源缓存中对应的条目
+        try {
+            val cacheDir = File(getWorkDir("storage", "cache", "invalidBookSourceCache", userNameSpace))
+            val cache = ACache.get(cacheDir, 1000 * 1000 * 5L, 1000000)
+            for (url in urlsToDelete) {
+                cache.remove(url)
+            }
+        } catch (e: Exception) {
+            logger.warn("清理失效书源缓存条目异常: {}", e.message)
+        }
+
+        saveUserStorage(userNameSpace, "bookSource", newBookSourceList)
         if (userNameSpace.equals("admin") || userNameSpace.equals("default")) {
-            saveUserStorage("default", "bookSource", bookSourceList)
+            saveUserStorage("default", "bookSource", newBookSourceList)
         }
         return returnData.setData("")
     }

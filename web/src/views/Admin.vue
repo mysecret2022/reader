@@ -637,11 +637,21 @@
                   label="作者"
                   width="120"
                 ></el-table-column>
-                <el-table-column label="分组" width="110">
+                <el-table-column label="分组" width="120">
                   <template slot-scope="scope">
-                    <el-tag size="mini" type="info">{{
-                      getGroupName(scope.row.group)
-                    }}</el-tag>
+                    <el-tag
+                      size="mini"
+                      :type="scope.row.group ? 'primary' : 'info'"
+                      style="cursor: pointer;"
+                      title="点击修改分组"
+                      @click="openChangeGroupDialog(scope.row)"
+                    >
+                      {{ getGroupName(scope.row.group) }}
+                      <i
+                        class="el-icon-edit"
+                        style="font-size: 11px; margin-left: 2px;"
+                      ></i>
+                    </el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column
@@ -664,8 +674,17 @@
                     }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="180" align="center">
+                <el-table-column label="操作" width="220" align="center">
                   <template slot-scope="scope">
+                    <el-button
+                      type="text"
+                      size="mini"
+                      icon="el-icon-folder"
+                      style="color: #409EFF;"
+                      @click="openChangeGroupDialog(scope.row)"
+                    >
+                      分组
+                    </el-button>
                     <el-button
                       type="text"
                       size="mini"
@@ -673,7 +692,7 @@
                       style="color: #E6A23C;"
                       @click="openCoverPicker(scope.row)"
                     >
-                      修改封面
+                      封面
                     </el-button>
                     <el-button
                       type="text"
@@ -936,7 +955,11 @@
             </div>
           </div>
 
-          <div class="dashboard-box" style="margin-bottom: 20px;">
+          <div
+            class="dashboard-box"
+            v-if="isAdmin"
+            style="margin-bottom: 20px;"
+          >
             <div class="box-header">
               <div class="box-title-group">
                 <h3 class="box-title">
@@ -1916,6 +1939,55 @@
       </div>
     </el-dialog>
 
+    <!-- 弹窗：修改书籍分组 -->
+    <el-dialog
+      title="修改书籍分组"
+      :visible.sync="showChangeGroupDialog"
+      width="420px"
+      append-to-body
+    >
+      <div v-if="currentGroupBook" style="margin-bottom: 16px;">
+        <div
+          style="font-weight: bold; font-size: 15px; margin-bottom: 4px; color: #1e293b;"
+        >
+          {{ currentGroupBook.name }}
+        </div>
+        <div style="color: #64748b; font-size: 13px;">
+          作者：{{ currentGroupBook.author || "未知" }}
+        </div>
+      </div>
+      <el-form label-width="80px">
+        <el-form-item label="所属分组">
+          <el-select
+            v-model="selectedGroupId"
+            placeholder="请选择分组"
+            style="width: 100%;"
+          >
+            <el-option :value="0" label="未分组"></el-option>
+            <el-option
+              v-for="g in bookGroupSetList"
+              :key="g.groupId"
+              :label="g.groupName"
+              :value="g.groupId"
+            ></el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="small" @click="showChangeGroupDialog = false"
+          >取消</el-button
+        >
+        <el-button
+          type="primary"
+          size="small"
+          :loading="changingGroup"
+          @click="confirmChangeGroup"
+        >
+          保存
+        </el-button>
+      </div>
+    </el-dialog>
+
     <!-- 弹窗 4：新增用户对话框 -->
     <el-dialog title="新增用户" :visible.sync="showAddUser" width="420px">
       <el-form :model="newUserForm" label-width="100px" size="small">
@@ -2472,10 +2544,19 @@ export default {
         bookSourceList: "0 B",
         chapterList: "0 B",
         chapterContent: "0 B"
-      }
+      },
+
+      // 手动修改书籍分组
+      showChangeGroupDialog: false,
+      currentGroupBook: null,
+      selectedGroupId: 0,
+      changingGroup: false
     };
   },
   computed: {
+    bookGroupSetList() {
+      return (this.bookGroupList || []).filter(v => v.groupId > 0);
+    },
     api() {
       return this.$store.getters.api;
     },
@@ -2999,7 +3080,7 @@ export default {
         limitFunc(async () => {
           try {
             const res = await Axios.post(
-              "/searchBook",
+              this.api + "/searchBook",
               {
                 key: this.checkSourceKeyword,
                 bookSourceUrl: source.bookSourceUrl
@@ -3056,18 +3137,37 @@ export default {
       try {
         const res = await Axios.post(this.api + "/getInvalidBookSources");
         if (res.data.isSuccess) {
-          const rawMap = res.data.data || {};
+          const rawData = res.data.data || [];
           const list = [];
-          for (let url in rawMap) {
-            const item = rawMap[url];
-            const matched = this.bookSourceList.find(
-              s => s.bookSourceUrl === url
-            );
-            list.push({
-              bookSourceUrl: url,
-              bookSourceName: (matched && matched.bookSourceName) || url,
-              error: item.error || "运行异常: 超时或格式错误"
+          if (Array.isArray(rawData)) {
+            rawData.forEach(item => {
+              const url =
+                (item && (item.bookSourceUrl || item.sourceUrl)) || "";
+              if (!url) return;
+              const matched = this.bookSourceList.find(
+                s => s.bookSourceUrl === url
+              );
+              list.push({
+                bookSourceUrl: url,
+                bookSourceName:
+                  (matched && matched.bookSourceName) ||
+                  (item && item.bookSourceName) ||
+                  url,
+                error: (item && item.error) || "运行异常: 超时或格式错误"
+              });
             });
+          } else if (typeof rawData === "object") {
+            for (let url in rawData) {
+              const item = rawData[url];
+              const matched = this.bookSourceList.find(
+                s => s.bookSourceUrl === url
+              );
+              list.push({
+                bookSourceUrl: url,
+                bookSourceName: (matched && matched.bookSourceName) || url,
+                error: (item && item.error) || "运行异常: 超时或格式错误"
+              });
+            }
           }
           this.invalidSourcesList = list;
           this.$message.success(`已调取到 ${list.length} 个后端故障记录源`);
@@ -3108,12 +3208,17 @@ export default {
             bookSourceUrl: s.bookSourceUrl
           }));
           await Axios.post(this.api + "/deleteBookSources", payload);
+          try {
+            await Axios.post(this.api + "/clearInvalidBookSources");
+          } catch (e) {
+            // ignore
+          }
           this.$message.success("失效书源已全部清理完毕");
           this.invalidSourcesList = [];
           this.showInvalidSourcesDialog = false;
           this.fetchSources();
         } catch (err) {
-          this.$message.error("清理异常");
+          this.$message.error("清理异常: " + err.toString());
         }
       });
     },
@@ -3282,6 +3387,12 @@ export default {
         const res = await Axios.get(this.api + "/getBookGroups");
         if (res.data.isSuccess) {
           this.bookGroupList = res.data.data || [];
+          this.$store.commit("setBookGroupList", this.bookGroupList);
+          const username =
+            (this.currentUser && this.currentUser.username) || "default";
+          if (window.$cacheStorage) {
+            window.$cacheStorage.setItem("bookGroup@" + username, res.data);
+          }
         }
       } catch (e) {
         //
@@ -3376,6 +3487,46 @@ export default {
         this.fetchShelfBooks();
       } catch (e) {
         this.$message.error("置顶失败");
+      }
+    },
+    openChangeGroupDialog(book) {
+      this.currentGroupBook = book;
+      this.selectedGroupId = (book && book.group) || 0;
+      this.showChangeGroupDialog = true;
+    },
+    async confirmChangeGroup() {
+      if (!this.currentGroupBook) return;
+      this.changingGroup = true;
+      try {
+        const res = await Axios.post(this.api + "/saveBookGroupId", {
+          bookUrl: this.currentGroupBook.bookUrl,
+          groupId: this.selectedGroupId
+        });
+        if (res.data.isSuccess) {
+          this.$message.success("书籍分组已更新！");
+          this.currentGroupBook.group = this.selectedGroupId;
+          this.showChangeGroupDialog = false;
+          this.fetchShelfBooks();
+        } else {
+          const updatedBook = Object.assign({}, this.currentGroupBook, {
+            group: this.selectedGroupId
+          });
+          const res2 = await Axios.post(this.api + "/saveBook", updatedBook);
+          if (res2.data.isSuccess) {
+            this.$message.success("书籍分组已更新！");
+            this.currentGroupBook.group = this.selectedGroupId;
+            this.showChangeGroupDialog = false;
+            this.fetchShelfBooks();
+          } else {
+            this.$message.error(
+              res.data.errorMsg || res2.data.errorMsg || "修改分组失败"
+            );
+          }
+        }
+      } catch (e) {
+        this.$message.error("修改分组异常: " + e.toString());
+      } finally {
+        this.changingGroup = false;
       }
     },
     openCoverPicker(book) {
