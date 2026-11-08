@@ -308,7 +308,7 @@
         <!-- 2. 用户管理 -->
         <section v-if="activeTab === 'users'" class="tab-pane">
           <div class="pane-header">
-            <h2 class="pane-title">用户权限治理</h2>
+            <h2 class="pane-title">用户权限管理</h2>
             <el-button
               type="primary"
               size="small"
@@ -344,7 +344,7 @@
             <el-table-column label="书仓功能" width="110" align="center">
               <template slot-scope="scope">
                 <el-switch
-                  v-model="scope.row.enable_local_store"
+                  v-model="scope.row.enableLocalStore"
                   @change="updateUserPerm(scope.row)"
                   :disabled="scope.row.username === 'admin'"
                 ></el-switch>
@@ -353,7 +353,7 @@
             <el-table-column label="WebDAV" width="110" align="center">
               <template slot-scope="scope">
                 <el-switch
-                  v-model="scope.row.enable_webdav"
+                  v-model="scope.row.enableWebdav"
                   @change="updateUserPerm(scope.row)"
                   :disabled="scope.row.username === 'admin'"
                 ></el-switch>
@@ -960,41 +960,43 @@
                 <span style="font-weight: bold; width: 110px;"
                   >工作空间 (userNS):</span
                 >
-                <el-select
-                  v-if="isAdmin || $store.state.showManagerMode"
-                  v-model="userNS"
-                  size="small"
-                  style="width: 240px;"
-                  placeholder="切换用户空间"
-                >
-                  <el-option
-                    label="默认空间 (default)"
-                    value="default"
-                  ></el-option>
-                  <el-option
-                    v-for="u in userList"
-                    :key="u.username"
-                    :label="
-                      u.username +
-                        (u.username === (currentUser && currentUser.username)
-                          ? ' (当前)'
-                          : '')
-                    "
-                    :value="u.username"
-                  ></el-option>
-                </el-select>
-                <span v-else style="color: #64748b;">{{
-                  userNS || (currentUser && currentUser.username) || "default"
-                }}</span>
-
-                <el-button
-                  v-if="isAdmin || $store.state.showManagerMode"
-                  size="small"
-                  icon="el-icon-refresh"
-                  @click="loadUserList"
-                >
-                  加载用户空间
-                </el-button>
+                <template v-if="isAdmin">
+                  <el-select
+                    v-model="userNS"
+                    size="small"
+                    style="width: 240px;"
+                    placeholder="切换用户空间"
+                  >
+                    <el-option
+                      label="默认空间 (default)"
+                      value="default"
+                    ></el-option>
+                    <el-option
+                      v-for="u in userList"
+                      :key="u.username"
+                      :label="
+                        u.username +
+                          (u.username === (currentUser && currentUser.username)
+                            ? ' (当前)'
+                            : '')
+                      "
+                      :value="u.username"
+                    ></el-option>
+                  </el-select>
+                  <el-button
+                    size="small"
+                    icon="el-icon-refresh"
+                    @click="loadUserList"
+                  >
+                    加载用户空间
+                  </el-button>
+                </template>
+                <span v-else style="color: #64748b; font-size: 13px;">
+                  <el-tag size="small" type="info">{{
+                    userNS || (currentUser && currentUser.username) || "default"
+                  }}</el-tag>
+                  （个人专属空间，仅当前用户本人可访问与同步）
+                </span>
               </div>
             </div>
           </div>
@@ -2340,7 +2342,7 @@ export default {
           title: "系统状态总览",
           icon: "el-icon-data-analysis"
         },
-        { index: "users", title: "用户权限治理", icon: "el-icon-user-solid" },
+        { index: "users", title: "用户权限管理", icon: "el-icon-user-solid" },
         { index: "sources", title: "书源设置", icon: "el-icon-collection" },
         { index: "shelf", title: "书架设置", icon: "el-icon-reading" },
         { index: "userSpace", title: "用户空间", icon: "el-icon-user" },
@@ -2499,6 +2501,9 @@ export default {
     },
     userNS: {
       get() {
+        if (!this.isAdmin && this.currentUser && this.currentUser.username) {
+          return this.currentUser.username;
+        }
         return (
           this.$store.state.userNS ||
           (this.currentUser && this.currentUser.username) ||
@@ -2506,9 +2511,11 @@ export default {
         );
       },
       set(val) {
-        this.$store.commit("setUserNS", val);
-        if (val) {
-          this.$store.commit("setIsManagerMode", true);
+        if (this.isAdmin) {
+          this.$store.commit("setUserNS", val);
+          if (val) {
+            this.$store.commit("setIsManagerMode", true);
+          }
         }
       }
     },
@@ -2625,7 +2632,7 @@ export default {
       } else if (index === "cache") {
         this.scanCacheStorage();
       } else if (index === "userSpace") {
-        if (this.isAdmin || this.$store.state.showManagerMode) {
+        if (this.isAdmin) {
           this.fetchUsers();
         }
       }
@@ -2816,14 +2823,38 @@ export default {
       });
     },
     async fetchUsers() {
+      if (!this.isAdmin) return;
       this.loadingUsers = true;
       try {
         const res = await Axios.get(this.api + "/getUserList");
         if (res.data.isSuccess) {
-          this.userList = res.data.data || [];
+          const list = res.data.data || [];
+          this.userList = list.map(u => ({
+            ...u,
+            enableLocalStore:
+              typeof u.enableLocalStore !== "undefined"
+                ? !!u.enableLocalStore
+                : !!u.enable_local_store,
+            enable_local_store:
+              typeof u.enableLocalStore !== "undefined"
+                ? !!u.enableLocalStore
+                : !!u.enable_local_store,
+            enableWebdav:
+              typeof u.enableWebdav !== "undefined"
+                ? !!u.enableWebdav
+                : !!u.enable_webdav,
+            enable_webdav:
+              typeof u.enableWebdav !== "undefined"
+                ? !!u.enableWebdav
+                : !!u.enable_webdav,
+            isAdmin:
+              typeof u.isAdmin !== "undefined" ? !!u.isAdmin : !!u.is_admin,
+            is_admin:
+              typeof u.isAdmin !== "undefined" ? !!u.isAdmin : !!u.is_admin
+          }));
         }
       } catch (err) {
-        //
+        // ignore error
       } finally {
         this.loadingUsers = false;
       }
@@ -3148,7 +3179,14 @@ export default {
         return;
       }
       try {
-        const res = await Axios.post(this.api + "/addUser", this.newUserForm);
+        const payload = {
+          ...this.newUserForm,
+          enableLocalStore: this.newUserForm.enable_local_store !== false,
+          enable_local_store: this.newUserForm.enable_local_store !== false,
+          enableWebdav: this.newUserForm.enable_webdav !== false,
+          enable_webdav: this.newUserForm.enable_webdav !== false
+        };
+        const res = await Axios.post(this.api + "/addUser", payload);
         if (res.data.isSuccess) {
           this.$message.success("添加用户成功");
           this.showAddUser = false;
@@ -3157,7 +3195,12 @@ export default {
           this.$message.error(res.data.errorMsg || "添加用户失败");
         }
       } catch (err) {
-        this.$message.error("添加用户异常");
+        this.$message.error(
+          "添加用户异常: " +
+            (err.response && err.response.data && err.response.data.errorMsg
+              ? err.response.data.errorMsg
+              : err.toString())
+        );
       }
     },
     openResetPwd(user) {
@@ -3187,10 +3230,27 @@ export default {
     },
     async updateUserPerm(user) {
       try {
-        await Axios.post(this.api + "/updateUser", user);
-        this.$message.success("权限更新成功");
+        const payload = {
+          username: user.username,
+          enableLocalStore: !!user.enableLocalStore,
+          enable_local_store: !!user.enableLocalStore,
+          enableWebdav: !!user.enableWebdav,
+          enable_webdav: !!user.enableWebdav,
+          isAdmin: !!user.isAdmin,
+          is_admin: !!user.isAdmin
+        };
+        const res = await Axios.post(this.api + "/updateUser", payload);
+        if (res.data.isSuccess) {
+          user.enable_local_store = !!user.enableLocalStore;
+          user.enable_webdav = !!user.enableWebdav;
+          this.$message.success("权限更新成功");
+        } else {
+          this.$message.error(res.data.errorMsg || "权限更新失败");
+          this.fetchUsers();
+        }
       } catch (err) {
-        this.$message.error("权限更新失败");
+        this.$message.error("权限更新失败: " + err.toString());
+        this.fetchUsers();
       }
     },
     async syncAdminSources() {
@@ -3718,11 +3778,32 @@ export default {
       }
     },
     async loadUserList() {
+      if (!this.isAdmin) return;
       try {
         const res = await Axios.get(this.api + "/getUserList");
         if (res.data.isSuccess && res.data.data) {
           this.userList = res.data.data.map(v => ({
             ...v,
+            enableLocalStore:
+              typeof v.enableLocalStore !== "undefined"
+                ? !!v.enableLocalStore
+                : !!v.enable_local_store,
+            enable_local_store:
+              typeof v.enableLocalStore !== "undefined"
+                ? !!v.enableLocalStore
+                : !!v.enable_local_store,
+            enableWebdav:
+              typeof v.enableWebdav !== "undefined"
+                ? !!v.enableWebdav
+                : !!v.enable_webdav,
+            enable_webdav:
+              typeof v.enableWebdav !== "undefined"
+                ? !!v.enableWebdav
+                : !!v.enable_webdav,
+            isAdmin:
+              typeof v.isAdmin !== "undefined" ? !!v.isAdmin : !!v.is_admin,
+            is_admin:
+              typeof v.isAdmin !== "undefined" ? !!v.isAdmin : !!v.is_admin,
             userNS: v.username
           }));
           this.$store.commit("setIsManagerMode", true);

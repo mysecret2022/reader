@@ -35,23 +35,18 @@ version: '3.8'
 
 services:
   reader:
-    image: ghcr.io/mysecret2022/reader:latest
+    image: ghcr.io/mysecret2022/reader:dev
     container_name: reader
     restart: always
     ports:
-      - "4396:8080" # 外部访问端口，可按需修改为任意未占用端口
+      - "8080:8080" # 外部访问端口，按需调整（宿主机端口:容器端口）
     volumes:
-      - ./storage:/app/storage # 数据持久化目录（书源、书架、缓存及用户配置）
-      - ./logs:/app/logs       # 系统运行日志输出目录
+      - ./storage:/storage # 数据持久化目录（书源、书架、缓存及配置）
+      - ./logs:/app/logs   # 系统运行日志输出目录（后台管理「诊断运行日志」实时互通）
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
-      # ================= 权限与系统配置 =================
-      - READER_APP_SECURE=true                  # 开启多用户登录鉴权（推荐）
-      - READER_APP_SECUREKEY=admin_password_123 # 初始默认管理员密码（强烈建议修改）
-      # - READER_APP_INVITECODE=invite888       # 注册邀请码（可选；开启后仅持邀请码可注册）
-      - READER_APP_CACHECHAPTERCONTENT=true     # 开启章节内容本地高速缓存
-      - READER_APP_USERLIMIT=50                 # 系统最大注册用户数限制
+      # 💡 提示：多用户登录鉴权、管理员密码、注册邀请码、章节正文缓存及用户配额已全面支持在【管理后台】在线设置，无需在此配置环境变量。
 ```
 
 #### 2. 启动服务
@@ -59,9 +54,9 @@ services:
 ```bash
 docker compose up -d
 ```
-启动完成后，在浏览器访问 `http://<服务器IP>:4396` 即可进入登录界面。
+启动完成后，在浏览器访问 `http://<服务器IP>:8080` 即可进入登录界面。
 - **默认管理员账号**：`admin`
-- **默认管理员密码**：您在 `READER_APP_SECUREKEY` 中设置的密码
+- **默认管理员密码**：`admin`（首次登录后请在后台管理页面修改密码；若系统存在历史管理员数据则以已有配置为准）
 
 ---
 
@@ -73,14 +68,12 @@ docker compose up -d
 docker run -d \
   --name reader \
   --restart always \
-  -p 4396:8080 \
-  -v $(pwd)/storage:/app/storage \
+  -p 8080:8080 \
+  -v $(pwd)/storage:/storage \
   -v $(pwd)/logs:/app/logs \
   -e TZ=Asia/Shanghai \
-  -e READER_APP_SECURE=true \
-  -e READER_APP_SECUREKEY=admin_password_123 \
-  -e READER_APP_CACHECHAPTERCONTENT=true \
-  ghcr.io/mysecret2022/reader:latest
+  -e SPRING_PROFILES_ACTIVE=prod \
+  ghcr.io/mysecret2022/reader:dev
 ```
 
 ---
@@ -88,18 +81,17 @@ docker run -d \
 ### 方式三：群晖 / 威联通 / 绿联 / 极空间 NAS 图形化部署
 
 1. **拉取镜像**：在 NAS 的 Docker/Container 应用中搜索并拉取：
-   `ghcr.io/mysecret2022/reader:latest`
+   `ghcr.io/mysecret2022/reader:dev`
 2. **端口设置**：
    - 容器端口：`8080`
-   - 本地端口：`4396`（或任意未占用端口）
+   - 本地端口：`8080`（或任意未占用端口）
 3. **文件夹映射 (存储卷)**：
-   - 本地 `docker/reader/storage` -> 容器内 `/app/storage`
-   - 本地 `docker/reader/logs` -> 容器内 `/app/logs`
+   - 本地 `docker/reader/storage` -> 容器内 `/storage`（或 `/app/storage`）
+   - 本地 `docker/reader/logs` -> 容器内 `/app/logs`（或 `/logs`）
 4. **环境参数添加**：
    - `TZ` = `Asia/Shanghai`
-   - `READER_APP_SECURE` = `true`
-   - `READER_APP_SECUREKEY` = `你的自定义管理员密码`
-5. 点击创建并运行容器即可。
+   - `SPRING_PROFILES_ACTIVE` = `prod`
+5. 点击创建并运行容器即可。所有权限、密码与配额直接在进入后台 `http://<NAS_IP>:8080/#/admin` 界面在线设置。
 
 ---
 

@@ -544,18 +544,16 @@ export default {
           this.$store.commit("setConnected", true);
           if (res.data.isSuccess) {
             this.$store.commit("setIsSecureMode", res.data.data.secure);
-            if (res.data.data.secure && res.data.data.secureKey) {
-              this.$store.commit("setShowManagerMode", true);
-            }
-            if (res.data.data.userInfo) {
+            if (res.data.data.userInfo && res.data.data.userInfo.username) {
               this.$store.commit("setUserInfo", res.data.data.userInfo);
-              if (
+              const isAdmin = !!(
                 res.data.data.userInfo.isAdmin ||
+                res.data.data.userInfo.is_admin ||
                 res.data.data.userInfo.username === "admin"
-              ) {
-                this.$store.commit("setShowManagerMode", true);
-              }
+              );
+              this.$store.commit("setShowManagerMode", isAdmin);
             } else {
+              this.$store.commit("setShowManagerMode", false);
               // 强制登录：未登录必须展示登录门面，彻底关闭游客模式与免登录浏览书架
               localStorage.removeItem("reader_guest_mode");
               this.$store.commit("setUserInfo", {});

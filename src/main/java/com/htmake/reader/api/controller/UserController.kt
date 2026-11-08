@@ -75,9 +75,11 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
 
     private fun getUserLimit(context: RoutingContext): Int {
         if (context.request().host().equals("reader.htmake.com")) {
-            return 500;
+            return 500
         }
-        return Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
+        val configJson: JsonObject? = asJsonObject(getStorage("data", "systemConfig"))
+        val configuredLimit = configJson?.getInteger("userLimit") ?: appConfig.userLimit
+        return Math.max(configuredLimit, 1)
     }
 
     suspend fun login(context: RoutingContext): ReturnData {
@@ -229,7 +231,23 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         val username = context.bodyAsJson.getString("username") ?: ""
         val password = context.bodyAsJson.getString("password") ?: ""
-        val isAdmin = context.bodyAsJson.getBoolean("isAdmin", false) ?: false
+        val isAdmin = if (context.bodyAsJson.containsKey("isAdmin")) {
+            context.bodyAsJson.getBoolean("isAdmin", false) ?: false
+        } else if (context.bodyAsJson.containsKey("is_admin")) {
+            context.bodyAsJson.getBoolean("is_admin", false) ?: false
+        } else false
+
+        val enableWebdav = if (context.bodyAsJson.containsKey("enableWebdav")) {
+            context.bodyAsJson.getBoolean("enableWebdav", true) ?: true
+        } else if (context.bodyAsJson.containsKey("enable_webdav")) {
+            context.bodyAsJson.getBoolean("enable_webdav", true) ?: true
+        } else true
+
+        val enableLocalStore = if (context.bodyAsJson.containsKey("enableLocalStore")) {
+            context.bodyAsJson.getBoolean("enableLocalStore", true) ?: true
+        } else if (context.bodyAsJson.containsKey("enable_local_store")) {
+            context.bodyAsJson.getBoolean("enable_local_store", true) ?: true
+        } else true
         if (username.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入用户名")
         }
@@ -267,8 +285,8 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             username = username,
             password = passwordEncrypted,
             salt = salt,
-            enable_webdav = true,
-            enable_local_store = true,
+            enable_webdav = enableWebdav,
+            enable_local_store = enableLocalStore,
             is_admin = isAdmin
         )
         userMap.put(newUser.username, newUser.toMap() as MutableMap<String, Any>)
@@ -364,9 +382,23 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setData("NEED_SECURE_KEY").setErrorMsg("需要管理员权限")
         }
         val username = context.bodyAsJson.getString("username") ?: ""
-        val enableWebdav = context.bodyAsJson.getBoolean("enableWebdav")
-        val enableLocalStore = context.bodyAsJson.getBoolean("enableLocalStore")
-        val isAdmin = context.bodyAsJson.getBoolean("isAdmin")
+        val enableWebdav = if (context.bodyAsJson.containsKey("enableWebdav")) {
+            context.bodyAsJson.getBoolean("enableWebdav")
+        } else if (context.bodyAsJson.containsKey("enable_webdav")) {
+            context.bodyAsJson.getBoolean("enable_webdav")
+        } else null
+
+        val enableLocalStore = if (context.bodyAsJson.containsKey("enableLocalStore")) {
+            context.bodyAsJson.getBoolean("enableLocalStore")
+        } else if (context.bodyAsJson.containsKey("enable_local_store")) {
+            context.bodyAsJson.getBoolean("enable_local_store")
+        } else null
+
+        val isAdmin = if (context.bodyAsJson.containsKey("isAdmin")) {
+            context.bodyAsJson.getBoolean("isAdmin")
+        } else if (context.bodyAsJson.containsKey("is_admin")) {
+            context.bodyAsJson.getBoolean("is_admin")
+        } else null
         if (username.isEmpty()) {
             return returnData.setErrorMsg("参数错误")
         }
@@ -399,8 +431,15 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         val returnData = ReturnData()
         checkAuth(context)
         var username = context.session().get("username") as String? ?: context.get("username") as String?
-        var secure = env.getProperty("reader.app.secure", Boolean::class.java) ?: false
+        val configJson: JsonObject? = asJsonObject(getStorage("data", "systemConfig"))
+        var secure = env.getProperty("reader.app.secure", Boolean::class.java)
+        if (secure == null) {
+            secure = configJson?.getBoolean("secure", true) ?: true
+        }
         var secureKey = env.getProperty("reader.app.secureKey")
+        if (secureKey.isNullOrEmpty()) {
+            secureKey = configJson?.getString("secureKey") ?: ""
+        }
 
         var userInfo: Any? = null
         if (username != null) {
@@ -417,7 +456,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         return returnData.setData(mapOf(
             "userInfo" to userInfo,
             "secure" to secure,
-            "secureKey" to (secureKey?.isNotEmpty() == true || (userInfo as? Map<*, *>)?.get("isAdmin") == true)
+            "secureKey" to (secureKey.isNotEmpty() == true || (userInfo as? Map<*, *>)?.get("isAdmin") == true)
         ))
     }
 

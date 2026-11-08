@@ -123,6 +123,15 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         }
         // 自动登录
         var accessToken = context.queryParam("accessToken").firstOrNull() ?: ""
+        if (accessToken.isEmpty()) {
+            accessToken = context.request().getHeader("accessToken") ?: ""
+        }
+        if (accessToken.isEmpty()) {
+            val authHeader = context.request().getHeader("Authorization") ?: ""
+            if (authHeader.startsWith("Bearer ", ignoreCase = true)) {
+                accessToken = authHeader.substring(7).trim()
+            }
+        }
         if (accessToken.isNotEmpty()) {
             var userMap = getUserMap()
             var tmp = accessToken.split(":", limit=2)
@@ -182,14 +191,17 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
                 return true
             }
         }
-        if (!appConfig.secure) {
+        val configJson: JsonObject? = asJsonObject(getStorage("data", "systemConfig"))
+        val systemSecureKey = configJson?.getString("secureKey") ?: appConfig.secureKey
+        val systemSecure = configJson?.getBoolean("secure") ?: appConfig.secure
+        if (!systemSecure) {
             return true
         }
-        if (appConfig.secureKey.isEmpty()) {
+        if (systemSecureKey.isEmpty()) {
             return true
         }
-        var secureKey = context.queryParam("secureKey").firstOrNull() ?: ""
-        if (secureKey.equals(appConfig.secureKey)) {
+        var secureKey = context.queryParam("secureKey").firstOrNull() ?: context.request().getHeader("secureKey") ?: ""
+        if (secureKey.equals(systemSecureKey)) {
             // 判断是否需要修改 userNameSpace
             var userNS = context.queryParam("userNS").firstOrNull()
             if (userNS != null && userNS.isNotEmpty()) {
@@ -202,10 +214,12 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
 
     fun getUserNameSpace(context: RoutingContext): String {
         // 管理权限，可以修改 userNameSpace 来获取指定命名空间信息
-        checkManagerAuth(context)
-        var userNS = context.get("userNameSpace") as String?
-        if (userNS != null && userNS.isNotEmpty()) {
-            return userNS
+        val isManager = checkManagerAuth(context)
+        if (isManager) {
+            var userNS = context.get("userNameSpace") as String?
+            if (userNS != null && userNS.isNotEmpty()) {
+                return userNS
+            }
         }
         var username = context.get("username") as String? ?: context.session().get("username") as String?
         if (!username.isNullOrEmpty()) {
@@ -245,9 +259,10 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
             userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
         }
         if (userMap.isEmpty()) {
-            // 系统初次运行自动创建默认管理员：账号 admin，密码 admin
+            // 系统初次运行自动创建默认管理员：账号 admin，密码优先读取 secureKey，默认 admin
+            val initialPassword = if (appConfig.secureKey.isNotEmpty()) appConfig.secureKey else "admin"
             val salt = getRandomString(8)
-            val passwordEncrypted = genEncryptedPassword("admin", salt)
+            val passwordEncrypted = genEncryptedPassword(initialPassword, salt)
             val defaultAdmin = User(
                 username = "admin",
                 password = passwordEncrypted,
@@ -289,13 +304,18 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
             return mutableMapOf()
         }
         val isAdminUser = user.is_admin || user.username.equals("admin", ignoreCase = true)
+        val enableWebdav = user.enable_webdav || isAdminUser
+        val enableLocalStore = user.enable_local_store || isAdminUser
         return mutableMapOf(
             "username" to user.username,
             "lastLoginAt" to user.last_login_at,
             "accessToken" to user.username + ":" + user.token,
-            "enableWebdav" to (user.enable_webdav || isAdminUser),
-            "enableLocalStore" to (user.enable_local_store || isAdminUser),
+            "enableWebdav" to enableWebdav,
+            "enable_webdav" to enableWebdav,
+            "enableLocalStore" to enableLocalStore,
+            "enable_local_store" to enableLocalStore,
             "isAdmin" to isAdminUser,
+            "is_admin" to isAdminUser,
             "createdAt" to user.created_at
         )
     }

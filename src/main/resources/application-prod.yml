@@ -8,7 +8,7 @@ reader:
     showUI: false
     debug: false
     packaged: false
-    secure: false
+    secure: true
     inviteCode: ""
     secureKey: ""
     proxy: false

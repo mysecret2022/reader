@@ -254,15 +254,21 @@ class YueduApi : RestVerticle() {
         // 书仓功能
         // 获取书仓文件列表
         router.get("/reader3/getLocalStoreFileList").coroutineHandler { bookController.getLocalStoreFileList(it) }
+        router.get("/getLocalStoreFileList").coroutineHandler { bookController.getLocalStoreFileList(it) }
         // 下载书仓文件
         router.get("/reader3/getLocalStoreFile").coroutineHandlerWithoutRes { bookController.getLocalStoreFile(it) }
+        router.get("/getLocalStoreFile").coroutineHandlerWithoutRes { bookController.getLocalStoreFile(it) }
         // 删除书仓文件
         router.post("/reader3/deleteLocalStoreFile").coroutineHandler { bookController.deleteLocalStoreFile(it) }
+        router.post("/deleteLocalStoreFile").coroutineHandler { bookController.deleteLocalStoreFile(it) }
         router.post("/reader3/deleteLocalStoreFileList").coroutineHandler { bookController.deleteLocalStoreFileList(it) }
+        router.post("/deleteLocalStoreFileList").coroutineHandler { bookController.deleteLocalStoreFileList(it) }
         // 从本地书仓/webdav导入
         router.post("/reader3/importFromLocalPathPreview").coroutineHandler { bookController.importFromLocalPathPreview(it) }
+        router.post("/importFromLocalPathPreview").coroutineHandler { bookController.importFromLocalPathPreview(it) }
         // 上传文件到书仓
         router.post("/reader3/uploadFileToLocalStore").coroutineHandler { bookController.uploadFileToLocalStore(it) }
+        router.post("/uploadFileToLocalStore").coroutineHandler { bookController.uploadFileToLocalStore(it) }
 
         // 调试书源
         router.get("/reader3/bookSourceDebugSSE").coroutineHandlerWithoutRes { bookController.bookSourceDebugSSE(it) }
@@ -330,41 +336,60 @@ class YueduApi : RestVerticle() {
         router.get("/tts").coroutineHandlerWithoutRes(ttsHandler)
 
         // 系统日志读取接口 (供诊断自查)
-        router.get("/reader3/getSystemLogs").coroutineHandler { context ->
+        val systemLogsHandler: suspend (RoutingContext) -> ReturnData = { context ->
             val returnData = ReturnData()
             val linesParam = context.queryParam("lines").firstOrNull()?.toIntOrNull() ?: 200
             val errorOnly = context.queryParam("error").firstOrNull()?.toBoolean() ?: false
 
             val candidateDirs = listOf(
+                java.io.File("/app/logs"),
                 java.io.File("./logs"),
-                java.io.File(getWorkDir("logs")),
                 java.io.File("/logs"),
-                java.io.File(System.getProperty("user.dir", ".") + "/logs")
+                java.io.File(getWorkDir("logs")),
+                java.io.File(System.getProperty("user.dir", ".") + "/logs"),
+                java.io.File("/storage/logs")
             )
             val logFiles = candidateDirs
                 .filter { it.exists() && it.isDirectory }
-                .flatMap { it.listFiles { f -> f.isFile && f.name.endsWith(".log") }?.toList() ?: emptyList() }
-            val latestLog = logFiles.maxByOrNull { it.lastModified() }
+                .flatMap { dir ->
+                    dir.listFiles { f -> f.isFile && (f.name.endsWith(".log") || f.name.endsWith(".txt")) }?.toList() ?: emptyList()
+                }
+                .distinctBy { it.canonicalPath }
+                .sortedByDescending { it.lastModified() }
 
-            if (latestLog == null || !latestLog.exists()) {
-                return@coroutineHandler returnData.setData(listOf("暂无日志文件或日志目录未初始化"))
-            }
-
-            val allLines = latestLog.readLines(Charsets.UTF_8)
-            val filtered = if (errorOnly) {
-                allLines.filter { it.contains("ERROR") || it.contains("Exception") || it.contains("WARN") }
+            if (logFiles.isEmpty()) {
+                val searchedDirs = candidateDirs.filter { it.exists() }.map { it.absolutePath }
+                returnData.setData(listOf("暂无日志文件或日志目录未初始化（已检测目录: $searchedDirs）"))
             } else {
-                allLines
+                val allLines = mutableListOf<String>()
+                for (file in logFiles.take(3)) {
+                    try {
+                        val lines = file.readLines(Charsets.UTF_8)
+                        allLines.addAll(0, lines)
+                        if (allLines.size >= linesParam * 2) break
+                    } catch (e: Exception) {
+                        logger.warn("读取日志文件失败: ${file.absolutePath}, ${e.message}")
+                    }
+                }
+                val filtered = if (errorOnly) {
+                    allLines.filter { it.contains("ERROR") || it.contains("Exception") || it.contains("WARN") }
+                } else {
+                    allLines
+                }
+                returnData.setData(filtered.takeLast(linesParam))
             }
-            returnData.setData(filtered.takeLast(linesParam))
         }
+        router.get("/reader3/getSystemLogs").coroutineHandler(systemLogsHandler)
+        router.get("/getSystemLogs").coroutineHandler(systemLogsHandler)
 
         /** 用户模块 */
         // 上传文件
         router.post("/reader3/uploadFile").coroutineHandler { userController.uploadFile(it) }
+        router.post("/uploadFile").coroutineHandler { userController.uploadFile(it) }
 
         // 删除文件
         router.post("/reader3/deleteFile").coroutineHandler { userController.deleteFile(it) }
+        router.post("/deleteFile").coroutineHandler { userController.deleteFile(it) }
 
         // 登录 (支持 /reader3 前缀及根路径)
         router.post("/reader3/login").coroutineHandler { userController.login(it) }
@@ -379,24 +404,31 @@ class YueduApi : RestVerticle() {
 
         // 用户备份本地配置
         router.post("/reader3/saveUserConfig").coroutineHandler { userController.saveUserConfig(it) }
+        router.post("/saveUserConfig").coroutineHandler { userController.saveUserConfig(it) }
 
         // 用户恢复本地配置
         router.get("/reader3/getUserConfig").coroutineHandler { userController.getUserConfig(it) }
+        router.get("/getUserConfig").coroutineHandler { userController.getUserConfig(it) }
 
         // 获取用户列表
         router.get("/reader3/getUserList").coroutineHandler { userController.getUserList(it) }
+        router.get("/getUserList").coroutineHandler { userController.getUserList(it) }
 
         // 删除用户
         router.post("/reader3/deleteUsers").coroutineHandler { userController.deleteUsers(it) }
+        router.post("/deleteUsers").coroutineHandler { userController.deleteUsers(it) }
 
         // 添加用户
         router.post("/reader3/addUser").coroutineHandler { userController.addUser(it) }
+        router.post("/addUser").coroutineHandler { userController.addUser(it) }
 
         // 重置用户密码
         router.post("/reader3/resetPassword").coroutineHandler { userController.resetPassword(it) }
+        router.post("/resetPassword").coroutineHandler { userController.resetPassword(it) }
 
         // 更新用户
         router.post("/reader3/updateUser").coroutineHandler { userController.updateUser(it) }
+        router.post("/updateUser").coroutineHandler { userController.updateUser(it) }
 
         // 系统全局配置与清理维护
         router.get("/reader3/getSystemConfig").coroutineHandler { userController.getSystemConfig(it) }
@@ -416,23 +448,31 @@ class YueduApi : RestVerticle() {
         /** webdav模块 */
         // 获取webdav备份列表
         router.get("/reader3/getWebdavFileList").coroutineHandler { webdavController.getWebdavFileList(it) }
+        router.get("/getWebdavFileList").coroutineHandler { webdavController.getWebdavFileList(it) }
 
         // 下载webdav文件
         router.get("/reader3/getWebdavFile").coroutineHandlerWithoutRes { webdavController.getWebdavFile(it) }
+        router.get("/getWebdavFile").coroutineHandlerWithoutRes { webdavController.getWebdavFile(it) }
 
         // 上传webdav文件
         router.post("/reader3/uploadFileToWebdav").coroutineHandler { webdavController.uploadFileToWebdav(it) }
+        router.post("/uploadFileToWebdav").coroutineHandler { webdavController.uploadFileToWebdav(it) }
 
         // 删除webdav文件
         router.get("/reader3/deleteWebdavFile").coroutineHandler { webdavController.deleteWebdavFile(it) }
+        router.get("/deleteWebdavFile").coroutineHandler { webdavController.deleteWebdavFile(it) }
         router.post("/reader3/deleteWebdavFile").coroutineHandler { webdavController.deleteWebdavFile(it) }
+        router.post("/deleteWebdavFile").coroutineHandler { webdavController.deleteWebdavFile(it) }
         router.post("/reader3/deleteWebdavFileList").coroutineHandler { webdavController.deleteWebdavFileList(it) }
+        router.post("/deleteWebdavFileList").coroutineHandler { webdavController.deleteWebdavFileList(it) }
 
         // 从webdav备份恢复
         router.post("/reader3/restoreFromWebdav").coroutineHandler { webdavController.restoreFromWebdav(it) }
+        router.post("/restoreFromWebdav").coroutineHandler { webdavController.restoreFromWebdav(it) }
 
         // 备份到webdav
         router.post("/reader3/backupToWebdav").coroutineHandler { webdavController.backupToWebdav(it) }
+        router.post("/backupToWebdav").coroutineHandler { webdavController.backupToWebdav(it) }
 
 
         /** rss模块 */
