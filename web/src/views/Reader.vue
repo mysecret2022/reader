@@ -686,7 +686,7 @@ export default {
             ) {
               return;
             }
-            this.closeTextActionMenu(true);
+            this.textActionMenuVisible = false;
             document.removeEventListener("pointerdown", closeHandler, true);
           };
           document.addEventListener("pointerdown", closeHandler, true);
@@ -1936,7 +1936,7 @@ export default {
     handleTouchStart(e) {
       this.isTouchActive = true;
       if (this.textActionMenuVisible) {
-        this.closeTextActionMenu(true);
+        this.textActionMenuVisible = false;
       }
       this.lastSelection = this.checkSelection();
       if (this.lastSelection) {
@@ -4664,15 +4664,10 @@ export default {
   transform: translate(-50%, 15px);
 }
 
-/* 屏蔽 iOS/移动端原生文本选择弹窗 */
+/* 屏蔽 iOS/移动端原生文本选择弹窗，但完整保留文本高亮与游标选择 */
 .chapter-wrapper.suppress-callout {
-  -webkit-touch-callout: none;
-
-  .content,
-  .content-inner,
-  .book-content,
-  .chapter-content {
-    -webkit-touch-callout: none;
+  &, * {
+    -webkit-touch-callout: none !important;
   }
 }
 
