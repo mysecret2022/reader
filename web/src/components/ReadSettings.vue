@@ -322,14 +322,7 @@
               :key="index"
               :class="{ selected: config.readMethod == method }"
               @click="setReadMethod(method)"
-              v-show="
-                (!$store.state.miniInterface && method !== '左右滑动') ||
-                  $store.state.miniInterface
-              "
               >{{ method }}</span
-            >
-            <span class="small-tip"
-              >❗️上下滚动2会自动隐藏看过的章节，但是可能会抖动</span
             >
           </div>
         </li>
@@ -491,7 +484,7 @@ export default {
         { src: "bg/边彩画布.jpg" }
       ],
       fonts: ["系统", "文楷", "宋体", "手写体"],
-      readMethods: ["上下滑动", "左右滑动", "上下滚动", "上下滚动2"],
+      readMethods: ["上下滑动", "左右滑动", "仿真翻页"],
       clickMethods: ["下一页", "自动", "不翻页"],
       selectionActions: ["操作弹窗", "忽略"],
       pageModes: ["自适应", "手机模式"],

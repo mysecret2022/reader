@@ -437,6 +437,49 @@
             @epubKeydown="keydownHandler($event, true)"
           />
         </div>
+        <!-- 仿真翻页 3D 纸张拟真翻页图层 -->
+        <div class="simulation-flip-container" v-if="isSimulationFlipping">
+          <div class="simulation-page-sheet" :style="sheetTransformStyle">
+            <div class="sheet-face sheet-front" :style="sheetFrontStyle">
+              <div
+                class="sheet-content"
+                :style="{
+                  transform: `translateX(${flipperOffset}px)`
+                }"
+                v-html="flipperHTML"
+              ></div>
+              <div
+                class="sheet-shadow"
+                :style="{
+                  opacity: sheetShadowOpacity,
+                  background: isNight
+                    ? 'linear-gradient(to right, rgba(0,0,0,0) 20%, rgba(0,0,0,0.85) 100%)'
+                    : 'linear-gradient(to right, rgba(0,0,0,0) 20%, rgba(0,0,0,0.38) 100%)'
+                }"
+              ></div>
+            </div>
+            <div class="sheet-face sheet-back" :style="sheetBackStyle">
+              <div
+                class="sheet-shadow"
+                :style="{
+                  opacity: sheetShadowOpacity,
+                  background: isNight
+                    ? 'linear-gradient(to left, rgba(0,0,0,0) 20%, rgba(0,0,0,0.85) 100%)'
+                    : 'linear-gradient(to left, rgba(0,0,0,0) 20%, rgba(0,0,0,0.38) 100%)'
+                }"
+              ></div>
+            </div>
+          </div>
+          <div
+            class="under-page-shadow"
+            :style="{
+              opacity: underShadowOpacity,
+              background: isNight
+                ? 'linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%)'
+                : 'linear-gradient(to right, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 100%)'
+            }"
+          ></div>
+        </div>
       </div>
       <div class="bottom-bar" ref="bottom">
         <span v-if="isSlideRead">{{
@@ -483,6 +526,20 @@
           <i class="el-icon-arrow-left"></i> 再次滑动返回书架
         </div>
       </transition>
+
+      <!-- 选中文本高亮图层 (彻底解决 iOS/安卓原生系统菜单弹出的问题，同时完美保留文字选区高亮) -->
+      <div
+        v-for="(rect, idx) in selectionHighlightRects"
+        :key="'selection-hl-' + idx"
+        class="custom-selection-highlight"
+        :style="{
+          position: 'fixed',
+          top: rect.top + 'px',
+          left: rect.left + 'px',
+          width: rect.width + 'px',
+          height: rect.height + 'px'
+        }"
+      ></div>
 
       <!-- 选中文字快捷操作气泡弹窗 (替代系统原生菜单，支持复制、书签、过滤) -->
       <transition name="text-action-fade">
@@ -686,7 +743,7 @@ export default {
             ) {
               return;
             }
-            this.textActionMenuVisible = false;
+            this.closeTextActionMenu(true);
             document.removeEventListener("pointerdown", closeHandler, true);
           };
           document.addEventListener("pointerdown", closeHandler, true);
@@ -876,7 +933,19 @@ export default {
         placeBelow: false
       },
       isTouchActive: false,
-      selectionChangeTimer: null
+      selectionChangeTimer: null,
+
+      // 仿真翻页 3D 纸张翻折状态
+      isSimulationFlipping: false,
+      flipAngle: 0,
+      flipperHTML: "",
+      flipperOffset: 0,
+      flipDirection: "next",
+
+      // 文本选区高亮与弹窗关闭防误触冷冻期
+      selectionHighlightRects: [],
+      dismissCooldown: 0,
+      isDismissingMenu: false
     };
   },
   computed: {
@@ -922,6 +991,35 @@ export default {
         this.isAudio
         ? false
         : this.$store.getters.isSlideRead;
+    },
+    isSimulationRead() {
+      return this.isSlideRead && this.config.readMethod === "仿真翻页";
+    },
+    sheetTransformStyle() {
+      return {
+        transform: `rotateY(${this.flipAngle}deg)`,
+        WebkitTransform: `rotateY(${this.flipAngle}deg)`
+      };
+    },
+    sheetFrontStyle() {
+      return {
+        background: this.$store.getters.currentThemeConfig.body
+      };
+    },
+    sheetBackStyle() {
+      return {
+        background: this.$store.getters.currentThemeConfig.body,
+        transform: "rotateY(180deg)",
+        WebkitTransform: "rotateY(180deg)"
+      };
+    },
+    sheetShadowOpacity() {
+      const rad = Math.abs(this.flipAngle) * (Math.PI / 180);
+      return Math.sin(rad) * 0.65;
+    },
+    underShadowOpacity() {
+      const rad = Math.abs(this.flipAngle) * (Math.PI / 180);
+      return Math.sin(rad) * 0.45;
     },
     isScrollRead() {
       return (
@@ -1747,11 +1845,15 @@ export default {
       if (!this.show) {
         return;
       }
-      if (this.transforming) {
+      if (this.transforming || this.isSimulationFlipping) {
         return;
       }
       if (this.isSlideRead) {
         if (this.currentPage < this.totalPages) {
+          if (this.isSimulationRead) {
+            this.flipPage("next");
+            return;
+          }
           if (typeof moveX === "undefined") {
             this.transformX =
               -(this.windowSize.width - 16) * (this.currentPage - 1);
@@ -1792,11 +1894,15 @@ export default {
       if (!this.show) {
         return;
       }
-      if (this.transforming) {
+      if (this.transforming || this.isSimulationFlipping) {
         return;
       }
       if (this.isSlideRead) {
         if (this.currentPage > 1) {
+          if (this.isSimulationRead) {
+            this.flipPage("prev");
+            return;
+          }
           if (typeof moveX === "undefined") {
             this.transformX =
               -(this.windowSize.width - 16) * (this.currentPage - 1);
@@ -1828,6 +1934,83 @@ export default {
           this.currentPage = 1;
           this.toLastChapter();
         }
+      }
+    },
+    flipPage(direction) {
+      if (this.transforming || this.isSimulationFlipping) {
+        return;
+      }
+      if (!this.$refs.bookContentRef || !this.$refs.bookContentRef.$el) {
+        return;
+      }
+      const pageWidth = this.windowSize.width - 16;
+      this.transforming = true;
+      this.isSimulationFlipping = true;
+      this.flipDirection = direction;
+
+      if (direction === "next") {
+        this.flipperHTML = this.$refs.bookContentRef.$el.outerHTML;
+        this.flipperOffset = -(pageWidth * (this.currentPage - 1));
+
+        this.currentPage += 1;
+        this.transformX = -(pageWidth * (this.currentPage - 1));
+        this.contentStyle = {
+          transform: `translateX(${this.transformX}px)`
+        };
+
+        const duration = this.animateMSTime || 360;
+        const timing = Animate.Utils.makeEaseInOut(
+          Animate.Timings.power.bind(null, 3)
+        );
+
+        new Animate({
+          duration: duration,
+          timing: timing,
+          draw: progress => {
+            this.flipAngle = -progress * 180;
+          },
+          onEnd: () => {
+            this.flipAngle = 0;
+            this.isSimulationFlipping = false;
+            this.flipperHTML = "";
+            this.transforming = false;
+            setTimeout(this.saveReadingPosition, 50);
+          }
+        });
+      } else {
+        this.flipperHTML = this.$refs.bookContentRef.$el.outerHTML;
+        this.currentPage -= 1;
+        this.transformX = -(pageWidth * (this.currentPage - 1));
+        this.flipperOffset = this.transformX;
+
+        const oldX = -(pageWidth * this.currentPage);
+        this.contentStyle = {
+          transform: `translateX(${oldX}px)`
+        };
+
+        this.flipAngle = -180;
+        const duration = this.animateMSTime || 360;
+        const timing = Animate.Utils.makeEaseInOut(
+          Animate.Timings.power.bind(null, 3)
+        );
+
+        new Animate({
+          duration: duration,
+          timing: timing,
+          draw: progress => {
+            this.flipAngle = -180 + progress * 180;
+          },
+          onEnd: () => {
+            this.flipAngle = 0;
+            this.contentStyle = {
+              transform: `translateX(${this.transformX}px)`
+            };
+            this.isSimulationFlipping = false;
+            this.flipperHTML = "";
+            this.transforming = false;
+            setTimeout(this.saveReadingPosition, 50);
+          }
+        });
       }
     },
     showPage(page, duration) {
@@ -1914,7 +2097,12 @@ export default {
     },
     handlerClick(e) {
       if (this.textActionMenuVisible) {
-        this.textActionMenuVisible = false;
+        this.closeTextActionMenu(true);
+        this.ignoreNextClick = true;
+        return;
+      }
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        this.ignoreNextClick = true;
         return;
       }
       if (this.isEpub) {
@@ -1936,7 +2124,20 @@ export default {
     handleTouchStart(e) {
       this.isTouchActive = true;
       if (this.textActionMenuVisible) {
-        this.textActionMenuVisible = false;
+        if (
+          this.$refs.textActionMenuRef &&
+          this.$refs.textActionMenuRef.contains(e.target)
+        ) {
+          return;
+        }
+        this.closeTextActionMenu(true);
+        this.isDismissingMenu = true;
+        this.lastSelection = null;
+        return;
+      }
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        this.lastSelection = null;
+        return;
       }
       this.lastSelection = this.checkSelection();
       if (this.lastSelection) {
@@ -2005,42 +2206,59 @@ export default {
         if (this.isSlideRead) {
           e.preventDefault();
           e.stopPropagation();
-          this.contentStyle = {
-            transform: `translateX(${this.transformX + moveX}px)`
-          };
+          if (!this.isSimulationRead) {
+            this.contentStyle = {
+              transform: `translateX(${this.transformX + moveX}px)`
+            };
+          }
           this.lastMoveX = moveX;
         }
       }
     },
     handleTouchCancel() {
       this.isTouchActive = false;
+      if (this.isDismissingMenu) {
+        this.isDismissingMenu = false;
+        this.lastSelection = null;
+        return;
+      }
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        this.lastSelection = null;
+        return;
+      }
       setTimeout(() => {
         this.checkAndTriggerSelection();
       }, 80);
     },
     handleMouseUp() {
+      if (this.isDismissingMenu) {
+        this.isDismissingMenu = false;
+        this.lastSelection = null;
+        return;
+      }
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        this.lastSelection = null;
+        return;
+      }
       setTimeout(() => {
         this.checkAndTriggerSelection();
       }, 50);
     },
     handleTouchEnd() {
       this.isTouchActive = false;
+      if (this.isDismissingMenu) {
+        this.isDismissingMenu = false;
+        this.lastSelection = null;
+        return;
+      }
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        this.lastSelection = null;
+        return;
+      }
       setTimeout(() => {
         this.checkAndTriggerSelection();
       }, 80);
       if (this.checkSelection(true)) {
-        return;
-      }
-      if (this.lastSelection) {
-        setTimeout(() => {
-          if (
-            this.$store.getters.config.selectionAction === "过滤弹窗" ||
-            this.$store.getters.config.selectionAction === "操作弹窗"
-          ) {
-            this.showTextOperate(this.lastSelection);
-          }
-          this.lastSelection = false;
-        }, 200);
         return;
       }
 
@@ -2073,6 +2291,16 @@ export default {
       }
 
       if (this.lastMoveX) {
+        if (this.isSimulationRead) {
+          const moveX = this.lastMoveX;
+          this.lastMoveX = 0;
+          if (moveX < -30) {
+            this.nextPage();
+          } else if (moveX > 30) {
+            this.prevPage();
+          }
+          return;
+        }
         this.transformX += this.lastMoveX;
         if (this.lastMoveX > 0) {
           // 上一页
@@ -2336,6 +2564,23 @@ export default {
               placeBelow = true;
             }
           }
+          // 提取选区的所有行选框矩形，作为高亮层展示在正文上方
+          const clientRects = Array.from(
+            range.getClientRects ? range.getClientRects() : [rect]
+          );
+          this.selectionHighlightRects = clientRects
+            .filter(r => r.width > 0 && r.height > 0)
+            .map(r => ({
+              top: r.top,
+              left: r.left,
+              width: r.width,
+              height: r.height
+            }));
+
+          // 提取完坐标后立即清空原生选区，彻底阻断 iOS Safari / 安卓长按呼出的原生上下文菜单（拷贝/查询/翻译/搜索网页）
+          if (sel.removeAllRanges) {
+            sel.removeAllRanges();
+          }
         } catch (e) {
           // ignore
         }
@@ -2348,17 +2593,32 @@ export default {
       this.textActionMenuPos = { top, left, placeBelow };
       this.textActionMenuVisible = true;
     },
-    closeTextActionMenu(clearSelection = true) {
+    closeTextActionMenu(clearHighlight = true) {
       this.textActionMenuVisible = false;
-      if (clearSelection && window.getSelection) {
+      this.lastSelection = null;
+      if (clearHighlight) {
+        this.selectionHighlightRects = [];
+      }
+      if (this.selectionChangeTimer) {
+        clearTimeout(this.selectionChangeTimer);
+        this.selectionChangeTimer = null;
+      }
+      if (window.getSelection) {
         try {
           window.getSelection().removeAllRanges();
         } catch (err) {
           // ignore
         }
       }
+      this.dismissCooldown = Date.now() + 450;
     },
     handleSelectionChange() {
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        return;
+      }
+      if (this.isDismissingMenu) {
+        return;
+      }
       if (
         !this.$store.getters.config ||
         (this.$store.getters.config.selectionAction !== "过滤弹窗" &&
@@ -2401,6 +2661,12 @@ export default {
       }, delay);
     },
     checkAndTriggerSelection() {
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        return;
+      }
+      if (this.isDismissingMenu) {
+        return;
+      }
       if (
         !this.$store.getters.config ||
         (this.$store.getters.config.selectionAction !== "过滤弹窗" &&
@@ -4738,5 +5004,103 @@ export default {
   &.is-below {
     transform: translate(-50%, 0) scale(0.9);
   }
+}
+
+/* 选中文本高亮层 */
+.custom-selection-highlight {
+  position: fixed;
+  background: rgba(64, 158, 255, 0.35);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 9998;
+  mix-blend-mode: multiply;
+}
+.night .custom-selection-highlight {
+  background: rgba(64, 158, 255, 0.48);
+  mix-blend-mode: screen;
+}
+
+/* 仿真翻页 3D 纸张拟真翻页图层 */
+.simulation-flip-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  perspective: 1600px;
+  -webkit-perspective: 1600px;
+  pointer-events: none;
+  z-index: 20;
+  overflow: hidden;
+}
+
+.simulation-page-sheet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  transform-origin: left center;
+  -webkit-transform-origin: left center;
+  will-change: transform;
+}
+
+.sheet-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.3);
+}
+
+.sheet-front {
+  z-index: 2;
+}
+
+.sheet-back {
+  z-index: 1;
+}
+
+.sheet-content {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+
+  .content-inner {
+    margin: 0 16px;
+    height: 100%;
+  }
+
+  .book-content {
+    height: 100%;
+    -webkit-columns: calc(100vw - 16px) 1;
+    columns: calc(100vw - 16px) 1;
+    column-gap: 16px;
+  }
+}
+
+.sheet-shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.under-page-shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 35%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 15;
 }
 </style>

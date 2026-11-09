@@ -449,7 +449,14 @@ export default new Vuex.Store({
       return getters.api.replace(/\/reader3\/?/, "");
     },
     isSlideRead: state => {
-      return state.miniInterface && state.config.readMethod === "左右滑动";
+      return (
+        state.miniInterface &&
+        (state.config.readMethod === "左右滑动" ||
+          state.config.readMethod === "仿真翻页")
+      );
+    },
+    isSimulationRead: state => {
+      return state.miniInterface && state.config.readMethod === "仿真翻页";
     },
     isSystemNight: state => {
       return state.config.theme === settings.defaultNightTheme;
@@ -762,7 +769,10 @@ export default new Vuex.Store({
             ...settings.searchConfig,
             ...searchConfig
           };
-          if (!mergedConfig.concurrentCount || mergedConfig.concurrentCount > 30) {
+          if (
+            !mergedConfig.concurrentCount ||
+            mergedConfig.concurrentCount > 30
+          ) {
             mergedConfig.concurrentCount = 8;
           }
           commit("setSearchConfig", mergedConfig);
