@@ -163,21 +163,11 @@
         </div>
       </form>
 
-      <!-- 底部辅助说明（firefly-panel 规范） -->
+      <!-- 底部辅助说明 -->
       <div class="firefly-footer">
         <div class="tip-line">
           初始管理员: <strong class="badge-text">admin</strong> &nbsp;|&nbsp;
           初始密码: <strong class="badge-text">admin</strong>
-        </div>
-        <div class="credit-line">
-          Designed with
-          <a
-            href="https://github.com/mysecret2022/firefly-panel"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="firefly-brand-link"
-            >Firefly-panel</a
-          >
         </div>
       </div>
     </div>
