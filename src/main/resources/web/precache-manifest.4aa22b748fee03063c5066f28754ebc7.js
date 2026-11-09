@@ -80,8 +80,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "css/admin~index.d55d2547.css"
   },
   {
-    "revision": "03485e4c6bb3e605f8c5",
-    "url": "css/app.d6cd1138.css"
+    "revision": "f80b7b1ca6bff2cf6cef",
+    "url": "css/app.70eacf82.css"
   },
   {
     "revision": "c669bb41c24f8ccac9d7",
@@ -1288,6 +1288,10 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "fonts/songti/songti.css"
   },
   {
+    "revision": "4bca449063e6e0ed7831c8134080bbbe",
+    "url": "img/firefly.4bca4490.webp"
+  },
+  {
     "revision": "1a2a0d7d3b97e159c0f16c357a652771",
     "url": "img/icons/android-chrome-192x192.png"
   },
@@ -1368,8 +1372,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "js/admin~index.7910c07a.js"
   },
   {
-    "revision": "03485e4c6bb3e605f8c5",
-    "url": "js/app.5f89a1f5.js"
+    "revision": "f80b7b1ca6bff2cf6cef",
+    "url": "js/app.36283661.js"
   },
   {
     "revision": "c669bb41c24f8ccac9d7",

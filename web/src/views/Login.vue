@@ -1,28 +1,7 @@
 <template>
-  <div
-    class="lx-login-container"
-    :class="isDark ? 'theme-dark' : 'theme-light'"
-  >
-    <!-- 动态极光渐变背景与微网格 -->
-    <div class="ambient-canvas">
-      <div class="aurora-blob aurora-1"></div>
-      <div class="aurora-blob aurora-2"></div>
-      <div class="aurora-blob aurora-3"></div>
-    </div>
-    <div class="bg-grid-mask"></div>
-
-    <!-- 左上方主题与返回快捷按钮 -->
+  <div class="firefly-login-container">
+    <!-- 顶部操作栏：模式与返回 -->
     <div class="top-nav-bar">
-      <button
-        type="button"
-        class="nav-pill-btn"
-        @click="toggleTheme"
-        :title="isDark ? '切换亮色主题' : '切换暗色主题'"
-      >
-        <i :class="isDark ? 'el-icon-moon' : 'el-icon-sunny'"></i>
-        <span>{{ isDark ? "暗色模式" : "亮色模式" }}</span>
-      </button>
-
       <button
         type="button"
         class="nav-pill-btn"
@@ -35,24 +14,25 @@
       </button>
     </div>
 
-    <!-- 登录主卡片 -->
-    <div class="glass-card" :class="{ 'shake-active': isErrorShake }">
-      <!-- 头部：Logo 与 标题 -->
-      <div class="card-header">
-        <div class="logo-box">
-          <i class="el-icon-reading"></i>
-        </div>
-        <h1 class="card-title">Reader 阅 读</h1>
-        <p class="mode-desc">
+    <!-- VisionOS 极光悬浮毛玻璃登录卡片 (Derived from mysecret2022/firefly-panel) -->
+    <div class="login-card" :class="{ 'shake-active': isErrorShake }">
+      <!-- 极光流萤发光标题 -->
+      <div class="login-title">
+        <span
+          class="text-3xl font-extrabold tracking-wide firefly-glow-title select-none"
+        >
+          Reader
+        </span>
+        <p class="subtitle-desc">
           {{
             isLogin
-              ? "登录您的专属阅读空间，同步书架与书源"
-              : "创建新账号开启纯净阅读体验"
+              ? "欢迎回来，畅享舒适阅读时光"
+              : "创建专属账号，同步书架与书源"
           }}
         </p>
       </div>
 
-      <!-- 模式切换选择器 (Segmented Control) -->
+      <!-- 模式切换：登录 / 注册 -->
       <div class="segmented-control">
         <div
           class="tab-pill"
@@ -74,37 +54,47 @@
           @click="switchMode(false)"
         >
           <i class="el-icon-edit-outline"></i>
-          <span>新用户注册</span>
+          <span>用户注册</span>
         </button>
       </div>
 
       <!-- 表单区域 -->
       <form @submit.prevent="handleSubmit" class="login-form">
-        <!-- 用户名 -->
-        <div class="input-wrapper">
+        <!-- 账号 -->
+        <div
+          class="input-wrapper"
+          :class="{ focused: usernameFocus || loginForm.username }"
+        >
           <span class="input-icon"><i class="el-icon-user"></i></span>
           <input
             type="text"
             v-model="loginForm.username"
-            placeholder="请输入用户名"
-            class="modern-input"
+            placeholder="请输入账号"
+            class="firefly-input"
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
             required
+            @focus="usernameFocus = true"
+            @blur="usernameFocus = false"
           />
         </div>
 
         <!-- 密码 -->
-        <div class="input-wrapper">
+        <div
+          class="input-wrapper"
+          :class="{ focused: passwordFocus || loginForm.password }"
+        >
           <span class="input-icon"><i class="el-icon-lock"></i></span>
           <input
             :type="showPassword ? 'text' : 'password'"
             v-model="loginForm.password"
             placeholder="请输入密码"
-            class="modern-input"
+            class="firefly-input"
             autocomplete="current-password"
             required
+            @focus="passwordFocus = true"
+            @blur="passwordFocus = false"
           />
           <button
             type="button"
@@ -116,56 +106,79 @@
           </button>
         </div>
 
-        <!-- 注册邀请码 (注册时显示) -->
-        <div class="input-wrapper register-fade" v-if="!isLogin">
-          <span class="input-icon"><i class="el-icon-key"></i></span>
-          <input
-            type="text"
-            v-model="loginForm.code"
-            placeholder="邀请码（未启用邀请码则留空）"
-            class="modern-input"
-            autocomplete="off"
-          />
-        </div>
+        <!-- 注册邀请码 (注册时展开) -->
+        <transition name="fade">
+          <div
+            class="input-wrapper"
+            v-if="!isLogin"
+            :class="{ focused: codeFocus || loginForm.code }"
+          >
+            <span class="input-icon"><i class="el-icon-key"></i></span>
+            <input
+              type="text"
+              v-model="loginForm.code"
+              placeholder="邀请码（未开放自由注册时必填）"
+              class="firefly-input"
+              autocomplete="off"
+              @focus="codeFocus = true"
+              @blur="codeFocus = false"
+            />
+          </div>
+        </transition>
 
-        <!-- 记住登录 / 选项 -->
+        <!-- 记住状态与操作 -->
         <div class="form-options">
           <label class="checkbox-label">
             <input type="checkbox" v-model="remember" />
             <span class="checkbox-custom"></span>
-            <span class="checkbox-text">记住登录状态</span>
+            <span class="checkbox-text">保持登录状态</span>
           </label>
+          <button
+            type="button"
+            class="link-ghost-btn"
+            @click="clearLocalCache"
+            title="清理本地历史凭据"
+          >
+            <i class="el-icon-refresh-left"></i> 清理凭据
+          </button>
         </div>
 
-        <!-- 错误提示横条 -->
-        <div class="error-banner" v-if="errorMsg">
-          <i class="el-icon-warning-outline"></i>
-          <span>{{ errorMsg }}</span>
-        </div>
+        <!-- 错误提示 -->
+        <transition name="fade">
+          <div class="error-banner" v-if="errorMsg">
+            <i class="el-icon-warning-outline"></i>
+            <span>{{ errorMsg }}</span>
+          </div>
+        </transition>
 
-        <!-- 提交按钮与游客快速通道 -->
+        <!-- 提交按钮 -->
         <div class="submit-actions">
-          <button type="submit" class="btn-gradient-submit" :disabled="loading">
+          <button type="submit" class="btn-firefly-submit" :disabled="loading">
             <i class="el-icon-loading" v-if="loading"></i>
             <i class="el-icon-right" v-else></i>
             <span>{{
-              loading ? "正在提交..." : isLogin ? "立即登录" : "注册账号"
+              loading ? "处理中..." : isLogin ? "立 即 登 录" : "注 册 账 号"
             }}</span>
           </button>
         </div>
       </form>
 
-      <!-- 底部辅助信息 -->
-      <div class="card-footer">
-        <span>开源阅读服务 Web 端</span>
-        <button
-          type="button"
-          class="footer-link-btn"
-          @click="clearLocalCache"
-          title="清除本地可能缓存的失效凭据"
-        >
-          <i class="el-icon-refresh-left"></i> 清理本地凭据
-        </button>
+      <!-- 底部辅助说明（firefly-panel 规范） -->
+      <div class="firefly-footer">
+        <div class="tip-line">
+          初始管理员: <strong class="badge-text">admin</strong> &nbsp;|&nbsp;
+          初始密码: <strong class="badge-text">admin</strong>
+        </div>
+        <div class="credit-line">
+          Designed with
+          <a
+            href="https://github.com/mysecret2022/firefly-panel"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="firefly-brand-link"
+            >Firefly-panel</a
+          >
+        </div>
       </div>
     </div>
   </div>
@@ -190,6 +203,9 @@ export default {
       loading: false,
       errorMsg: "",
       isErrorShake: false,
+      usernameFocus: false,
+      passwordFocus: false,
+      codeFocus: false,
       loginForm: {
         username: "",
         password: "",
@@ -197,20 +213,7 @@ export default {
       }
     };
   },
-  computed: {
-    isDark() {
-      return this.$store.getters.isNight;
-    }
-  },
   methods: {
-    toggleTheme() {
-      const nextNight = !this.isDark;
-      this.$store.commit("setIsNight", nextNight);
-      this.$store.commit("setConfig", {
-        key: "isNight",
-        value: nextNight
-      });
-    },
     switchMode(isLogin) {
       this.isLogin = isLogin;
       this.errorMsg = "";
@@ -248,383 +251,181 @@ export default {
             remember: this.remember
           });
         } else {
-          const err =
+          const msg =
             (res && res.data && res.data.errorMsg) || "操作失败，请重试";
-          this.triggerShake(err);
+          this.triggerShake(msg);
         }
       } catch (err) {
         const msg =
-          (err && (err.errorMsg || err.message)) ||
-          "网络连接异常，请检查服务状态";
+          (err &&
+            err.response &&
+            err.response.data &&
+            err.response.data.errorMsg) ||
+          "网络或服务异常，请稍后重试";
         this.triggerShake(msg);
       } finally {
         this.loading = false;
       }
     },
     clearLocalCache() {
-      this.$store.commit("setToken", "");
-      this.loginForm.username = "";
-      this.loginForm.password = "";
-      this.loginForm.code = "";
-      this.$message.info("本地凭据已重置");
+      try {
+        localStorage.removeItem("auth");
+        localStorage.removeItem("userToken");
+        sessionStorage.clear();
+        this.$message.info("已清理本地登录凭据缓存");
+        this.loginForm.username = "";
+        this.loginForm.password = "";
+        this.loginForm.code = "";
+      } catch (e) {
+        // ignore
+      }
     }
   }
 };
 </script>
 
 <style scoped>
-.lx-login-container {
+.firefly-login-container {
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+  background: url("~@/assets/firefly.webp") no-repeat center center;
+  background-size: cover;
   position: fixed;
   inset: 0;
-  z-index: 2500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  transition: background 0.4s ease, color 0.4s ease;
+  z-index: 2000;
+  overflow-y: auto;
 }
 
-/* ===== 暗色模式 ===== */
-.lx-login-container.theme-dark {
-  background: #090d16;
-  color: #f3f4f6;
-}
-
-.lx-login-container.theme-dark .bg-grid-mask {
-  background-image: linear-gradient(
-      to right,
-      rgba(255, 255, 255, 0.03) 1px,
-      transparent 1px
-    ),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-}
-
-.lx-login-container.theme-dark .glass-card {
-  background: rgba(18, 24, 38, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.75),
-    0 18px 36px -18px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 0 20px rgba(16, 185, 129, 0.05);
-}
-
-.lx-login-container.theme-dark .modern-input {
-  background: rgba(11, 15, 25, 0.75);
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-}
-
-.lx-login-container.theme-dark .modern-input:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(15, 21, 34, 0.88);
-}
-
-.lx-login-container.theme-dark .modern-input:focus {
-  border-color: #10b981;
-  background: rgba(16, 24, 39, 0.98);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2),
-    0 4px 20px rgba(16, 185, 129, 0.18);
-}
-
-.lx-login-container.theme-dark .segmented-control {
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.lx-login-container.theme-dark .nav-pill-btn {
-  background: rgba(18, 24, 38, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #f3f4f6;
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.5);
-}
-
-.lx-login-container.theme-dark .card-title {
-  color: #ffffff;
-}
-
-.lx-login-container.theme-dark .mode-desc {
-  color: #94a3b8;
-}
-
-/* ===== 亮色模式 ===== */
-.lx-login-container.theme-light {
-  background: #f0fdf4;
-  color: #1e293b;
-}
-
-.lx-login-container.theme-light .bg-grid-mask {
-  background-image: linear-gradient(
-      to right,
-      rgba(16, 185, 129, 0.08) 1px,
-      transparent 1px
-    ),
-    linear-gradient(to bottom, rgba(16, 185, 129, 0.08) 1px, transparent 1px);
-}
-
-.lx-login-container.theme-light .glass-card {
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 30px 60px -12px rgba(16, 185, 129, 0.18),
-    0 18px 36px -18px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1),
-    inset 0 0 20px rgba(16, 185, 129, 0.06);
-}
-
-.lx-login-container.theme-light .modern-input {
-  background: rgba(248, 250, 252, 0.9);
-  border: 1.5px solid rgba(203, 213, 225, 0.8);
-  color: #0f172a;
-}
-
-.lx-login-container.theme-light .modern-input::placeholder {
-  color: #94a3b8;
-}
-
-.lx-login-container.theme-light .modern-input:hover {
-  border-color: rgba(16, 185, 129, 0.45);
-  background: #ffffff;
-}
-
-.lx-login-container.theme-light .modern-input:focus {
-  border-color: #10b981;
-  background: #ffffff;
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.16),
-    0 4px 16px rgba(16, 185, 129, 0.12);
-}
-
-.lx-login-container.theme-light .segmented-control {
-  background: rgba(241, 245, 249, 0.9);
-  border: 1px solid rgba(203, 213, 225, 0.7);
-}
-
-.lx-login-container.theme-light .nav-pill-btn {
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(203, 213, 225, 0.8);
-  color: #0f172a;
-  box-shadow: 0 8px 20px -4px rgba(16, 185, 129, 0.15);
-}
-
-.lx-login-container.theme-light .card-title {
-  color: #0f172a;
-}
-
-.lx-login-container.theme-light .mode-desc {
-  color: #64748b;
-}
-
-/* 动态微网格与极光背景 */
-.ambient-canvas {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 0;
-}
-
-.aurora-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.55;
-  mix-blend-mode: screen;
-  animation: floatAurora 18s ease-in-out infinite alternate;
-}
-
-.theme-light .aurora-blob {
-  opacity: 0.4;
-  mix-blend-mode: normal;
-}
-
-.aurora-1 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(
-    circle,
-    #059669 0%,
-    rgba(16, 185, 129, 0.4) 50%,
-    transparent 70%
-  );
-  top: -10%;
-  left: -5%;
-  animation-duration: 20s;
-}
-
-.aurora-2 {
-  width: 560px;
-  height: 560px;
-  background: radial-gradient(
-    circle,
-    #0284c7 0%,
-    rgba(6, 182, 212, 0.4) 50%,
-    transparent 70%
-  );
-  bottom: -15%;
-  right: -10%;
-  animation-duration: 24s;
-  animation-delay: -5s;
-}
-
-.aurora-3 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(
-    circle,
-    #6366f1 0%,
-    rgba(99, 102, 241, 0.3) 50%,
-    transparent 70%
-  );
-  top: 45%;
-  left: 35%;
-  animation-duration: 16s;
-  animation-delay: -9s;
-}
-
-@keyframes floatAurora {
-  0% {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-  }
-  50% {
-    transform: translate(50px, 40px) scale(1.1) rotate(45deg);
-  }
-  100% {
-    transform: translate(-30px, -20px) scale(0.95) rotate(-30deg);
-  }
-}
-
-.bg-grid-mask {
-  position: absolute;
-  inset: 0;
-  background-size: 40px 40px;
-  mask-image: radial-gradient(
-    ellipse 80% 80% at 50% 50%,
-    #000 60%,
-    transparent 100%
-  );
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* 顶部浮动控制导航栏 */
+/* 顶部操作条 */
 .top-nav-bar {
   position: absolute;
-  top: 24px;
-  left: 24px;
-  right: 24px;
-  z-index: 20;
+  top: max(16px, env(safe-area-inset-top));
+  right: 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  pointer-events: none;
+  gap: 10px;
+  z-index: 10;
 }
 
 .nav-pill-btn {
-  pointer-events: auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 8px 14px;
   border-radius: 9999px;
-  cursor: pointer;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(18, 22, 34, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f1f5f9;
   font-size: 13px;
-  font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  outline: none;
+  font-weight: 500;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 
 .nav-pill-btn:hover {
-  transform: translateY(-2px) scale(1.02);
-  border-color: #10b981;
+  background: rgba(18, 22, 34, 0.8);
+  border-color: rgba(99, 242, 201, 0.6);
+  color: #34d399;
+  transform: translateY(-1px);
 }
 
-.nav-pill-btn:active {
-  transform: translateY(0.5px) scale(0.98);
-}
-
-/* 磨砂玻璃卡片 */
-.glass-card {
-  position: relative;
-  z-index: 10;
-  width: 90%;
+/* VisionOS 悬浮极光毛玻璃卡片核心样式 (From firefly-panel) */
+.login-card {
+  margin: 20px;
+  width: 100%;
   max-width: 440px;
-  border-radius: 28px;
-  padding: 40px 36px;
-  box-sizing: border-box;
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Header & Logo */
-.card-header {
-  text-align: center;
-  margin-bottom: 26px;
-}
-
-.logo-box {
-  width: 66px;
-  height: 66px;
-  border-radius: 20px;
-  margin: 0 auto 16px auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
-  box-shadow: 0 12px 28px -4px rgba(16, 185, 129, 0.45);
+  border-radius: 28px !important;
   position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 32px 30px 24px;
+
+  /* 高透磨砂质感 */
+  background: rgba(18, 22, 34, 0.65) !important;
+  backdrop-filter: blur(32px) saturate(210%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(210%) !important;
+
+  /* 极光双层微光边框与悬浮高光深度投影 */
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.55),
+    0 0 50px -10px rgba(99, 242, 201, 0.25),
+    0 0 35px -8px rgba(251, 191, 36, 0.18),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.55),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.15) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-.logo-box::after {
+/* 极光环形边缘折射伪元素 */
+.login-card::before {
   content: "";
   position: absolute;
-  inset: -4px;
-  border-radius: 24px;
-  background: linear-gradient(135deg, #10b981, #06b6d4);
-  filter: blur(12px);
-  opacity: 0.6;
-  z-index: -1;
-  animation: pulseGlow 3s ease-in-out infinite alternate;
+  inset: 0;
+  border-radius: 28px;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(99, 242, 201, 0.55) 30%,
+    rgba(251, 191, 36, 0.45) 60%,
+    rgba(167, 139, 250, 0.55) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.85;
 }
 
-@keyframes pulseGlow {
-  0% {
-    opacity: 0.35;
-    transform: scale(0.96);
-  }
-  100% {
-    opacity: 0.75;
-    transform: scale(1.05);
-  }
+/* 标题设计：流萤薄荷青 ➔ 荧光冰绿晶莹渐变 */
+.login-title {
+  text-align: center;
+  margin-bottom: 22px;
 }
 
-.logo-box i {
-  color: #ffffff;
+.firefly-glow-title {
   font-size: 32px;
-}
-
-.card-title {
-  margin: 0 0 8px 0;
-  font-size: 26px;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  background: linear-gradient(
+    135deg,
+    #a7f3d0 0%,
+    #34d399 45%,
+    #64f4ac 100%
+  ) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  filter: drop-shadow(0 0 16px rgba(52, 211, 153, 0.55))
+    drop-shadow(0 2px 10px rgba(0, 0, 0, 0.45));
+  letter-spacing: 0.05em;
+  display: inline-block;
+  transition: filter 0.3s ease;
 }
 
-.mode-desc {
-  margin: 0;
+.firefly-glow-title:hover {
+  filter: drop-shadow(0 0 24px rgba(100, 244, 172, 0.85))
+    drop-shadow(0 2px 10px rgba(0, 0, 0, 0.5));
+}
+
+.subtitle-desc {
+  margin: 6px 0 0;
   font-size: 13px;
-  line-height: 1.5;
-  transition: color 0.3s;
+  color: rgba(226, 232, 240, 0.75);
+  font-weight: 400;
 }
 
-/* 分段选项卡切换 */
+/* 模式切换器 */
 .segmented-control {
   position: relative;
   display: flex;
-  padding: 4px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
+  padding: 4px;
   margin-bottom: 24px;
 }
 
@@ -634,35 +435,32 @@ export default {
   bottom: 4px;
   left: 4px;
   width: calc(50% - 4px);
-  border-radius: 12px;
   background: linear-gradient(
     135deg,
-    rgba(16, 185, 129, 0.95),
-    rgba(5, 150, 105, 0.95)
+    rgba(16, 185, 129, 0.85) 0%,
+    rgba(5, 150, 105, 0.95) 100%
   );
+  border-radius: 12px;
   box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
-  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-  z-index: 1;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
 }
 
 .tab-btn {
-  position: relative;
-  z-index: 2;
   flex: 1;
-  border: none;
-  background: transparent;
-  padding: 10px 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #94a3b8;
-  cursor: pointer;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 12px;
-  transition: color 0.3s;
-  outline: none;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 1;
+  transition: color 0.2s ease;
 }
 
 .tab-btn.active {
@@ -680,79 +478,82 @@ export default {
   position: relative;
   display: flex;
   align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 0 14px;
+  backdrop-filter: blur(10px);
+  transition: all 0.25s ease;
 }
 
-.modern-input {
-  width: 100%;
-  border-radius: 14px;
-  padding: 13px 44px 13px 44px;
-  font-size: 15px;
-  outline: none;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-sizing: border-box;
+.input-wrapper.focused,
+.input-wrapper:focus-within {
+  border-color: rgba(99, 242, 201, 0.75) !important;
+  box-shadow: 0 0 16px rgba(99, 242, 201, 0.35) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
 }
 
 .input-icon {
-  position: absolute;
-  left: 15px;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.65);
   font-size: 18px;
-  pointer-events: none;
-  transition: color 0.25s;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
 }
 
-.modern-input:focus + .input-icon,
-.input-wrapper:focus-within .input-icon {
-  color: #10b981;
+.firefly-input {
+  flex: 1;
+  height: 44px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.firefly-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+  transition: opacity 0.2s ease;
+}
+
+.input-wrapper.focused .firefly-input::placeholder,
+.firefly-input:focus::placeholder {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .input-action-btn {
-  position: absolute;
-  right: 12px;
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 17px;
   cursor: pointer;
-  padding: 6px;
-  font-size: 16px;
-  outline: none;
-  transition: color 0.2s;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s ease;
 }
 
 .input-action-btn:hover {
-  color: #10b981;
+  color: #34d399;
 }
 
-.register-fade {
-  animation: fadeInSlide 0.3s ease;
-}
-
-@keyframes fadeInSlide {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 记住登录状态自定义多选 */
+/* 选项行 */
 .form-options {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 0 2px;
+  align-items: center;
+  font-size: 13px;
+  padding: 2px 2px;
 }
 
 .checkbox-label {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  color: rgba(226, 232, 240, 0.85);
   cursor: pointer;
-  font-size: 13px;
-  color: #94a3b8;
   user-select: none;
 }
 
@@ -761,18 +562,19 @@ export default {
 }
 
 .checkbox-custom {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   border-radius: 5px;
-  border: 1.5px solid #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
   display: inline-block;
   position: relative;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .checkbox-label input:checked + .checkbox-custom {
   background: #10b981;
-  border-color: #10b981;
+  border-color: #34d399;
 }
 
 .checkbox-label input:checked + .checkbox-custom::after {
@@ -782,153 +584,146 @@ export default {
   top: 2px;
   width: 4px;
   height: 8px;
-  border: solid #ffffff;
+  border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
 
-/* 错误提示横条 */
-.error-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 12.5px;
-  background: rgba(225, 29, 72, 0.15);
-  border: 1px solid rgba(225, 29, 72, 0.35);
-  color: #fb7185;
-}
-
-/* 流光提交按钮 */
-.btn-gradient-submit {
-  width: 100%;
-  padding: 14px 0;
-  border-radius: 14px;
-  border: none;
-  font-size: 15px;
-  font-weight: 700;
-  color: #ffffff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #0284c7 100%);
-  background-size: 200% 200%;
-  box-shadow: 0 8px 24px -4px rgba(16, 185, 129, 0.45);
-  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  outline: none;
-  margin-top: 6px;
-}
-
-.btn-gradient-submit:hover:not(:disabled) {
-  background-position: 100% 0%;
-  box-shadow: 0 12px 30px -4px rgba(16, 185, 129, 0.6),
-    0 4px 12px rgba(6, 182, 212, 0.4);
-  transform: translateY(-1.5px) scale(1.01);
-}
-
-.btn-gradient-submit:active:not(:disabled) {
-  transform: translateY(0.5px) scale(0.985);
-}
-
-.btn-gradient-submit:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  filter: grayscale(0.2);
-}
-
-/* 底部说明与清理 */
-.card-footer {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(156, 163, 175, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.footer-link-btn {
+.link-ghost-btn {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: rgba(167, 243, 208, 0.8);
   cursor: pointer;
   font-size: 12px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  outline: none;
-  transition: color 0.2s;
-  padding: 0;
+  transition: color 0.2s ease;
 }
 
-.footer-link-btn:hover {
-  color: #10b981;
+.link-ghost-btn:hover {
+  color: #6ee7b7;
+  text-decoration: underline;
 }
 
-.submit-actions {
+/* 错误横条 */
+.error-banner {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  backdrop-filter: blur(8px);
 }
 
-.btn-guest {
+/* 极光微光登录按钮 (firefly-panel 规范) */
+.btn-firefly-submit {
   width: 100%;
-  padding: 11px 16px;
-  border-radius: 12px;
-  border: 1px dashed rgba(64, 158, 255, 0.45);
-  background: rgba(64, 158, 255, 0.08);
-  color: #409eff;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
+  height: 46px;
+  border-radius: 14px !important;
+  background: linear-gradient(
+    135deg,
+    #10b981 0%,
+    #059669 50%,
+    #0d9488 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.45) !important;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-firefly-submit:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.6) !important;
+  background: linear-gradient(
+    135deg,
+    #34d399 0%,
+    #10b981 50%,
+    #059669 100%
+  ) !important;
+}
+
+.btn-firefly-submit:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.btn-firefly-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* 底部提示与版权致敬 */
+.firefly-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 6px;
-  transition: all 0.25s ease;
-  outline: none;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
 }
 
-.btn-guest:hover {
-  background: rgba(64, 158, 255, 0.16);
-  border-color: #409eff;
-  transform: translateY(-1px);
+.badge-text {
+  color: #a7f3d0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-/* 错误震动动画 */
+.firefly-brand-link {
+  color: #34d399;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.firefly-brand-link:hover {
+  color: #6ee7b7;
+  text-decoration: underline;
+}
+
+/* 抖动动画 */
 .shake-active {
-  animation: shakeHard 0.45s ease-in-out;
+  animation: shake 0.45s ease-in-out;
 }
 
-@keyframes shakeHard {
+@keyframes shake {
   0%,
   100% {
     transform: translateX(0);
   }
-  20% {
-    transform: translateX(-10px);
-  }
-  40% {
-    transform: translateX(10px);
-  }
+  20%,
   60% {
-    transform: translateX(-6px);
+    transform: translateX(-8px);
   }
+  40%,
   80% {
-    transform: translateX(6px);
+    transform: translateX(8px);
   }
 }
 
-@media (max-width: 480px) {
-  .glass-card {
-    padding: 30px 22px;
-    border-radius: 22px;
-  }
+/* 淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

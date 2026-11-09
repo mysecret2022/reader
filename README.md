@@ -229,8 +229,8 @@ storage/
    - 本项目核心代码源自作者 [hectorqin](https://github.com/hectorqin) 创造的 Reader 2.x 完整服务器端，感谢其在小说抓取规则解析、Vert.x 服务端架构上所做的卓越设计。
 2. **[gedoor/legado (阅读3.0)](https://github.com/gedoor/legado) & [gedoor/MyBookshelf](https://github.com/gedoor/MyBookshelf)**
    - 开源界最强阅读神器，本项目规则引擎、数据结构标准与书源解析生态均脱胎于阅读开源社区规范。
-3. **[XCQ0607/lxserver](https://github.com/XCQ0607/lxserver)**
-   - 本项目免弹窗全屏拟态登录页面的极光渐变、磨砂玻璃与现代卡片式交互设计灵感来源于该项目的 Web 登录界面设计。
+3. **[mysecret2022/firefly-panel](https://github.com/mysecret2022/firefly-panel)**
+   - 本项目免弹窗全屏拟态登录页面的 VisionOS 悬浮极光毛玻璃卡片、流萤薄荷荧光晶莹渐变标题与现代交互质感采用该仓库的设计规范与前端实现。
 4. **[celetor/web-yuedu3](https://github.com/celetor/web-yuedu3)**
    - 为阅读 Web 端初期提供了优秀的交互设计与组件化实现借鉴。
 
