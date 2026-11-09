@@ -1,13 +1,17 @@
 services:
   reader:
-    image: ghcr.io/mysecret2022/reader:dev
+    image: ghcr.io/mysecret2022/reader:latest
     container_name: reader
     restart: always
     ports:
-      - "8080:8080" # 外部访问端口，按需调整
+      - "8080:8080" # 外部访问端口，按需调整（宿主机端口:容器端口）
     volumes:
-      - ./storage:/storage # 数据持久化目录（书源、书架、缓存及配置）
+      - ./storage:/storage # 数据持久化目录（书源、书架、用户数据、缓存及配置）
       - ./logs:/app/logs   # 日志输出目录（与管理后台诊断日志实时互通）
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
+      - READER_APP_SECURE=true # 默认多用户鉴权模式（默认管理员：admin，默认密码：admin）
+      # 可在首次登录后台后直接修改密码及配置邀请码，也可通过下方环境变量直接初始化：
+      # - READER_APP_SECUREKEY=admin # 初始管理员密码
+      # - READER_APP_INVITECODE=      # 注册邀请码（留空则开放注册）

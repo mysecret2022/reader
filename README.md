@@ -94,17 +94,18 @@
 ```yaml
 services:
   reader:
-    image: ghcr.io/mysecret2022/reader:dev
+    image: ghcr.io/mysecret2022/reader:latest
     container_name: reader
     restart: always
     ports:
-      - "8080:8080" # 外部访问端口，按需调整
+      - "8080:8080" # 外部访问端口，按需调整（宿主机端口:容器端口）
     volumes:
-      - ./storage:/storage # 数据持久化目录（书源、书架、缓存及配置）
+      - ./storage:/storage # 数据持久化目录（书源、书架、用户数据、缓存及配置）
       - ./logs:/app/logs   # 日志输出目录（与管理后台诊断日志实时互通）
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
+      - READER_APP_SECURE=true # 默认多用户鉴权模式（默认管理员：admin，默认密码：admin）
 ```
 
 #### 2. 启动服务
@@ -114,7 +115,7 @@ docker compose up -d
 ```
 启动完成后，在浏览器访问 `http://<服务器IP>:8080` 即可进入登录界面。
 - **默认管理员账号**：`admin`
-- **默认管理员密码**：`admin`（首次登录后请在后台管理页面修改密码；若系统存在历史管理员数据则以已有配置为准）
+- **默认管理员密码**：`admin`（首次登录后请在后台管理页面修改密码；邀请码可在后台「系统设置」中直接配置）
 
 ---
 
@@ -131,7 +132,8 @@ docker run -d \
   -v $(pwd)/logs:/app/logs \
   -e TZ=Asia/Shanghai \
   -e SPRING_PROFILES_ACTIVE=prod \
-  ghcr.io/mysecret2022/reader:dev
+  -e READER_APP_SECURE=true \
+  ghcr.io/mysecret2022/reader:latest
 ```
 
 ---
@@ -139,7 +141,7 @@ docker run -d \
 ### 方式三：群晖 / 威联通 / 绿联 / 极空间 NAS 图形化部署
 
 1. **拉取镜像**：在 NAS 的 Docker/Container 应用中搜索并拉取：
-   `ghcr.io/mysecret2022/reader:dev`
+   `ghcr.io/mysecret2022/reader:latest`
 2. **端口设置**：
    - 容器端口：`8080`
    - 本地端口：`8080`（或任意未占用端口）
@@ -149,7 +151,8 @@ docker run -d \
 4. **环境参数添加**：
    - `TZ` = `Asia/Shanghai`
    - `SPRING_PROFILES_ACTIVE` = `prod`
-5. 点击创建并运行容器即可。所有权限、密码与配额直接在进入后台 `http://<NAS_IP>:8080/#/admin` 界面在线设置。
+   - `READER_APP_SECURE` = `true`
+5. 点击创建并运行容器即可。首次使用 `admin / admin` 登录，所有权限、密码与配额直接在进入后台 `http://<NAS_IP>:8080/#/admin` 界面在线设置。
 
 ---
 

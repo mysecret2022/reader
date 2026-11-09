@@ -134,9 +134,9 @@ http://ip:端口/
 reader:
   app:
     workDir: ""            # 服务工作目录（为空时自动识别为当前目录）
-    secure: false          # 是否开启登录鉴权：false 为单用户免登录模式；true 为多用户认证模式
-    inviteCode: ""         # 注册邀请码：为空则允许自由注册；配置后注册必须提供匹配的邀请码
-    secureKey: ""          # 管理密码：开启鉴权时用于保护管理后台与超级用户操作
+    secure: true           # 是否开启登录鉴权，默认为 true（标准多用户权限模式，系统自动创建默认管理员：admin / admin）
+    inviteCode: ""         # 注册邀请码：为空则开放注册；可直接在 Web 管理后台可视化配置
+    secureKey: ""          # 初始管理密码：若留空则首次运行默认管理员密码为 admin，可在后台直接修改
     cacheChapterContent: false # 是否在服务器持久化缓存抓取的章节正文内容
     debugLog: false        # 是否打印详细的抓取与通信调试日志
     autoClearInactiveUser: 0 # 自动清理不活跃用户天数：0 表示不清理，大于 0 表示清理超过指定天数未登录的用户
@@ -171,8 +171,7 @@ reader:
    - 打开阅读手机 App -> 我的 -> 备份与恢复 -> WebDAV 设置。
    - **WebDAV 地址**：`http://你的服务器IP:端口/reader3/webdav/`
    - **账号密码**：
-     - 若服务端开启多用户认证（`secure: true`），使用在网页端注册的个人用户名和密码登录；
-     - 若未开启认证（`secure: false`，单用户模式），服务端不对 WebDAV 进行密码校验，手机端账号密码可随意填写（如账号填 `default`，密码填任意字符即可，因为手机 App 要求输入框不能为空）。
+     - 使用在网页端注册的个人用户名和密码登录（或使用超级管理员账号 `admin` 及密码）。
 2. **执行备份**：
    - 在手机 App 中点击「备份到 WebDAV」，系统会将书源、书架及进度打包上传。
 3. **网页端恢复与同步**：
@@ -183,22 +182,9 @@ reader:
 
 ## 部署与运行指南
 
-### Docker 部署（推荐）
+### Docker 命令行一键运行（推荐）
 
-#### 1. 单用户免密版（适合个人快速部署）
-
-```bash
-docker run -d \
-  --name reader \
-  --restart always \
-  -p 8080:8080 \
-  -v $(pwd)/storage:/storage \
-  -v $(pwd)/logs:/app/logs \
-  -e "SPRING_PROFILES_ACTIVE=prod" \
-  ghcr.io/mysecret2022/reader:latest
-```
-
-#### 2. 多用户权限版（适合家人或朋友合用）
+直接使用标准 Docker 命令启动容器服务：
 
 ```bash
 docker run -d \
@@ -207,37 +193,41 @@ docker run -d \
   -p 8080:8080 \
   -v $(pwd)/storage:/storage \
   -v $(pwd)/logs:/app/logs \
-  -e "SPRING_PROFILES_ACTIVE=prod" \
-  -e "READER_APP_SECURE=true" \
-  -e "READER_APP_SECUREKEY=你的管理密码" \
-  -e "READER_APP_INVITECODE=你的邀请码" \
+  -e TZ=Asia/Shanghai \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e READER_APP_SECURE=true \
   ghcr.io/mysecret2022/reader:latest
 ```
+
+> **默认管理员账户与安全说明**：
+> - **默认管理员账号**：`admin`
+> - **默认初始密码**：`admin`
+> - 容器首次启动后，访问 `http://<服务器IP>:8080` 即可使用 `admin / admin` 登录。
+> - 登录后进入管理后台，可直接在线修改管理员密码，并在「系统设置」中可视化开启/关闭注册或设定专属注册邀请码。
+> - 如需在启动时直接通过环境变量预设管理密码或邀请码，可在命令中添加 `-e "READER_APP_SECUREKEY=自定义管理密码" -e "READER_APP_INVITECODE=自定义邀请码"`。
 
 ### Docker Compose 部署（标准推荐）
 
-推荐在服务器上直接使用 `docker-compose.yaml` 管理，方便配置持久化：
+推荐在服务器上使用 `docker-compose.yaml` 管理，方便持久化与后续一键更新：
 
 ```yaml
-version: '3.8'
-
 services:
   reader:
     image: ghcr.io/mysecret2022/reader:latest
     container_name: reader
     restart: always
     ports:
-      - "8080:8080"
+      - "8080:8080" # 外部访问端口，按需调整（宿主机端口:容器端口）
     volumes:
-      - ./storage:/storage
-      - ./logs:/app/logs
+      - ./storage:/storage # 数据持久化目录（书源、书架、用户数据、缓存及配置）
+      - ./logs:/app/logs   # 日志输出目录（与管理后台诊断日志实时互通）
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
-      # 如需开启多用户与管理密码，取消以下注释即可：
-      # - READER_APP_SECURE=true
-      # - READER_APP_SECUREKEY=your_admin_secret
-      # - READER_APP_INVITECODE=your_invite_code
+      - READER_APP_SECURE=true # 默认多用户鉴权模式（默认管理员：admin，默认密码：admin）
+      # 可在首次登录后台后直接修改密码及配置邀请码，也可通过下方环境变量直接初始化：
+      # - READER_APP_SECUREKEY=admin # 初始管理员密码
+      # - READER_APP_INVITECODE=      # 注册邀请码（留空则开放注册）
 ```
 
 **操作命令**：
