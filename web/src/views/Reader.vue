@@ -554,17 +554,29 @@
           }"
           @click.stop
         >
-          <div class="text-action-btn" @click="handleActionCopy">
+          <div
+            class="text-action-btn"
+            @click.stop.prevent="handleActionCopy"
+            @touchend.stop.prevent="handleActionCopy"
+          >
             <i class="el-icon-document-copy"></i>
             <span>复制</span>
           </div>
           <div class="text-action-divider"></div>
-          <div class="text-action-btn" @click="handleActionAddBookmark">
+          <div
+            class="text-action-btn"
+            @click.stop.prevent="handleActionAddBookmark"
+            @touchend.stop.prevent="handleActionAddBookmark"
+          >
             <i class="el-icon-collection-tag"></i>
             <span>添加书签</span>
           </div>
           <div class="text-action-divider"></div>
-          <div class="text-action-btn" @click="handleActionAddFilter">
+          <div
+            class="text-action-btn"
+            @click.stop.prevent="handleActionAddFilter"
+            @touchend.stop.prevent="handleActionAddFilter"
+          >
             <i class="el-icon-scissors"></i>
             <span>添加过滤规则</span>
           </div>
@@ -945,7 +957,8 @@ export default {
       // 文本选区高亮与弹窗关闭防误触冷冻期
       selectionHighlightRects: [],
       dismissCooldown: 0,
-      isDismissingMenu: false
+      isDismissingMenu: false,
+      isTextSelecting: false
     };
   },
   computed: {
@@ -2123,6 +2136,7 @@ export default {
     },
     handleTouchStart(e) {
       this.isTouchActive = true;
+      this.isTextSelecting = false;
       if (this.textActionMenuVisible) {
         if (
           this.$refs.textActionMenuRef &&
@@ -2141,6 +2155,7 @@ export default {
       }
       this.lastSelection = this.checkSelection();
       if (this.lastSelection) {
+        this.isTextSelecting = true;
         return;
       }
       if (this.isAudio) {
@@ -2181,7 +2196,21 @@ export default {
       }
     },
     handleTouchMove(e) {
+      // 1. 如果已处于文本划选状态，绝对不要移动正文视口，防止屏幕文字乱跳
+      if (this.isTextSelecting) {
+        this.lastMoveX = 0;
+        return;
+      }
+      // 2. 实时检测当前是否有选区正在产生
+      const sel = window.getSelection ? window.getSelection() : null;
+      if (sel && !sel.isCollapsed && sel.toString().trim()) {
+        this.isTextSelecting = true;
+        this.lastMoveX = 0;
+        return;
+      }
       if (this.checkSelection()) {
+        this.isTextSelecting = true;
+        this.lastMoveX = 0;
         return;
       }
       if (e.touches && e.touches[0] && this.lastTouch) {
@@ -2217,6 +2246,7 @@ export default {
     },
     handleTouchCancel() {
       this.isTouchActive = false;
+      this.isTextSelecting = false;
       if (this.isDismissingMenu) {
         this.isDismissingMenu = false;
         this.lastSelection = null;
@@ -2249,16 +2279,37 @@ export default {
       if (this.isDismissingMenu) {
         this.isDismissingMenu = false;
         this.lastSelection = null;
+        this.isTextSelecting = false;
         return;
       }
       if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
         this.lastSelection = null;
+        this.isTextSelecting = false;
         return;
       }
-      setTimeout(() => {
-        this.checkAndTriggerSelection();
-      }, 80);
-      if (this.checkSelection(true)) {
+
+      // 核心拦截：如果处于划选文本状态，或者当前选区有文本，绝对禁止触发翻页！
+      const currentSel = window.getSelection ? window.getSelection() : null;
+      const hasSelectedText =
+        this.isTextSelecting ||
+        (currentSel &&
+          !currentSel.isCollapsed &&
+          currentSel.toString().trim()) ||
+        this.checkSelection();
+
+      if (hasSelectedText) {
+        this.isTextSelecting = false;
+        this.lastMoveX = 0;
+        this.lastTouch = false;
+        // 如果在划选初探时产生微小位移，立即复位回当前页，避免视口偏移
+        if (this.isSlideRead && !this.isSimulationRead) {
+          this.contentStyle = {
+            transform: `translateX(${this.transformX}px)`
+          };
+        }
+        setTimeout(() => {
+          this.checkAndTriggerSelection();
+        }, 80);
         return;
       }
 
@@ -2596,6 +2647,7 @@ export default {
     closeTextActionMenu(clearHighlight = true) {
       this.textActionMenuVisible = false;
       this.lastSelection = null;
+      this.isTextSelecting = false;
       if (clearHighlight) {
         this.selectionHighlightRects = [];
       }
@@ -2626,6 +2678,13 @@ export default {
       ) {
         return;
       }
+      // 核心防线：手指触屏拖拽划选中，只标记选词状态，绝对不要提前清空选区，也不要提前弹窗打断！
+      if (this.isTouchActive) {
+        this.isTextSelecting = true;
+        this.lastMoveX = 0;
+        return;
+      }
+
       const sel = window.getSelection ? window.getSelection() : null;
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
         if (this.textActionMenuVisible && !this.isTouchActive) {
@@ -2654,11 +2713,10 @@ export default {
       if (this.selectionChangeTimer) {
         clearTimeout(this.selectionChangeTimer);
       }
-      // 手指拖拽选区中时防抖等待，手指抬起或PC选中文本时迅速响应
-      const delay = this.isTouchActive ? 250 : 80;
+      // 手指抬起或 PC 鼠标划选防抖
       this.selectionChangeTimer = setTimeout(() => {
         this.checkAndTriggerSelection();
-      }, delay);
+      }, 80);
     },
     checkAndTriggerSelection() {
       if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
@@ -2715,10 +2773,15 @@ export default {
     fallbackCopy(text) {
       const input = document.createElement("textarea");
       input.value = text;
+      input.setAttribute("readonly", "");
       input.style.position = "fixed";
+      input.style.top = "-9999px";
+      input.style.left = "-9999px";
       input.style.opacity = "0";
+      input.style.pointerEvents = "none";
       document.body.appendChild(input);
       input.select();
+      input.setSelectionRange(0, 99999);
       try {
         document.execCommand("copy");
         this.$message.success("已复制到剪贴板");

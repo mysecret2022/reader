@@ -1,47 +1,39 @@
-# AGENT_PROJECT_GUIDE (v2.0.6)
+# AGENT_PROJECT_GUIDE (v2.0.7)
 
 面向后续接手智能体的项目自说明与迭代指引文档。
 
 ---
 
 ## 1. 版本概述 (Version Summary)
-- **版本号**：`v2.0.6`
-- **定位**：iOS/移动端选中文本原生系统菜单彻底屏蔽与自研高亮保留、空白处退出防二次回弹修复、仿真翻页（3D 纸张翻折）功能完整落地。
-- **上一版本**：`v2.0.5`
+- **版本号**：`v2.0.7`
+- **定位**：长按划选文字屏幕乱跳、划选抬手误触发翻页跳转前一页 Bug 彻底修复，以及无感复制焦点锁定优化。
+- **上一版本**：`v2.0.6`
 
 ---
 
-## 2. 核心架构与功能迭代记录 (Architectural Hardening & Improvements)
+## 2. 核心架构与 Bug 修复记录 (Architectural Hardening & Fixes)
 
-### 2.1 iOS / 移动端原生菜单屏蔽与选区高亮保留机制 (`Reader.vue`)
+### 2.1 长按划选文字屏幕乱跳与跳转前一页根因与彻底修复 (`Reader.vue`)
 - **根因分析**：
-  在 iOS Safari 等移动端浏览器中，系统编辑菜单（拷贝、查询、翻译、搜索网页等）与底层 DOM 选区范围（`window.getSelection()`）强绑定。只要存在活跃选区，iOS 就会强行呼出系统菜单；而如果直接粗暴清空选区，选中文本的高亮标识又会消失，导致用户无法获知已选文字范围。
-- **技术解决方案**：
-  1. **坐标捕获与自研高亮图层**：
-     当选区确定后，利用 `range.getClientRects()` 精确捕获选区内每一行文字的视口像素边界，存入 `selectionHighlightRects`，渲染自研的独立半透明高亮矩形层（`.custom-selection-highlight`），在白天模式（`multiply` 混合）与黑夜模式（`screen` 混合）下均呈现原生般的质感。
-  2. **选区即时脱离**：
-     捕获坐标后立即执行 `sel.removeAllRanges()` 清除底层原生选区，从根本上切断了 iOS Safari 呼出原生菜单的系统条件。
-  3. **纯净胶囊**：
-     屏幕上仅保留自研悬浮胶囊：**【复制】**、**【添加书签】**、**【添加过滤规则】**，视觉清爽纯粹。
+  1. **视口位移干扰选区**：
+     在手机触摸滑动（`touchmove`）过程中，用户拖拽游标划选文字时，旧版事件监听未能在第一时间锁定正文视口。手指横向划选产生的微小或较大位移（`moveX`）直接被应用到 `contentStyle = { transform: translateX(...) }` 上，导致正在划选的正文在指尖下方左右位移。正文一动，浏览器底层的光标命中点随之改变，引发选区拉手和高亮在屏幕上剧烈跳动（“屏幕上面会乱跳”）。
+  2. **划词位移被误判为翻页手势**：
+     当用户完成划词抬起手指（`touchend`）时，由于从左向右划词产生了 `moveX > 30` 的累积正向位移，`handleTouchEnd` 将其误当成了“向右滑动屏幕翻页”的手势，从而强行触发了 `prevPage()`，导致刚选完字屏幕瞬间跳转到了前一页（“然后复制的内容会跳转到前一页”）。
+  3. **触控中提前触发选区销毁**：
+     旧逻辑中 `handleSelectionChange` 在 `isTouchActive === true`（手指仍在屏上）时仍启动了延时定时器，导致用户还没选完字，底层原生选区就提前被 `removeAllRanges()` 销毁，引发浏览器光标重置。
 
-### 2.2 退出选区点击空白处二次回弹气泡 Bug 修复 (`Reader.vue`)
-- **根因分析**：
-  在旧版触摸事件中，`handleTouchStart` 在检测到选区时记录了 `this.lastSelection`，而 `handleTouchEnd` 中包含一段遗留的 200ms 延时重启弹窗逻辑。当用户点击空白区域试图退出时，手指触碰瞬间仍读取到了旧选区，导致高亮清理后气泡又被二次弹出。
 - **技术解决方案**：
-  1. 彻底移除了 `handleTouchEnd` 中废弃的 `lastSelection` 延时唤起定时器逻辑。
-  2. 引入 `dismissCooldown`（450ms 防误触冷冻期）与 `isDismissingMenu` 状态机。在用户点击空白处关闭菜单时，立即清空高亮层与状态，并在此窗口期内忽略任何连带触发的 `selectionchange` 或触摸结束事件，确保退出彻底干脆、绝不二次回弹。
-
-### 2.3 仿真翻页（3D 纸张拟真翻页）完整落地 (`Reader.vue` & `ReadSettings.vue` & `vuex.js`)
-- **设计与排版**：
-  在阅读设置面板中，翻页方式精简并统一为 3 个标准等宽标签：**「上下滑动」**、**「左右滑动」**、**「仿真翻页」**。
-- **技术架构与 3D 渲染**：
-  1. 基于 CSS 3D Transform（`perspective: 1600px`、`rotateY`、`transform-origin: left center`、`backface-visibility: hidden`）构建独立仿真纸张翻折层（`.simulation-flip-container`、`.simulation-page-sheet`）。
-  2. **双面纸张与动态光影**：
-     - **正面（sheet-front）**：展示翻走的当前页内容，翻转时动态叠加书脊渐变阴影（`sheet-shadow`），角度越陡峭光影越深。
-     - **背面（sheet-back）**：翻过 90 度后展示纸张背面，采用当前阅读主题的纸张底色与纹理，并自然过渡至 180 度。
-     - **底页投影（under-page-shadow）**：在底层新页的书脊侧投射柔和投影，模拟立体纸书翻动时的层次感。
-  3. **交互适配**：
-     支持点击左右翻页区与手势轻扫（横向滑动超过 30px 即启动仿真翻页），并由 GPU 硬件加速渲染，性能丝滑达 60~120fps，且**完全不产生任何服务端开销（0% 资源占用）**。
+  1. **划选状态严格锁定 (`isTextSelecting`)**：
+     - 在 `handleTouchStart` 中初始化 `isTextSelecting = false`。
+     - 在 `handleTouchMove` 顶部首先判断 `isTextSelecting` 或底层选区（`window.getSelection()`）：一旦检测到选词正在进行，立即将 `isTextSelecting` 标记为 `true` 并将位移重置为 `lastMoveX = 0`，**直接跳出事件，严禁改变 `contentStyle` 任何坐标**，正文稳如磐石，彻底消除选词晃动跳跃。
+     - 在 `handleSelectionChange` 中，只要手指仍在屏幕上（`isTouchActive === true`），仅记录 `isTextSelecting = true` 并立即退出，**绝不提前清空选区，也绝不提前弹窗打断用户的连续拉手选词体验**。
+  2. **抬手拦截翻页与坐标精确复位**：
+     - 在 `handleTouchEnd` 中，首先检测 `hasSelectedText`（处于划选状态或存在有效选中文本）。
+     - 一旦命中，立即清空位移 `this.lastMoveX = 0`，将微小位移瞬间复位到精确的 `translateX(${this.transformX}px)`，随后直接 `return`，**彻底掐死翻页逻辑（上一页/下一页）的触发路径**。
+     - 此时手指已经离开屏幕，再平稳调用 `checkAndTriggerSelection()`，提取高亮坐标、呈现自研高亮图层、屏蔽原生系统菜单并弹出操作气泡，整套流程严密流畅。
+  3. **复制焦点防跳与按钮事件隔离**：
+     - 在 `fallbackCopy` 中为隐藏的临时输入框补全安全样式：`readonly`、`pointer-events: none`、`position: fixed; top: -9999px; left: -9999px; opacity: 0`，彻底防止输入框聚焦拉动页面滚动。
+     - 为气泡弹窗内的【复制】、【添加书签】、【添加过滤规则】按钮全面绑定 `@click.stop.prevent` 与 `@touchend.stop.prevent`，杜绝任何穿透与冒泡。
 
 ---
 
