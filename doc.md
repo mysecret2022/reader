@@ -1,595 +1,468 @@
-# 文档
+# 文档 (Documentation)
 
-- [文档](#文档)
+> **声明与出处**：本项目基于原开源项目 [hectorqin/reader](https://github.com/hectorqin/reader) 进行二次开发、架构重构与持续维护，维护者非官方原作者。特此向原作者团队及所有开源贡献者致敬。
+
+---
+
+- [文档 (Documentation)](#文档-documentation)
   - [免责声明（Disclaimer）](#免责声明disclaimer)
   - [数据存储](#数据存储)
+    - [存储目录结构](#存储目录结构)
     - [本地书仓](#本地书仓)
   - [阅读页面地址](#阅读页面地址)
-    - [全功能web端](#全功能web端)
-    - [适配kindle的 `simple-web`](#适配kindle的-simple-web)
-  - [自定义阅读主题](#自定义阅读主题)
-  - [自定义样式](#自定义样式)
-  - [接口服务配置](#接口服务配置)
-  - [WebDAV同步配置](#webdav同步配置)
-  - [客户端](#客户端)
-    - [Windows / MacOS / Linux](#windows--macos--linux)
-    - [手机端](#手机端)
-    - [服务器版](#服务器版)
-    - [Docker版](#docker版)
-    - [Docker-Compose版(推荐)](#docker-compose版推荐)
-    - [通过脚本一键部署](#通过脚本一键部署)
-    - [Arch Linux 安装](#Arch-Linux-安装)
-      - [配置文件](#配置文件)
-  - [Nginx反向代理(如果有域名可以考虑80端口复用)](#nginx反向代理如果有域名可以考虑80端口复用)
-  - [开发编译](#开发编译)
-    - [编译脚本](#编译脚本)
-    - [编译前端](#编译前端)
-    - [编译接口](#编译接口)
-  - [接口文档](#接口文档)
-    - [新增接口](#新增接口)
-      - [加入书架](#加入书架)
-      - [获取书籍书源](#获取书籍书源)
-      - [搜索书籍更多书源](#搜索书籍更多书源)
-      - [书籍换源](#书籍换源)
+    - [全功能 Web 端](#全功能-web-端)
+    - [适配 Kindle / 电子墨水屏的 `simple-web`](#适配-kindle--电子墨水屏的-simple-web)
+  - [阅读主题与新版阅读体验](#阅读主题与新版阅读体验)
+    - [主题与视觉定制](#主题与视觉定制)
+    - [v2.0 交互升级](#v20-交互升级)
+    - [自定义 CSS 样式](#自定义-css-样式)
+  - [接口服务配置 (application.yml)](#接口服务配置-applicationyml)
+  - [WebDAV 同步配置](#webdav-同步配置)
+  - [部署与运行指南](#部署与运行指南)
+    - [Docker 部署（推荐）](#docker-部署推荐)
+    - [Docker Compose 部署（标准推荐）](#docker-compose-部署标准推荐)
+    - [Java 原生运行 (Jar 包)](#java-原生运行-jar-包)
+  - [Nginx 反向代理配置](#nginx-反向代理配置)
+  - [开发与源码编译](#开发与源码编译)
+    - [编译前端 (Web)](#编译前端-web)
+    - [编译后端 (Gradle)](#编译后端-gradle)
+    - [快捷构建脚本](#快捷构建脚本)
+  - [后端 API 接口文档](#后端-api-接口文档)
+    - [与阅读 3 (Legado) 协议兼容性](#与阅读-3-legado-协议兼容性)
+    - [核心业务接口](#核心业务接口)
+      - [1. 加入书架 (`saveBook`)](#1-加入书架-savebook)
+      - [2. 获取书籍书源 (`getBookSource`)](#2-获取书籍书源-getbooksource)
+      - [3. 搜索书籍更多书源 (`searchBookSource`)](#3-搜索书籍更多书源-searchbooksource)
+      - [4. 书籍换源 (`setBookSource`)](#4-书籍换源-setbooksource)
+
+---
 
 ## 免责声明（Disclaimer）
 
-阅读是一款提供网络文学搜索的工具，为广大网络文学爱好者提供一种方便、快捷舒适的试读体验。
+1. **阅读**是一款提供网络文学搜索、格式转换与多端排版渲染的开源工具，致力于为广大网络文学爱好者提供方便、舒适、无广告的个人试读体验。
+2. 当您搜索一本书籍时，阅读会将书名关键词提交至由您自行添加或配置的第三方网络文学书源网站。各第三方网站返回的内容与阅读软件本身无关，阅读对其合法性、真实性、时效性概不负责，亦不承担任何连带法律责任。
+3. 第三方书源搜索结果由自动化程序抓取呈现，不代表阅读赞成或代表被搜索网页上的内容或立场。使用者应自行对网络内容的辨别与版权负责，并提倡支持正版文学作品。
+4. 阅读充分尊重并保护用户个人隐私与数据安全，所有数据（书架、进度、缓存、书源）完全存储在用户自建的本地或私有服务器环境中，不会向任何未授权第三方泄露。
 
-当您搜索一本书的时，阅读会将该书的书名以关键词的形式提交到各个第三方网络文学网站。各第三方网站返回的内容与阅读无关，阅读对其概不负责，亦不承担任何法律责任。任何通过使用阅读而链接到的第三方网页均系他人制作或提供，您可能从第三方网页上获得其他服务，阅读对其合法性概不负责，亦不承担任何法律责任。第三方搜索引擎结果根据您提交的书名自动搜索获得并提供试读，不代表阅读赞成或被搜索链接到的第三方网页上的内容或立场。您应该对使用搜索引擎的结果自行承担风险。
-
-阅读不做任何形式的保证：不保证第三方搜索引擎的搜索结果满足您的要求，不保证搜索服务不中断，不保证搜索结果的安全性、正确性、及时性、合法性。因网络状况、通讯线路、第三方网站等任何原因而导致您不能正常使用阅读，阅读不承担任何法律责任。阅读尊重并保护所有使用阅读用户的个人隐私权，您注册的用户名、电子邮件地址等个人资料，非经您亲自许可或根据相关法律、法规的强制性规定，阅读不会主动地泄露给第三方。
-
-阅读致力于最大程度地减少网络文学阅读者在自行搜寻过程中的无意义的时间浪费，通过专业搜索展示不同网站中网络文学的最新章节。阅读在为广大小说爱好者提供方便、快捷舒适的试读体验的同时，也使优秀网络文学得以迅速、更广泛的传播，从而达到了在一定程度促进网络文学充分繁荣发展之目的。阅读鼓励广大小说爱好者通过阅读发现优秀网络小说及其提供商，并建议阅读正版图书。任何单位或个人认为通过阅读搜索链接到的第三方网页内容可能涉嫌侵犯其信息网络传播权，应该及时向阅读提出书面权力通知，并提供身份证明、权属证明及详细侵权情况证明。阅读在收到上述法律文件后，将会依法尽快断开相关链接内容。
+---
 
 ## 数据存储
 
-接口服务使用文件存储书源及目录等信息，存储位置为 storage 目录(可通过运行时添加 `-Dreader.app.storagePath=/path/to/storage` 修改)。
+接口服务默认采用轻量高效的**纯文件系统**进行存储（无外部数据库依赖），默认存储位置为程序工作目录下的 `storage` 目录。
 
-> MacOS客户端的存储目录是 `~/.reader/storage`，Window和Linux客户端为 `运行目录/storage`
+> **参数覆盖**：启动时可通过 Java 系统属性 `-Dreader.app.storagePath=/path/to/storage` 或环境变量自定义存储路径。
 
-数据存储目录结构如下：
+### 存储目录结构
 
 ```bash
 storage
-├── assets                                        # 静态资源
-│   ├── hector                                    # 用户 hector 的资源目录
-│   |   |── covers                                # 本地 epub 书籍的封面图片目录
-│   │   ├── background                            # 自定义阅读背景图片保存目录
-│   │   │   └── 6.jpg
-│   └── reader.css                                # 自定义CSS样式文件
-├── cache                                         # 缓存目录
-│   ├── 6190ac40068e74c2c82624e91a5f8a0c.jpg      # 书籍封面缓存
-│   ├── bookInfoCache                             # 书籍搜索缓存 ACache 目录
-│   └── ea11967236129bdae6133c3c9ff8c2dd.jpg
-├── data                                          # 数据目录
-│   ├── default                                   # 系统默认用户的数据目录 (reader.app.secure为false时)
-│   │   ├── bookSource.json                       # 书源列表
-│   │   ├── bookshelf.json                        # 书架书籍列表
-│   │   ├── 斗罗大陆_唐家三少                        # 书籍缓存目录
-│   │   │   ├── 5d01bc88d6b19ebbe974acaac1675811         # A书源章节缓存目录
-│   │   │   ├── 5d01bc88d6b19ebbe974acaac1675811.json    # A书源目录列表
-│   │   │   ├── 7e5ca1cc2a1ea2e09fdec4ee2e150f02         # B书源章节缓存目录
-│   │   │   ├── 7e5ca1cc2a1ea2e09fdec4ee2e150f02.json    # B书源目录列表
-│   │   │   └── bookSource.json                          # 书籍书源列表
-│   ├── hector                                    # 用户 hector 的数据目录 (reader.app.secure为true时的用户目录)
-│   │   ├── bookSource.json                       # 书源列表
-│   │   ├── bookshelf.json                        # 书架书籍列表
-│   │   ├── webdav                                # webdav 存储目录 可能会存在 legado 子目录
-│   │   │   ├── backup2021-09-15.zip              # 阅读3备份文件
-│   │   │   └── bookProgress                      # 阅读3书籍进度备份目录
-│   │   │       └── 斗罗大陆_唐家三少.json           # 阅读3书籍进度
-│   │   └── 斗罗大陆_唐家三少                        # 书籍缓存目录
-│   │       |── 2d44d0ec2397b6c1d4010b97d914031e       # A书源章节缓存目录
-│   │       └── 2d44d0ec2397b6c1d4010b97d914031e.json  # A书源目录列表
-│   └── users.json                                # 用户列表
-├── localStore                                    # 本地书仓，所有用户共享(用户需要开启书仓权限，才能访问)
-│   |── 斗破苍穹.txt                               # 本地书仓书籍
-│   └── 斗罗大陆.txt                               # 本地书仓书籍
-└── windowConfig.json                             # 窗口配置文件
+├── assets                                        # 静态资源与用户媒体
+│   ├── <用户名>                                  # 多用户模式下特定用户的静态资源（如 admin）
+│   │   ├── covers                                # 本地导入书籍的封面图片
+│   │   └── background                            # 自定义阅读背景图
+│   └── reader.css                                # 全局自定义 CSS 样式文件
+├── cache                                         # 临时缓存目录
+│   ├── bookInfoCache                             # 书籍详情及搜索 ACache 缓存
+│   └── [hash].jpg                                # 远程章节与封面图片本地缓存
+├── data                                          # 业务核心数据（含原子防掉保护机制）
+│   ├── default                                   # 单用户模式或未登录状态默认数据目录
+│   │   ├── bookSource.json                       # 书源配置列表
+│   │   ├── bookshelf.json                        # 书架图书列表
+│   │   └── 书名_作者名                            # 书籍离线章节缓存及目录
+│   ├── <用户名>                                  # 多用户模式下独立用户数据空间（如 admin）
+│   │   ├── bookSource.json                       # 用户私有书源列表
+│   │   ├── bookshelf.json                        # 用户私有书架列表
+│   │   ├── webdav                                # WebDAV 同步及备份归档
+│   │   └── 书名_作者名                            # 章节内容缓存
+│   └── users.json                                # 用户鉴权账户列表 (secure 开启时)
+├── localStore                                    # 本地公共书仓（支持所有有权限用户浏览导入）
+│   ├── 示例书籍A.txt
+│   └── 示例书籍B.epub
+└── windowConfig.json                             # 桌面端/嵌入式窗口状态配置文件
 ```
 
 ### 本地书仓
 
-在 `storage/localStore` 中可以集中存放管理本地书籍，开启访问权限的用户可以在 `页面-浏览书仓` 中选择批量导入到自己的书架进行阅读。
+在 `storage/localStore` 目录中可以集中存放 txt、epub 等本地电子书文件。在多用户模式下，管理员为用户赋予“书仓权限”后，用户即可在 Web 界面的「书架 -> 浏览书仓」中直接选择并一键批量导入到个人书架中阅读。
+
+---
 
 ## 阅读页面地址
 
-### 全功能web端
+### 全功能 Web 端
 
-`http://ip:端口/`
+```text
+http://ip:端口/
+```
 
-### 适配kindle的 `simple-web`
+- 适用于现代 PC 浏览器（Chrome、Edge、Safari、Firefox）及智能手机、平板。
+- 支持全屏沉浸阅读、仿真 3D 纸张翻页、双边缘手势滑动、深浅主题切换、字体定制与多端书签实时同步。
 
-`http://ip:端口/simple-web`
+### 适配 Kindle / 电子墨水屏的 `simple-web`
 
-> 注意，加入TG群了解详情
+```text
+http://ip:端口/simple-web
+```
 
-## 自定义阅读主题
+- **专门适配电纸书**：专为 Amazon Kindle 实验性浏览器、文石 (BOOX)、汉王等各类黑白电子墨水屏设备深度定制。
+- **高对比极简排版**：移除所有重度动画与过渡渲染，采用黑白纯净高对比度排版，刷新迅速、省电且不卡顿。
 
-书架页面仅支持白天模式和黑夜模式。
+---
 
-阅读页面支持设置多款主题，还可以自定义主题。自定义阅读主题包括:
+## 阅读主题与新版阅读体验
 
-- 自定义页面背景颜色
-- 自定义浮窗背景颜色
-- 自定义阅读背景颜色
-- 自定义阅读背景图片
+### 主题与视觉定制
 
-## 自定义样式
+- **白天与黑夜**：书架与管理后台全面支持深色模式与浅色模式。
+- **自定义色彩与壁纸**：支持自主设定页面背景色、内容文字颜色、浮动控制台背景色以及上传自定义阅读背景图片。
 
-页面还会加载应用目录下的 `reader-assets/reader.css` 这个CSS样式文件，在这个文件中可以自定义页面样式。
+### v2.0 交互升级
 
-> 自定义样式可能需要配合 `!important` 来设定属性
+- 📖 **仿真翻页（3D 纸书翻折效果）**：
+  采用客户端硬件加速变换与曲度光影，翻页时具备真实纸张背光与底层书脊阴影，翻过 90 度自动切换纸张背面，翻页效果丝滑且**服务器资源占用为 0%**。
+- ✂️ **选词快捷气泡与独立高亮**：
+  长按或滑动划选正文文本时，弹出【复制】、【添加书签】、【添加过滤规则】轻量操作气泡；配合独立选区高亮层，**彻底屏蔽 iOS Safari 和 Android 系统的原生浏览器弹窗**，杜绝误触与跳屏。
+- 📐 **3 标签等宽规范排版**：
+  设置面板采用统一的 3 标签等宽网格排版，视觉整洁一致；特殊模式分为「正常」、「简洁」、「边缘识别」，简洁说明动态悬浮呈现。
+- 🔤 **霞鹜文楷优质排版字体**：
+  内置轻量化高品质中文字体「霞鹜文楷」，开箱即享出版级字形排版质感。
+- 📱 **屏幕边缘侧滑手势**：
+  在手机端全屏模式下，支持左/右边缘向内滑动返回书架，带有弧形指示器与防误触二次确认。
 
-## 接口服务配置
+### 自定义 CSS 样式
 
-```yml
+如需进行深度样式微调，可在 `storage/assets/reader.css` 文件中编写自定义 CSS 规则。该文件会在前端页面加载时自动引入并生效。
+> 提示：覆盖默认样式时建议搭配 `!important` 提升权重。
+
+---
+
+## 接口服务配置 (application.yml)
+
+服务端主要配置位于 `conf/application.properties` 或 `src/main/resources/application.yml` 中。以下为核心参数及中文含义说明：
+
+```yaml
 reader:
   app:
-    workDir: ""            # 工作目录
-    secure: false          # 是否需要登录鉴权，开启后将支持多用户模式
-    inviteCode: ""         # 注册邀请码，为空时则开放注册，否则注册时需要输入邀请码
-    secureKey: ""          # 管理密码，开启鉴权时，前端管理用户空间的管理密码
-    cacheChapterContent: false # 是否缓存章节内容
-    debugLog: false        # 是否打开调试日志
-    autoClearInactiveUser: 0 # 是否自动清理不活跃用户，为0不清理，大于0为清理超过 autoClearInactiveUser 天未登录的用户
-    mongoUri: ""           # mongodb uri 用于备份数据
-    mongoDbName: "reader"  # mongodb 数据库名称
-    shelfUpdateInteval: 10 # 书架自动更新间隔时间，单位分钟，必须是10的倍数
-    userLimit: 15          # 用户上限，最大 15
-    remoteWebviewApi: ""   # remote-webview 地址
-    defaultUserEnableWebdav: true  # 新用户是否默认启用webdav
-    defaultUserEnableLocalStore: true # 新用户是否默认启用localStore
-    defaultUserEnableBookSource: true # 新用户是否默认可编辑书源，如果为false，则只能使用默认书源，不能新增/修改/删除
-    defaultUserEnableRssSource: true # 新用户是否默认可编辑RSS源
-    defaultUserBookSourceLimit: 100  # 新用户默认书源上限
-    defaultUserBookLimit: 200 # 新用户默认书籍上限
-    autoBackupUserData: false # 是否自动备份用户数据
-    minUserPasswordLength: 8  # 用户密码最小长度
-    remoteBookSourceUpdateInterval: 720   # 远程书源定时更新间隔时间，单位分钟，必须是10的倍数
+    workDir: ""            # 服务工作目录（为空时自动识别为当前目录）
+    secure: false          # 是否开启登录鉴权：false 为单用户免登录模式；true 为多用户认证模式
+    inviteCode: ""         # 注册邀请码：为空则允许自由注册；配置后注册必须提供匹配的邀请码
+    secureKey: ""          # 管理密码：开启鉴权时用于保护管理后台与超级用户操作
+    cacheChapterContent: false # 是否在服务器持久化缓存抓取的章节正文内容
+    debugLog: false        # 是否打印详细的抓取与通信调试日志
+    autoClearInactiveUser: 0 # 自动清理不活跃用户天数：0 表示不清理，大于 0 表示清理超过指定天数未登录的用户
+    mongoUri: ""           # MongoDB 数据库连接串（可选，用于数据远程异地备份）
+    mongoDbName: "reader"  # MongoDB 备份数据库名
+    shelfUpdateInteval: 10 # 书架后台自动追更检测间隔（单位：分钟，须为 10 的倍数）
+    userLimit: 50          # 允许注册的最大用户数上限
+    remoteWebviewApi: ""   # 外部 remote-webview 节点地址（用于辅助破解极验或强 JS 防爬书源）
+    defaultUserEnableWebdav: true    # 新注册用户是否默认开通 WebDAV 同步服务
+    defaultUserEnableLocalStore: true # 新注册用户是否默认允许访问本地公共书仓
+    defaultUserEnableBookSource: true # 新注册用户是否允许私有编辑/添加书源（false 则只能共享公共书源）
+    defaultUserEnableRssSource: true  # 新注册用户是否允许配置 RSS 订阅源
+    defaultUserBookSourceLimit: 200   # 新用户默认可添加的最大书源数量
+    defaultUserBookLimit: 300         # 新用户书架默认最大书籍容量
+    autoBackupUserData: false         # 是否开启周期性自动备份用户数据
+    minUserPasswordLength: 6          # 注册密码最低字符长度
+    remoteBookSourceUpdateInterval: 720 # 远程订阅书源自动拉取刷新间隔（单位：分钟）
 
   server:
-    port: 8080             # 监听端口
-    contextPath: ""        # 二级目录，为空则不使用二级目录
-    webUrl: http://localhost:${reader.server.port}    # web链接
-
+    port: 8080             # 服务监听 HTTP 端口
+    contextPath: ""        # 二级虚拟子路径（例如 /reader，留空表示根路径）
+    webUrl: "http://localhost:${reader.server.port}" # 外部访问基准 URL
 ```
 
-## WebDAV同步配置
+---
 
-1. 首先需要在阅读App里面配置 `WebDAV备份`
+## WebDAV 同步配置
 
-    服务器地址： `http://IP:端口/reader3/webdav/`
+服务内置与阅读 3 (Legado) 客户端协议完全兼容的 WebDAV 服务端接口，支持多端书架与阅读进度双向同步：
 
-    如果开启了 `reader.app.secure` 选项，那么使用网页注册的用户名和密码登录，否则使用用户名 `default` 和 密码 `123456` 登录
+1. **阅读手机端 App 配置**：
+   - 打开阅读手机 App -> 我的 -> 备份与恢复 -> WebDAV 设置。
+   - **WebDAV 地址**：`http://你的服务器IP:端口/reader3/webdav/`
+   - **账号密码**：
+     - 若服务端开启多用户认证（`secure: true`），使用网页注册的用户名和密码登录；
+     - 若未开启认证（`secure: false`），使用默认账户 `default` 与密码 `123456`。
+2. **执行备份**：
+   - 在手机 App 中点击「备份到 WebDAV」，系统会将书源、书架及进度打包上传。
+3. **网页端恢复与同步**：
+   - 在 Web 网页端点击「用户 -> WebDAV 备份」，即可查看备份时间戳，并一键导入还原；
+   - 阅读器在打开书籍时会自动拉取并对齐最新的章节阅读位置。
 
-2. 然后在阅读App里面点击备份
+---
 
-3. 在网页里面查看WebDAV文件，确认是否备份成功
+## 部署与运行指南
 
-4. 备份成功之后
-    - 服务器会自动同步书籍阅读进度(暂不支持章节内阅读位置，也不会自动同步书架信息变更)
+### Docker 部署（推荐）
 
-    - 可以直接选择阅读App的备份文件进行恢复，这样会直接覆盖书源和书架信息
-
-    - 可以备份当前书源和书架信息到WebDAV，但是必须要先备份成功
-
-    - 需要通过恢复备份文件来同步书籍和书源信息
-
-5. PS: 本地书源的书籍同步后无法打开，除非换源
-
-## 客户端
-
-### Windows / MacOS / Linux
-
-从 [releases](https://github.com/hectorqin/reader/releases) 下载对应平台安装包安装即可，需要安装java8及以上环境
-
-MacOS 版 `storage` 默认是 `用户目录/.reader/storage`，其它版本 `storage` 默认是 `程序目录/storage`
-
-#### 配置文件
-
-`storage/windowConfig.json`
-
-包含图形界面和接口服务的相关配置，JSON格式，修改后，程序重启才会生效
-
-> 请仔细检查配置内容，不支持注释，此处注释只是为了方便理解
-
-```json
-{
-    "serverPort": 8080,            // web服务端口，默认为 8080
-    "showUI": true,                // 是否显示UI界面，默认为显示
-    "debug": false,                // 是否调试模式，默认为否
-    "positionX": 0.0,              // 窗口位置 横坐标
-    "positionY": 0.0,              // 窗口位置 纵坐标
-    "width": 1280.0,               // 窗口大小 宽度
-    "height": 800.0,               // 窗口大小 高度
-    "rememberSize": true,          // 改变窗口大小时，是否记住窗口大小，默认记住
-    "rememberPosition": false,     // 移动窗口时，是否记住窗口位置，默认不记住
-    "setWindowPosition": false,    // 启动时是否设置窗口位置，默认不设置，窗口默认居中
-    "setWindowSize": true,         // 启动时是否设置窗口大小，默认按照配置文件进行设置
-    "serverConfig": {                // 接口服务配置，此处配置会被 `serverPort|showUI|debug` 等覆盖
-        "reader.app.secure": false,  // 是否需要登录鉴权，开启后将支持多用户模式
-        "reader.app.inviteCode": "",  // 注册邀请码，为空时则开放注册，否则注册时需要输入邀请码。仅多用户模式下有效
-        "reader.app.secureKey": "",  // 管理密码，开启鉴权时，前端管理用户空间的管理密码。仅多用户模式下有效
-    }
-}
-```
-
-### 手机端
-
-使用docker版本或者服务器版本，访问web页面
-
-可以添加为桌面应用
-
-### 服务器版
-
-从 [releases](https://github.com/hectorqin/reader/releases) 下载 `reader-server-$version.zip` 解压后运行即可，需要安装java8及以上环境
+#### 1. 单用户免密版（适合个人快速部署）
 
 ```bash
-# 安装jdk10以上环境...
-
-# 解压文件
-unzip reader-server-$version.zip
-
-# 运行
-cd reader-server-$version
-
-./bin/startup.sh
-# windows 上直接点击 bin/startup.cmd 文件
-
-# startup 脚本支持以下选项，这些选项如果使用命令行参数修改，则会覆盖配置文件的设置
-# -m single|multi 选择单用户/多用户模式，默认 以配置文件 conf/application.properties 为准
-# -s reader-xx 选择 jar 文件名(不含.jar后缀)，默认使用target目录里最新的jar
-# -i inviteCode 设置多用户模式下的邀请码，默认 以配置文件 conf/application.properties 为准
-# -k secureKey 设置多用户模式下的管理密码，默认 以配置文件 conf/application.properties 为准
-
-# 注意！！！startup 脚本在单用户模式下 默认占用 256m 内存，在多用户模式下 默认占用 1g 内存，如果内存不够，请自行修改脚本
-
-# web端 http://localhost:8080/
-# 接口地址 http://localhost:8080/reader3/
+docker run -d \
+  --name reader \
+  --restart always \
+  -p 8080:8080 \
+  -v $(pwd)/storage:/storage \
+  -v $(pwd)/logs:/app/logs \
+  -e "SPRING_PROFILES_ACTIVE=prod" \
+  ghcr.io/mysecret2022/reader:latest
 ```
 
-### Docker版
+#### 2. 多用户权限版（适合家人或朋友合用）
 
 ```bash
-# 自行编译
-# docker build -t reader:latest .
-
-# 使用环境变量覆盖服务配置，环境变量采用大写字母，不允许使用.-符号，采用下划线“_”取代点“.”  减号“-”直接删除
-
-# docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 reader:latest
-
-# 跨平台镜像
-
-# 新建构建器
-# docker buildx create --use --name mybuilder
-# 启动构建器
-# docker buildx inspect mybuilder --bootstrap
-# 查看构建器及其所支持的cpu架构
-# docker buildx ls
-# 构建跨平台镜像
-# docker buildx build -t reader:latest --platform=linux/arm,linux/arm64,linux/amd64 . --push
-
-# 使用预编译的镜像
-
-# 自用版(建议修改映射端口)
-docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader
-
-# 多用户版(建议修改映射端口)
-docker run -d --restart=always --name=reader -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader java -jar /app/bin/reader.jar --spring.profiles.active=prod --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
-
-# 多用户版 使用环境变量(建议修改映射端口)
-docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e "READER_APP_SECURE=true" -e "READER_APP_SECUREKEY=管理密码" -e "READER_APP_INVITECODE=注册邀请码" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader
-
-# 更新docker镜像
-# docker pull hectorqin/reader
-
-#:后面的端口修改为映射端口
-# web端 http://localhost:8080/
-# 接口地址 http://localhost:8080/reader3/
-
-# 通过watchtower手动更新
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --run-once reader
-
-# 使用 remote-webview 功能
-# 1.创建 remote-webview 容器
-docker run -d --network host --restart=always hectorqin/remote-webview
-# 2.重建 reader 容器
-reader使用宿主机网络：--network host
-reader添加环境变量：-e "READER_APP_REMOTEWEBVIEWAPI=http://localhost:8050"
-获取reader添加参数：--reader.app.remoteWebviewApi=http://localhost:8050"
+docker run -d \
+  --name reader \
+  --restart always \
+  -p 8080:8080 \
+  -v $(pwd)/storage:/storage \
+  -v $(pwd)/logs:/app/logs \
+  -e "SPRING_PROFILES_ACTIVE=prod" \
+  -e "READER_APP_SECURE=true" \
+  -e "READER_APP_SECUREKEY=你的管理密码" \
+  -e "READER_APP_INVITECODE=你的邀请码" \
+  ghcr.io/mysecret2022/reader:latest
 ```
 
-### Docker-Compose版(推荐)
+### Docker Compose 部署（标准推荐）
 
-```shell
-#腾讯云，阿里云，华为云，甲骨文等服务器提供商需在控制台面板手动关闭防火墙并放行端口
-#安装docker 及 docker-compose
-#Debian/Ubuntu
-apt install docker-compose -y
-#CentOS
-curl -fsSL https://get.docker.com | bash -s docker #国外服务器
-curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun #国内服务器
+推荐在服务器上直接使用 `docker-compose.yaml` 管理，方便配置持久化：
 
-# 下载项目里的 docker-compose.yaml
-wget https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
-# 根据 docker-compose.yaml 里面的注释编辑所需配置
-vim docker-compose.yaml
-# 保存
-esc
-:wq
-# 启动 docker-compose
-docker-compose up -d
+```yaml
+version: '3.8'
 
-# 停止 docker-compose
-docker-compose stop
-
-# 查看实时日志
-docker logs -f reader
-
-# 自行导入远程书源(打开链接后复制网址导入即可)
-https://legado.aoaostar.com/
-
-# 手动更新
-docker-compose pull && docker-compose up -d
+services:
+  reader:
+    image: ghcr.io/mysecret2022/reader:latest
+    container_name: reader
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./storage:/storage
+      - ./logs:/app/logs
+    environment:
+      - TZ=Asia/Shanghai
+      - SPRING_PROFILES_ACTIVE=prod
+      # 如需开启多用户与管理密码，取消以下注释即可：
+      # - READER_APP_SECURE=true
+      # - READER_APP_SECUREKEY=your_admin_secret
+      # - READER_APP_INVITECODE=your_invite_code
 ```
 
-### 通过脚本一键部署
+**操作命令**：
+```bash
+# 启动服务
+docker compose up -d
 
-```shell
-# 此脚本对甲骨文非Ubuntu系统,CentOS9可能不兼容。建议网上手动搜索
-#curl
-bash <(curl -L -s https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
+# 查看日志
+docker compose logs -f
 
-#wget
-bash <(wget -qO- --no-check-certificate https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
-
+# 更新至最新镜像
+docker compose pull && docker compose up -d
 ```
 
-### Arch Linux 安装
+### Java 原生运行 (Jar 包)
 
-> 注意，此软件源并非官方提供，后果自负
-
-从 [AUR 仓库](https://aur.archlinux.org/packages/reader-pro-bin)安装或[自建软件源](https://github.com/taotieren/aur-repo)
-
+需要环境：Java 8 / 11 / 17 及以上 JRE/JDK。
 
 ```bash
-yay -Syu reader-pro
-# 开启开机自启
-sudo systemctl enable reader-pro-single
-sudo systemctl enable reader-pro-multi
-# 运行
-sudo systemctl start reader-pro-single
-sudo systemctl start reader-pro-multi
-# 状态
-sudo systemctl status reader-pro-single
-sudo systemctl status reader-pro-multi
-# 停止
-sudo systemctl stop reader-pro-single
-sudo systemctl stop reader-pro-multi
-# 停止开机自启
-sudo systemctl disable reader-pro-single
-sudo systemctl disable reader-pro-multi
+# 启动 Jar 服务
+java -jar reader-server.jar --spring.profiles.active=prod
+
+# 指定自定义数据存储路径
+java -Dreader.app.storagePath=/opt/reader/storage -jar reader-server.jar
 ```
 
-> Arch Linux 的存储目录是 `/var/lib/reader-pro/`
+---
 
-> Arch Linux 的配置文件是 `/usr/share/java/reader-pro/conf/application.properties`
+## Nginx 反向代理配置
 
-## Nginx反向代理(如果有域名可以考虑80端口复用)
-
-```shell
-# 宝塔等各种面板不适用下列教程
-# Debian/Ubuntu
-apt install nginx -y
-# CentOS
-yum install nginx -y
-vim /etc/nginx/conf.d/reader.conf
-将下面代码复制进reader.conf后，修改域名输入
-esc
-:wq
-保持即可
-```
+若需要使用域名访问（如配合 SSL 证书或复用 80/443 端口），推荐 Nginx 配置如下：
 
 ```nginx
 server {
     listen 80;
-    server_name 域名;
-    #开启ssl解除注释
-    # SSL证书获取
-    # https://github.com/acmesh-official/acme.sh/wiki/%E8%AF%B4%E6%98%8E
-    #listen 443 ssl;
-    #ssl_certificate 证书.cer;
-    #ssl_certificate_key 证书.key;
-    #ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
-    #ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
-    #ssl_prefer_server_ciphers on;
-    #ssl_session_cache shared:SSL:10m;
-    #ssl_session_timeout 10m;
-    #if ($server_port !~ 443){
-    #    rewrite ^(/.*)$ https://$host$1 permanent;
-    #}
-    #error_page 497  https://$host$request_uri;
+    server_name reader.yourdomain.com;
 
-    gzip on; #开启gzip压缩
-    gzip_min_length 1k; #设置对数据启用压缩的最少字节数
+    # 启用 Gzip 压缩，提高移动端静态文件加载速度
+    gzip on;
+    gzip_min_length 1k;
     gzip_buffers 4 16k;
-    gzip_http_version 1.0;
-    gzip_comp_level 6; #设置数据的压缩等级,等级为1-9，压缩比从小到大
-    gzip_types text/plain text/css text/javascript application/json application/javascript application/x-javascript application/xml; #设置需要压缩的数据格式
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/javascript application/json application/javascript application/x-javascript;
     gzip_vary on;
 
-    client_max_body_size   50m; #允许上传50MB文件,上传本地书籍需要修改此项大小.如nginx主配置文件已添加,删除此行并修改主配置即可
+    # 上传本地大体积 txt / epub 电子书必须放开限制
+    client_max_body_size 100m;
 
     location / {
-        proxy_pass  http://127.0.0.1:4396; #端口自行修改为映射端口
+        proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header Upgrade           $http_upgrade;
-        proxy_set_header Connection        "upgrade";
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+
+        # WebSocket 支持
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # 真实客户端信息透传
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host  $host;
-        proxy_set_header X-Forwarded-Port  $server_port;
+        proxy_set_header X-Forwarded-Port $server_port;
     }
 }
 ```
 
-## 开发编译
+---
 
-### 编译脚本
+## 开发与源码编译
 
-```bash
-$ ./build.sh
+本项目为标准的前后端分离架构：
+- **后端**：Kotlin + Spring Boot + JavaFX 引擎
+- **前端**：Vue 2 + Vue CLI + Tailwind / ElementUI
 
-USAGE: ./build.sh build|run|win|linux|mac|serve|cli|yarn|web|sync
-
-build   调试打包
-run     桌面端编译运行，需要先执行 sync 命令编译同步web资源
-win     打包 windows 安装包
-linux   打包 linux 安装包
-mac     打包 mac 安装包
-serve   服务端编译运行
-cli     服务端打包命令
-yarn    web页面 yarn 快捷命令，默认 install
-web     开发web页面
-sync    编译同步web资源
-```
-
-### 编译前端
+### 编译前端 (Web)
 
 ```bash
 cd web
-# 启动开发服务 访问 http://localhost:8081/
-# yarn serve
 
-# 编译，并拷贝到 src/main/resources/web 目录
+# 1. 安装前端依赖
+yarn install
+
+# 2. 本地开发热重载（端口 8081）
+yarn serve
+
+# 3. 生产打包并自动同步到后端资源目录 (src/main/resources/web)
 yarn sync
 ```
 
-### 编译接口
+### 编译后端 (Gradle)
 
 ```bash
-./gradlew assemble --info
+# 执行打包构建
+./gradlew assemble
 
-java -jar build/libs/reader-${version}.jar
-
-# 指定 storage 路径  默认为相对路径 storage
-# java -Dreader.app.storagePath=cacheStorage  -jar build/libs/reader-${version}.jar
-
-# web端 http://localhost:8080/
-# 接口地址 http://localhost:8080/reader3/
+# 运行构建产物
+java -jar build/libs/reader-2.0.0.jar
 ```
 
-## 接口文档
+### 快捷构建脚本
 
-与 [阅读3Web接口](https://github.com/gedoor/legado/blob/master/api.md) 基本一致，只是多了接口前缀 `/reader3/`
+根目录下自带 `./build.sh` 脚本工具：
+- `./build.sh sync`：编译前端并将静态资源同步到后端 resources
+- `./build.sh build`：全量构建
+- `./build.sh win` / `./build.sh linux` / `./build.sh mac`：打包对应平台可执行文件
 
-### 新增接口
+---
 
-#### 加入书架
+## 后端 API 接口文档
 
-- URL `http://localhost:8080/reader3/saveBook`
-- Method `POST`
-- Body `json 格式`
+### 与阅读 3 (Legado) 协议兼容性
 
-```JSON
+本服务完整向下兼容 [阅读 3 (Legado) Web 接口规范](https://github.com/gedoor/legado/blob/master/api.md)，所有请求统一带有 `/reader3/` 路由前缀。
+
+### 核心业务接口
+
+#### 1. 加入书架 (`saveBook`)
+
+- **URL**：`/reader3/saveBook`
+- **Method**：`POST`
+- **Content-Type**：`application/json`
+- **Request Body**：
+
+```json
 {
-    "infoHtml": "",
-    "tocHtml": "",
-    "bookUrl": "https://www.damixs.com/book/dmfz.html",
-    "origin": "https://www.damixs.com",
-    "originName": "🎉大米小说",
+    "name": "示例小说",
+    "author": "示例作者",
+    "bookUrl": "https://www.example.com/book/123.html",
+    "origin": "https://www.example.com",
+    "originName": "示例书源",
     "type": 0,
-    "name": "道门法则",
-    "author": "八宝饭",
-    "kind": "02-14",
-    "intro": "在道门掌控的天下，应该怎么修炼？符箓、丹药、道士、灵妖、斋醮科仪......想要修仙，很好，请从扫厕所开始做起！符诏到来的时候，你需要站在什么位置？Q群：1701556（需验证订阅截图）、954782460“盟主群”",
-    "wordCount": "",
-    "latestChapterTitle": "番外四（贺消脱止-M荣升盟主）",
+    "intro": "书籍简介说明...",
     "tocUrl": "",
-    "time": 1628756214810,
-    "originOrder": 16
+    "latestChapterTitle": "第100章 最终决战",
+    "time": 1690000000000
 }
 ```
 
-- Response Body
-
-[Book字段参考](https://github.com/gedoor/legado/blob/master/app/src/main/java/io/legado/app/data/entities/Book.kt)
-
-```JSON
+- **Response**：
+```json
 {
     "isSuccess": true,
     "errorMsg": "",
-    "data": Book
+    "data": {
+        "name": "示例小说",
+        "author": "示例作者",
+        "bookUrl": "https://www.example.com/book/123.html"
+    }
 }
 ```
 
-#### 获取书籍书源
+#### 2. 获取书籍书源 (`getBookSource`)
 
-- URL `http://localhost:8080/reader3/getBookSource?url=xxx`
-- Method `GET`
-
-获取指定URL对应的书源信息, 和 `阅读3Web接口` 的 `getSource` 接口相同
-
-- Response Body
-
-[SearchBook字段参考](https://github.com/gedoor/legado/blob/master/app/src/main/java/io/legado/app/data/entities/SearchBook.kt)
-
-```JSON
+- **URL**：`/reader3/getBookSource?url=xxx`
+- **Method**：`GET`
+- **说明**：获取指定 URL 绑定的书源详情。
+- **Response**：
+```json
 {
     "isSuccess": true,
     "errorMsg": "",
-    "data": [SearchBook]
+    "data": [
+        {
+            "bookSourceUrl": "https://www.example.com",
+            "bookSourceName": "示例书源",
+            "bookSourceType": 0
+        }
+    ]
 }
 ```
 
-#### 搜索书籍更多书源
+#### 3. 搜索书籍更多书源 (`searchBookSource`)
 
-- URL `http://localhost:8080/reader3/searchBookSource?name=xxx&lastIndex=0`
-- Method `GET`
-
-搜索指定name对应的书源列表信息
-
-lastIndex 是上次搜索结果中返回的字段，默认为 0，可以传入 `getBookSource` 接口返回的SearchBook列表长度
-
-- Response Body
-
-[SearchBook字段参考](https://github.com/gedoor/legado/blob/master/app/src/main/java/io/legado/app/data/entities/SearchBook.kt)
-
-```JSON
+- **URL**：`/reader3/searchBookSource?name=书名&author=作者名&lastIndex=0`
+- **Method**：`GET`
+- **说明**：在所有启用的书源中并行检索匹配的同名同作者书籍。
+- **Response**：
+```json
 {
     "isSuccess": true,
     "errorMsg": "",
-    "data": [SearchBook]
+    "data": [
+        {
+            "name": "书名",
+            "author": "作者名",
+            "bookUrl": "https://www.site-b.com/book/456.html",
+            "origin": "https://www.site-b.com",
+            "originName": "站点B",
+            "latestChapterTitle": "最新章节标题"
+        }
+    ]
 }
 ```
 
-#### 书籍换源
+#### 4. 书籍换源 (`setBookSource`)
 
-- URL `http://localhost:8080/reader3/setBookSource`
-- Method `POST`
-- Body `json 格式`
-
-```JSON
+- **URL**：`/reader3/setBookSource`
+- **Method**：`POST`
+- **Content-Type**：`application/json`
+- **Request Body**：
+```json
 {
-    "newUrl": "新源书籍链接",
     "name": "书籍名称",
-    "bookSourceUrl": "书源链接"
+    "newUrl": "https://www.site-b.com/book/456.html",
+    "bookSourceUrl": "https://www.site-b.com"
 }
 ```
-
-- Response Body
-
-[Book字段参考](https://github.com/gedoor/legado/blob/master/app/src/main/java/io/legado/app/data/entities/Book.kt)
-
-```JSON
+- **Response**：
+```json
 {
     "isSuccess": true,
     "errorMsg": "",
-    "data": Book
+    "data": {
+        "name": "书籍名称",
+        "bookUrl": "https://www.site-b.com/book/456.html"
+    }
 }
 ```
