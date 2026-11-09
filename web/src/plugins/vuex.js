@@ -758,10 +758,14 @@ export default new Vuex.Store({
         // 获取搜索设置
         const searchConfig = getCache("searchConfig");
         if (searchConfig && typeof searchConfig === "object") {
-          commit("setSearchConfig", {
+          const mergedConfig = {
             ...settings.searchConfig,
             ...searchConfig
-          });
+          };
+          if (!mergedConfig.concurrentCount || mergedConfig.concurrentCount > 30) {
+            mergedConfig.concurrentCount = 8;
+          }
+          commit("setSearchConfig", mergedConfig);
         }
       } catch (error) {
         //

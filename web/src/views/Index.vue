@@ -28,6 +28,8 @@
         <div class="navigation-sub-title">
           清风不识字，何故乱翻书
         </div>
+
+        <!-- 1. 搜索书籍 -->
         <div class="search-wrapper">
           <el-input
             size="mini"
@@ -100,6 +102,8 @@
               </el-option>
             </el-select>
           </div>
+
+          <!-- 3. 并发线程 (默认8，上限30) -->
           <div
             class="setting-item"
             v-show="searchConfig.searchType !== 'single'"
@@ -121,51 +125,13 @@
             </el-select>
           </div>
         </div>
-        <div class="recent-wrapper">
-          <div class="recent-title">
-            最近阅读
-          </div>
-          <div class="reading-recent">
-            <el-tag
-              type="warning"
-              :effect="isNight ? 'dark' : 'light'"
-              class="recent-book"
-              @click="toDetail(readingRecent)"
-              :class="{ 'no-point': readingRecent.bookUrl == '' }"
-            >
-              {{ readingRecent.name }}
-            </el-tag>
-          </div>
-        </div>
+
+        <!-- 2. 探索书源 -->
         <div class="setting-wrapper">
           <div class="setting-title">
-            后端设定
+            探索发现
           </div>
           <div class="setting-item">
-            <el-tag
-              :type="connectType"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-connect"
-              :class="{ 'no-point': connecting }"
-              @click="toBackendSetting"
-            >
-              {{ connectStatus }}
-            </el-tag>
-          </div>
-        </div>
-        <div class="setting-wrapper">
-          <div class="setting-title">
-            书源设置
-          </div>
-          <div class="setting-item">
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showBookSourceManageDialog = true"
-            >
-              书源管理
-            </el-tag>
             <el-popover
               placement="right"
               :width="popupWidth"
@@ -182,259 +148,75 @@
                 @showSearchList="showSearchList"
                 @close="popExploreVisible = false"
               />
-              <el-tag
-                type="info"
-                :effect="isNight ? 'dark' : 'light'"
+              <el-button
+                type="primary"
+                plain
+                size="small"
                 slot="reference"
                 ref="exploreBtn"
-                class="setting-btn"
+                icon="el-icon-discover"
+                style="width: 100%; border-radius: 8px; font-weight: 500;"
                 @click="showNavigation = false"
               >
-                探索书源
-              </el-tag>
+                探索书源 (发现/榜单)
+              </el-button>
             </el-popover>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="uploadBookSource"
-            >
-              导入书源
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="loadRemoteBookSource"
-            >
-              远程书源
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showFailureBookSource()"
-            >
-              失效书源
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="debugBookSource()"
-            >
-              调试书源
-            </el-tag>
-            <input
-              ref="fileRef"
-              type="file"
-              @change="onSourceFileChange"
-              style="display:none"
-            />
-          </div>
-        </div>
-        <div class="setting-wrapper">
-          <div class="setting-title">
-            书架设置
-          </div>
-          <div class="setting-item">
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showBookManage"
-            >
-              书籍管理
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showManageBookGroup"
-            >
-              分组管理
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="importLocalBook"
-            >
-              导入书籍
-            </el-tag>
-            <input
-              ref="bookRef"
-              type="file"
-              multiple="multiple"
-              @change="onBookFileChange"
-              style="display:none"
-            />
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showLocalStoreManageDialog = true"
-              v-if="
-                !$store.state.isSecureMode ||
-                  $store.state.userInfo.enableLocalStore
-              "
-            >
-              浏览书仓
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="init(true)"
-            >
-              刷新缓存
-            </el-tag>
           </div>
         </div>
 
-        <div class="setting-wrapper">
+        <!-- 4. 管理 (从顶部右侧迁移至左侧) -->
+        <div class="setting-wrapper" style="margin-top: 28px;">
           <div class="setting-title">
-            用户空间
-            <span
-              class="right-text"
-              v-if="$store.state.isSecureMode && $store.state.userInfo.username"
-              @click="logoutConfirm()"
-              >注销</span
-            >
-            <span
-              class="right-text"
-              v-else
-              @click="$store.commit('setShowLogin', true)"
-              >登录</span
-            >
+            管理与账户
           </div>
-          <div class="setting-item" v-if="$store.state.showManagerMode">
-            <el-select
-              size="mini"
-              v-model="userNS"
-              class="setting-select"
-              filterable
-              placeholder="请选择用户空间"
+          <div class="setting-item">
+            <el-dropdown
+              v-if="$store.state.userInfo && $store.state.userInfo.username"
+              @command="handleAdminMenuCommand"
+              trigger="click"
+              style="width: 100%;"
             >
-              <el-option
-                v-for="(item, index) in userList"
-                :key="'source-' + index"
-                :label="item.username"
-                :value="item.userNS"
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-s-operation"
+                style="width: 100%; border-radius: 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;"
               >
-              </el-option>
-            </el-select>
-          </div>
-          <div class="setting-item">
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="saveUserConfig"
-              v-if="localStorageAvaliable"
+                <span>管理 ({{ $store.state.userInfo.username }})</span>
+                <i class="el-icon-arrow-down"></i>
+              </el-button>
+              <el-dropdown-menu slot="dropdown" style="min-width: 160px;">
+                <el-dropdown-item command="admin" icon="el-icon-s-tools">
+                  {{
+                    $store.state.userInfo.isAdmin ||
+                    $store.state.userInfo.is_admin ||
+                    $store.state.userInfo.username === "admin"
+                      ? "控制台与管理后台"
+                      : "后台管理 (书源与书架)"
+                  }}
+                </el-dropdown-item>
+                <el-dropdown-item command="changePassword" icon="el-icon-key">
+                  修改账户密码
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="logout"
+                  divided
+                  icon="el-icon-switch-button"
+                >
+                  退出当前账号
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </el-dropdown>
+            <el-button
+              v-else
+              type="primary"
+              size="small"
+              icon="el-icon-user-solid"
+              style="width: 100%; border-radius: 8px;"
+              @click="$store.commit('setShowLogin', true)"
             >
-              备份用户配置
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="restoreUserConfig"
-              v-if="localStorageAvaliable"
-            >
-              同步用户配置
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="loadUserList"
-              v-if="$store.state.showManagerMode"
-            >
-              加载用户空间
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              v-if="$store.state.isManagerMode"
-              @click="showUserManageDialog()"
-            >
-              管理用户空间
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              v-if="$store.state.isManagerMode"
-              @click="exitSecureMode"
-            >
-              退出管理模式
-            </el-tag>
-          </div>
-        </div>
-        <div
-          class="setting-wrapper"
-          v-if="
-            !$store.state.isSecureMode || $store.state.userInfo.enableWebdav
-          "
-        >
-          <div class="setting-title">
-            WebDAV
-          </div>
-          <div class="setting-item">
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showWebDAVManageDialog = true"
-            >
-              文件管理
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="backupToWebdav"
-            >
-              保存备份
-            </el-tag>
-          </div>
-        </div>
-
-        <div class="setting-wrapper">
-          <div class="setting-title">
-            本地缓存
-            <span class="right-text">{{ localCacheStats.total }}</span>
-          </div>
-          <div class="setting-item">
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="clearCache('bookSourceList')"
-            >
-              清空书源缓存
-              <span>{{ localCacheStats.bookSourceList }}</span>
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="clearCache('chapterList')"
-            >
-              清空章节列表缓存
-              <span>{{ localCacheStats.chapterList }}</span>
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="clearCache('chapterContent')"
-            >
-              清空章节内容缓存
-              <span>{{ localCacheStats.chapterContent }}</span>
-            </el-tag>
+              登录账号
+            </el-button>
           </div>
         </div>
       </div>
@@ -471,16 +253,6 @@
             <i class="el-icon-loading" v-if="loadingMore"></i>
             {{ loadingMore ? "加载中..." : "加载更多" }}
           </div>
-          <div
-            class="title-btn"
-            @click="showExplorePop"
-            v-if="
-              $store.getters.isNormalPage &&
-                !(isSearchResult && !isExploreResult)
-            "
-          >
-            书海
-          </div>
           <div class="title-btn" v-if="!isSearchResult" @click="refreshShelf">
             <i class="el-icon-loading" v-if="refreshLoading"></i>
             {{ refreshLoading ? "刷新中..." : "刷新" }}
@@ -492,87 +264,6 @@
           >
             {{ showBookEditButton ? "取消" : "编辑" }}
           </div>
-          <el-dropdown
-            v-if="
-              $store.getters.isNormalPage &&
-                $store.state.userInfo &&
-                $store.state.userInfo.username
-            "
-            @command="handleAdminMenuCommand"
-            trigger="click"
-            class="title-btn-dropdown"
-          >
-            <div
-              class="title-btn"
-              style="cursor: pointer; color: #409EFF; font-weight: bold;"
-            >
-              <i class="el-icon-s-operation"></i> 管理
-              <span style="font-weight: normal; margin-left: 2px;">
-                ({{ $store.state.userInfo.username }})
-              </span>
-              <i
-                class="el-icon-arrow-down"
-                style="font-size: 10px; margin-left: 2px;"
-              ></i>
-            </div>
-            <el-dropdown-menu slot="dropdown">
-              <el-dropdown-item command="admin" icon="el-icon-s-tools">
-                {{
-                  $store.state.userInfo.isAdmin ||
-                  $store.state.userInfo.is_admin ||
-                  $store.state.userInfo.username === "admin"
-                    ? "控制台与管理后台"
-                    : "后台管理 (书源与书架)"
-                }}
-              </el-dropdown-item>
-              <el-dropdown-item command="changePassword" icon="el-icon-key">
-                修改账户密码
-              </el-dropdown-item>
-              <el-dropdown-item
-                command="logout"
-                divided
-                icon="el-icon-switch-button"
-              >
-                退出当前账号
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </el-dropdown>
-          <el-dropdown
-            v-else-if="
-              $store.getters.isNormalPage &&
-                $store.state.userInfo &&
-                $store.state.userInfo.username
-            "
-            @command="handleUserMenuCommand"
-            trigger="click"
-            class="title-btn-dropdown"
-          >
-            <div
-              class="title-btn"
-              style="cursor: pointer; color: #409EFF; font-weight: 500;"
-            >
-              <i class="el-icon-user"></i> {{ $store.state.userInfo.username }}
-              <i
-                class="el-icon-arrow-down"
-                style="font-size: 10px; margin-left: 2px;"
-              ></i>
-            </div>
-            <el-dropdown-menu slot="dropdown">
-              <el-dropdown-item command="userSpace" icon="el-icon-setting">
-                后台管理 (书源与书架)
-              </el-dropdown-item>
-              <el-dropdown-item command="changePassword" icon="el-icon-key">
-                修改密码
-              </el-dropdown-item>
-              <el-dropdown-item
-                command="logout"
-                divided
-                icon="el-icon-switch-button"
-              >
-                退出登录
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </el-dropdown>
           <div
             class="title-btn"
             v-else-if="$store.getters.isNormalPage"
@@ -1242,7 +933,7 @@ export default {
 
       importMultiBookTip: "",
 
-      concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60],
+      concurrentList: [4, 8, 12, 16, 20, 24, 30],
 
       localCacheStats: {
         total: "0 Bytes",

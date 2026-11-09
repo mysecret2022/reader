@@ -75,7 +75,7 @@ const settings = {
     searchType: "multi",
     bookSourceGroup: "",
     bookSourceUrl: "",
-    concurrentCount: 24
+    concurrentCount: 8
   },
   customConfigList: [defaultDayConfig, defaultNightConfig],
   config: {

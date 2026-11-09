@@ -647,7 +647,7 @@ export default {
             }
           }),
         "bookSourceList@" + this.currentUserName,
-        refresh
+        refresh !== undefined ? refresh : true
       ).then(
         res => {
           if (res.data.isSuccess) {
