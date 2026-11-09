@@ -1,42 +1,67 @@
-# AGENT_PROJECT_GUIDE (v2.0.4)
+# AGENT_PROJECT_GUIDE (v2.0.5)
 
 面向后续接手智能体的项目自说明与迭代指引文档。
 
 ---
 
 ## 1. 版本概述 (Version Summary)
-- **版本号**：`v2.0.4`
-- **定位**：iOS 后台顶部状态栏避让修复、移动端（iOS / Android）阅读文本长按气泡菜单优化与原生浏览器菜单屏蔽。
-- **上一版本**：`v2.0.3`
+- **版本号**：`v2.0.5`
+- **定位**：阅读设置面板 3 标签等宽标准化重构、配置方案精简、默认正文字体升级为“文楷”、以及仿真翻页动画架构评测。
+- **上一版本**：`v2.0.4`
 
 ---
 
-## 2. 核心架构与 Bug 修复记录 (Architectural Hardening & Fixes)
+## 2. 核心架构与功能迭代记录 (Architectural Hardening & Improvements)
 
-### 2.1 iOS 后台状态栏重叠与失效修复 (`Admin.vue`)
-- **根因分析**：
-  在 iOS 浏览器及 PWA 全屏模式下，系统状态栏（顶部时间、网络信号、电量图标等）位于页面最上层。原 `.admin-header` 采用固定高度 `60px`（移动端 `52px`），未计算 iOS 安全视口顶部内边距（`env(safe-area-inset-top)`），导致“返回书架”按钮、管理徽章与系统状态栏完全重叠，按钮被手势截断或无法被手指精准触控。
-- **解决方案**：
-  1. 引入 Webkit 标准安全区环境变量计算：
-     - 高度调整为 `height: calc(60px + env(safe-area-inset-top, 0px))`（移动端 `@media (max-width: 768px)` 调整为 `calc(52px + env(safe-area-inset-top, 0px))`）。
-     - 增加顶部内边距 `padding-top: env(safe-area-inset-top, 0px)` 及左右安全避让 `padding-left: calc(24px + env(safe-area-inset-left, 0px))`、`padding-right: calc(24px + env(safe-area-inset-right, 0px))`，并配置 `box-sizing: border-box`。
-  2. 元素整体自然下移避开齐刘海与灵动岛，彻底杜绝按钮与状态栏的视觉及点击冲突。
+### 2.1 全设置项 3 标签等宽网格排版规范 (`ReadSettings.vue`)
+- **设计规范**：
+  以“特殊模式”（正常、简洁、边缘识别）为视觉排版基准，彻底消除以往标签长短不一、换行参差不齐的凌乱感。
+- **技术实现**：
+  - 将 `.selection-zone` 升级为现代弹性流式布局：
+    ```css
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: calc(100% - 72px);
+    ```
+  - 将所有 `.span-item` 统一限定为单排 3 等分宽度：
+    ```css
+    width: calc((100% - 20px) / 3);
+    height: 34px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    ```
+  - 覆盖范围包括：特殊模式、配置方案、正文字体、简繁转换、页面模式、翻页方式、自动翻页、点击翻页、选择文字等所有选项区域。
 
-### 2.2 移动端（iOS / Android）文本选择气泡优化与原生菜单屏蔽 (`Reader.vue`)
-- **根因分析**：
-  在手机端（iOS Safari / Android Chrome / WebKit）开启“选择文字 - 操作弹窗”时，用户长按或滑动选中文本后，系统会同时唤起原生浏览器的上下文菜单（如 iOS 的“拷贝 / 查询 / 翻译 / 共享 / 搜索”，Android Chrome 的浮动操作栏），与阅读器弹窗重叠打架，视觉繁杂且易发生误触。
-- **解决方案**：
-  1. **原生菜单全面屏蔽**：
-     - **iOS 端**：当配置开启“操作弹窗”时，动态为阅读容器注入 `suppress-callout` 类，并在 CSS 中应用 `-webkit-touch-callout: none;`，彻底禁用 iOS WebKit 的默认气泡弹窗，同时保留文本选区判定。
-     - **Android 端**：在阅读主体上拦截并阻止默认 `@contextmenu` 事件（`e.preventDefault()`），消除安卓长按呼出的原生上下文菜单。
-     - **选区即时清除**：在获取选中文本及其屏幕坐标后，立即执行 `window.getSelection().removeAllRanges()`，清除系统高亮范围，迫使 Android/iOS 浏览器在最底层关闭其原生浮动工具栏与拉手。
-  2. **轻量自研悬浮气泡胶囊 (`.text-action-popup`)**：
-     - **全自动即时感应唤起 (`selectionchange` + `touchcancel/touchend`)**：
-       解决以往仅依赖 `touchend` 与 `click` 导致选中文本后无法自动弹出、必须二次点击内容才能弹出的缺陷。全面接入底层 `selectionchange` 选区变更事件，并在正文阅读容器内判定选区有效性与防抖；无论是移动端手指长按触发选词、拖拉光标游标，还是 PC 端鼠标划选，一旦选区生成即自动精确定位并弹出快捷气泡。
-     - 包含三个高频核心操作：**【复制】**、**【添加书签】**、**【添加过滤规则】**。
-     - **复制功能**：优先调用现代化 `navigator.clipboard.writeText` 异步接口，向下无缝兼容隐藏 `textarea` + `document.execCommand('copy')` 方案，复制成功后给出轻提示。
-     - **智能避让与定位**：基于文本选区的 `getBoundingClientRect()` 计算绝对视口坐标，居中悬浮在选中文本上方 10px 处；若选区过分靠顶（`< 55px`），则平滑翻转至选区正下方 10px 处显示；且内置左右安全边界限制，防止在大屏或边缘被截断。
-     - **高亮保留与退出清除**：选中文本后系统高亮样式正常保留在正文上，方便用户确认所选字句；只有在用户点击【复制/书签/过滤】或手指点击气泡外空白处退出时，才统一调用 `closeTextActionMenu(true)` 清除高亮，体验丝滑纯净。
+### 2.2 特殊模式与条件说明优化 (`ReadSettings.vue`)
+- **调整点**：
+  1. 标签固定为 `正常`、`简洁`、`边缘识别` 3 个。
+  2. 提示联动：原简洁模式说明常驻的问题已修复，现仅当选中“简洁”（`config.pageType === 'Kindle'`）时才动态浮现说明，逻辑与“边缘识别”保持一致。
+
+### 2.3 配置方案与精简方案类型 (`ReadSettings.vue` & `config.js`)
+- **调整点**：
+  1. 彻底删除“方案类型”（白天默认 / 黑夜默认）冗余配置行。
+  2. 精简“配置方案”为纯粹的 3 个选项：`内置白天`、`内置黑夜`、`自动切换`。
+  3. 新增 `selectBuiltinScheme` 快捷调度逻辑，点击后平滑联动 Vuex 状态。
+
+### 2.4 正文字体升级为“文楷”并设为默认 (`config.js` & `ReadSettings.vue`)
+- **背景与选型**：
+  原“楷体”实际上集成了高质量的“霞鹜文楷”（LXGW WenKai，包含 119 个极速切片字体包），在中文网文及电子出版物排版中享有极高美誉度（类似微信读书排版风格）。
+- **落地改造**：
+  1. 设置面板中正式命名为“文楷”。
+  2. 将系统 `defaultDayConfig.font` 与 `defaultNightConfig.font` 默认索引由 `0`（系统黑体）提升为 `1`（文楷），开箱即享沉浸典雅的阅读字形。
+
+### 2.5 仿真翻页（3D 纸张翻折）动画资源评测 (Simulation Page Turn Evaluation)
+- **评测结论**：**服务器负载消耗为 0%**。
+- **架构分析**：
+  1. 阅读器采用纯前端渲染与富客户端架构。服务端（Spring Boot / Vert.x）职责仅为章节文本存储与传输，绝不参与页面视觉帧渲染。
+  2. 仿真翻页属于纯客户端（浏览器端）图形变换，依靠 WebGL / HTML5 Canvas / CSS 3D Transform 实时计算贝塞尔曲面与阴影。整个翻页过程完全在用户手机或电脑的 GPU/CPU 本地运算，不产生任何服务端网络请求与资源占用。
+  3. **客户端体验权衡建议**：
+     - **上下滑动 / 左右滑动**：硬件加速平移，极致流畅省电（120Hz 满帧）。
+     - **仿真翻页**：拟真纸书翻页，沉浸感极强，但对极低端设备 GPU 算力有轻微要求。
+     - **最佳落地方案**：作为“翻页方式”的扩展模式加入，供用户在设置中自主自由选择。
 
 ---
 

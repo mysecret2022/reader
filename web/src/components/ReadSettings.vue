@@ -15,11 +15,15 @@
           <div class="selection-zone">
             <span
               class="span-item"
-              v-for="(type, index) in pageTypes"
-              :key="index"
-              :class="{ selected: config.pageType == type }"
-              @click="setPageType(type)"
-              >{{ type === "Kindle" ? "简洁" : "正常" }}</span
+              :class="{ selected: config.pageType !== 'Kindle' }"
+              @click="setPageType('正常')"
+              >正常</span
+            >
+            <span
+              class="span-item"
+              :class="{ selected: config.pageType === 'Kindle' }"
+              @click="setPageType('Kindle')"
+              >简洁</span
             >
             <span
               class="span-item"
@@ -27,8 +31,8 @@
               @click="toggleEdgeSwipeBack"
               >边缘识别</span
             >
-            <span class="small-tip"
-              >❗️开启简洁模式会关闭动画以及首页的部分功能</span
+            <span class="small-tip" v-if="config.pageType === 'Kindle'"
+              >❗️已开启简洁模式，将关闭复杂动画以获得极速极简体验。</span
             >
             <span class="small-tip" v-if="config.edgeSwipeBack"
               >💡已开启屏幕双侧边缘滑动返回。在iOS全屏或网页中，右侧向左轻滑即可触发返回，完美避开系统自带手势冲突。</span
@@ -41,59 +45,36 @@
           <div class="selection-zone">
             <span
               class="span-item"
-              v-for="(customConfig, index) in $store.state.customConfigList"
-              :key="index"
               :class="{
                 selected:
-                  $store.getters.config.customConfig === customConfig.name
+                  $store.getters.config.customConfig === '内置白天' &&
+                  !$store.getters.config.autoTheme
               }"
-              @click="setCustomConfig(customConfig)"
-            >
-              <span>{{ customConfig.name }}</span>
-              <i
-                class="el-icon-close delete-custom-config-icon"
-                v-if="
-                  index > 1 &&
-                    $store.getters.config.customConfig !== customConfig.name
-                "
-                @click.stop="deleteCustomConfig(index, customConfig.name)"
-              ></i>
-            </span>
-            <span
-              class="span-item"
-              :key="'addNewCustomConfig'"
-              @click="addNewCustomConfig"
-              >新增方案</span
+              @click="selectBuiltinScheme('内置白天')"
+              >内置白天</span
             >
             <span
               class="span-item"
-              :key="'autoTheme'"
+              :class="{
+                selected:
+                  $store.getters.config.customConfig === '内置黑夜' &&
+                  !$store.getters.config.autoTheme
+              }"
+              @click="selectBuiltinScheme('内置黑夜')"
+              >内置黑夜</span
+            >
+            <span
+              class="span-item"
               ref="themes"
               @click="setAutoTheme"
-              :class="{ selected: $store.getters.config.autoTheme }"
+              :class="{ selected: !!$store.getters.config.autoTheme }"
               >自动切换</span
             >
           </div>
         </li>
         <li>
-          <span class="setting-item-title">方案类型</span>
-          <div class="selection-zone">
-            <span
-              class="span-item"
-              v-for="(configDefaultType, index) in configDefaultTypeList"
-              :key="index"
-              :class="{
-                selected:
-                  currentCustomConfig.configDefaultType === configDefaultType
-              }"
-              @click="setConfigDefaultType(configDefaultType)"
-              >{{ configDefaultType }}</span
-            >
-          </div>
-        </li>
-        <li>
           <span class="setting-item-title">阅读主题</span>
-          <div class="selection-zone">
+          <div class="selection-zone theme-selection-zone">
             <span
               class="theme-item"
               v-for="(themeColor, index) in themeColors"
@@ -509,14 +490,13 @@ export default {
         { src: "bg/宁静夜色.jpg" },
         { src: "bg/边彩画布.jpg" }
       ],
-      fonts: ["系统", "楷体", "宋体", "手写体"],
+      fonts: ["系统", "文楷", "宋体", "手写体"],
       readMethods: ["上下滑动", "左右滑动", "上下滚动", "上下滚动2"],
       clickMethods: ["下一页", "自动", "不翻页"],
       selectionActions: ["操作弹窗", "忽略"],
       pageModes: ["自适应", "手机模式"],
       pageTypes: ["正常", "Kindle"],
       themeTypes: ["day", "night"],
-      configDefaultTypeList: ["白天默认", "黑夜默认"],
       autoReadingMethods: ["像素滚动", "段落滚动"],
       chineseFonts: ["简体", "繁体"],
 
@@ -871,6 +851,23 @@ export default {
         [].concat(this.$store.state.customConfigList).concat([newConfig])
       );
     },
+    selectBuiltinScheme(name) {
+      this.config = { ...this.config, autoTheme: false };
+      const target = this.$store.state.customConfigList.find(
+        item => item.name === name
+      );
+      if (target) {
+        this.setCustomConfig(target);
+      } else {
+        const fallback =
+          name === "内置黑夜"
+            ? settings.customConfigList[1]
+            : settings.customConfigList[0];
+        if (fallback) {
+          this.setCustomConfig(fallback);
+        }
+      }
+    },
     setCustomConfig(customConfig) {
       this.config = {
         ...this.config,
@@ -997,24 +994,42 @@ export default {
           line-height: 40px;
         }
         .selection-zone {
-          display: inline-block;
+          display: inline-flex;
+          flex-wrap: wrap;
+          gap: 10px;
           width: calc(100% - 72px);
+          vertical-align: top;
           word-wrap: break-word;
 
-          span {
-            margin-bottom: 5px;
+          .small-tip {
+            width: 100%;
+            margin-top: 4px;
+            margin-bottom: 2px;
+          }
+
+          &.theme-selection-zone {
+            gap: 8px;
+            align-items: center;
+
+            .span-item {
+              width: 70px;
+              height: 34px;
+            }
           }
         }
 
         .span-item {
-          width: 78px;
+          width: calc((100% - 20px) / 3);
           height: 34px;
+          box-sizing: border-box;
           cursor: pointer;
-          margin-right: 16px;
-          border-radius: 2px;
+          margin: 0;
+          border-radius: 4px;
           text-align: center;
           vertical-align: middle;
-          display: inline-block;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           font: 14px / 34px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
           position: relative;
 
