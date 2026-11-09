@@ -72,27 +72,27 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "browsertest.html"
   },
   {
-    "revision": "e80d110a0bb3bfea38ea",
+    "revision": "38606d3ffc11c69dc363",
     "url": "css/admin.7d693403.css"
   },
   {
-    "revision": "425f07b8e8c30a532150",
+    "revision": "11f50f6e3c79806a33d7",
     "url": "css/admin~index.d55d2547.css"
   },
   {
-    "revision": "4f0584b1b6592e2d133f",
+    "revision": "263b1f71364e35587c30",
     "url": "css/app.055f48cc.css"
   },
   {
-    "revision": "c669bb41c24f8ccac9d7",
+    "revision": "e0323b1fc2f85a84a8b7",
     "url": "css/chunk-vendors.7c015469.css"
   },
   {
-    "revision": "086bf74bde6a523b9deb",
+    "revision": "8f057bbd7efe663b3337",
     "url": "css/index.43cf8bfd.css"
   },
   {
-    "revision": "0593d02ec06b331d49f8",
+    "revision": "0d7a4d040d8e0daeec65",
     "url": "css/reader.53baaaa1.css"
   },
   {
@@ -1364,32 +1364,32 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "img/noImage.7443b2ba.png"
   },
   {
-    "revision": "e80d110a0bb3bfea38ea",
-    "url": "js/admin.58f14461.js"
+    "revision": "38606d3ffc11c69dc363",
+    "url": "js/admin.777779b0.js"
   },
   {
-    "revision": "425f07b8e8c30a532150",
-    "url": "js/admin~index.7910c07a.js"
+    "revision": "11f50f6e3c79806a33d7",
+    "url": "js/admin~index.05ca1b6e.js"
   },
   {
-    "revision": "4f0584b1b6592e2d133f",
-    "url": "js/app.8269837e.js"
+    "revision": "263b1f71364e35587c30",
+    "url": "js/app.4e913bd9.js"
   },
   {
-    "revision": "c669bb41c24f8ccac9d7",
-    "url": "js/chunk-vendors.e0420ee7.js"
+    "revision": "e0323b1fc2f85a84a8b7",
+    "url": "js/chunk-vendors.affecf97.js"
   },
   {
-    "revision": "086bf74bde6a523b9deb",
-    "url": "js/index.c9bb8721.js"
+    "revision": "8f057bbd7efe663b3337",
+    "url": "js/index.06ef2f97.js"
   },
   {
     "revision": "971a8dabb3206b93b71c",
     "url": "js/index~reader.930f1039.js"
   },
   {
-    "revision": "0593d02ec06b331d49f8",
-    "url": "js/reader.bc12bd2b.js"
+    "revision": "0d7a4d040d8e0daeec65",
+    "url": "js/reader.d6a1d391.js"
   },
   {
     "revision": "f0d07c276d4b9114ca5639c2417340b9",
