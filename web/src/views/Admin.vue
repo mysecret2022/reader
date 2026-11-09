@@ -440,11 +440,24 @@
                   失效书源
                 </el-button>
                 <el-button
+                  v-if="isAdmin"
                   size="small"
                   icon="el-icon-video-play"
                   @click="debugBookSource"
                 >
                   调试书源
+                </el-button>
+                <el-button
+                  v-else
+                  type="primary"
+                  plain
+                  size="small"
+                  class="sync-sources-btn"
+                  icon="el-icon-connection"
+                  @click="syncAdminSources"
+                  title="将管理员配置的默认书源同步至当前账户"
+                >
+                  拉取管理书源
                 </el-button>
                 <el-button
                   type="success"
@@ -1121,20 +1134,62 @@
               :model="userWebdavConfig"
               label-width="160px"
               size="small"
-              style="max-width: 720px; padding: 16px 0;"
+              class="webdav-config-form"
             >
-              <el-form-item label="配置模式">
-                <el-radio-group v-model="userWebdavConfig.useDefault">
-                  <el-radio :label="true"
-                    >使用管理员默认设置 (同步全局)</el-radio
+              <div class="webdav-mode-selector">
+                <div class="mode-selector-label">
+                  <i class="el-icon-guide"></i> 选择 WebDAV 备份模式：
+                </div>
+                <div class="mode-options-grid">
+                  <div
+                    class="mode-card-option"
+                    :class="{ active: userWebdavConfig.useDefault }"
+                    @click="userWebdavConfig.useDefault = true"
                   >
-                  <el-radio :label="false">自定义个人 WebDAV</el-radio>
-                </el-radio-group>
-              </el-form-item>
+                    <div class="mode-radio-icon">
+                      <i
+                        :class="
+                          userWebdavConfig.useDefault
+                            ? 'el-icon-success'
+                            : 'el-icon-circle-check'
+                        "
+                      ></i>
+                    </div>
+                    <div class="mode-info">
+                      <div class="mode-title">跟随系统管理员全局配置</div>
+                      <div class="mode-desc">
+                        直接使用系统统一提供的 WebDAV 云端备份，免去个人配置烦恼
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    class="mode-card-option"
+                    :class="{ active: !userWebdavConfig.useDefault }"
+                    @click="userWebdavConfig.useDefault = false"
+                  >
+                    <div class="mode-radio-icon">
+                      <i
+                        :class="
+                          !userWebdavConfig.useDefault
+                            ? 'el-icon-success'
+                            : 'el-icon-circle-check'
+                        "
+                      ></i>
+                    </div>
+                    <div class="mode-info">
+                      <div class="mode-title">配置我的私人 WebDAV</div>
+                      <div class="mode-desc">
+                        绑定您自己的坚果云、Alist、群晖或云盘，数据仅归您个人所有
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               <div
                 v-if="userWebdavConfig.useDefault"
-                style="margin-left: 160px; margin-bottom: 18px;"
+                class="webdav-default-alert"
               >
                 <el-alert
                   type="info"
@@ -1150,7 +1205,10 @@
                 </el-alert>
               </div>
 
-              <div v-show="!userWebdavConfig.useDefault">
+              <div
+                v-show="!userWebdavConfig.useDefault"
+                class="webdav-custom-inputs"
+              >
                 <el-form-item label="WebDAV 服务器地址">
                   <el-input
                     v-model="userWebdavConfig.webdavUrl"
@@ -4891,6 +4949,87 @@ export default {
   margin-bottom: 14px;
 }
 
+.sync-sources-btn {
+  font-size: 11px !important;
+  padding: 9px 8px !important;
+  letter-spacing: -0.3px;
+}
+
+/* WebDAV 配置卡片与模式切换器 */
+.webdav-config-form {
+  max-width: 800px;
+  padding: 16px 0;
+}
+.webdav-mode-selector {
+  margin-bottom: 22px;
+}
+.mode-selector-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 12px;
+}
+.theme-dark .mode-selector-label {
+  color: #f1f5f9;
+}
+.mode-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.mode-card-option {
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  transition: all 0.25s ease;
+  background: #fff;
+}
+.theme-dark .mode-card-option {
+  background: #1e293b;
+  border-color: #334155;
+}
+.mode-card-option:hover {
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+.mode-card-option.active {
+  border-color: #409eff;
+  background: rgba(64, 158, 255, 0.05);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.12);
+}
+.mode-radio-icon {
+  font-size: 20px;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+.mode-card-option.active .mode-radio-icon {
+  color: #409eff;
+}
+.mode-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+.theme-dark .mode-title {
+  color: #f8fafc;
+}
+.mode-desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.webdav-default-alert {
+  margin-bottom: 18px;
+}
+.webdav-custom-inputs {
+  padding-top: 8px;
+}
+
 /* 移动端与自适应优化 */
 @media (max-width: 768px) {
   .admin-container {
@@ -5031,6 +5170,11 @@ export default {
     font-size: 12px !important;
     text-align: center;
     justify-content: center;
+  }
+  .source-action-grid .el-button.sync-sources-btn {
+    font-size: 10.5px !important;
+    padding: 8px 2px !important;
+    letter-spacing: -0.4px;
   }
 
   /* 书架二级标签页胶囊横滑样式 */
