@@ -406,9 +406,12 @@
       </div>
       <div
         class="content"
+        ref="contentRef"
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
+        @touchcancel="handleTouchCancel"
+        @mouseup="handleMouseUp"
         @click="handlerClick"
         @contextmenu="handleContextMenu"
       >
@@ -555,6 +558,7 @@ export default {
       window.speechSynthesis.onvoiceschanged = this.fetchVoiceList;
     }
     window.addEventListener("unload", this.saveReadingPosition);
+    document.addEventListener("selectionchange", this.handleSelectionChange);
     eventBus.$on("showSearchContent", data => {
       if (this._inactive) {
         return;
@@ -665,6 +669,11 @@ export default {
         this.visibilityChangeHandler
       );
     }
+    document.removeEventListener("selectionchange", this.handleSelectionChange);
+    if (this.selectionChangeTimer) {
+      clearTimeout(this.selectionChangeTimer);
+      this.selectionChangeTimer = null;
+    }
   },
   watch: {
     textActionMenuVisible(val) {
@@ -677,7 +686,7 @@ export default {
             ) {
               return;
             }
-            this.textActionMenuVisible = false;
+            this.closeTextActionMenu(true);
             document.removeEventListener("pointerdown", closeHandler, true);
           };
           document.addEventListener("pointerdown", closeHandler, true);
@@ -865,7 +874,9 @@ export default {
         top: 100,
         left: 150,
         placeBelow: false
-      }
+      },
+      isTouchActive: false,
+      selectionChangeTimer: null
     };
   },
   computed: {
@@ -1923,8 +1934,9 @@ export default {
       }
     },
     handleTouchStart(e) {
+      this.isTouchActive = true;
       if (this.textActionMenuVisible) {
-        this.textActionMenuVisible = false;
+        this.closeTextActionMenu(true);
       }
       this.lastSelection = this.checkSelection();
       if (this.lastSelection) {
@@ -2000,7 +2012,22 @@ export default {
         }
       }
     },
+    handleTouchCancel() {
+      this.isTouchActive = false;
+      setTimeout(() => {
+        this.checkAndTriggerSelection();
+      }, 80);
+    },
+    handleMouseUp() {
+      setTimeout(() => {
+        this.checkAndTriggerSelection();
+      }, 50);
+    },
     handleTouchEnd() {
+      this.isTouchActive = false;
+      setTimeout(() => {
+        this.checkAndTriggerSelection();
+      }, 80);
       if (this.checkSelection(true)) {
         return;
       }
@@ -2320,9 +2347,10 @@ export default {
 
       this.textActionMenuPos = { top, left, placeBelow };
       this.textActionMenuVisible = true;
-
-      // 及时清空系统原生选区，消除 iOS/Android 自带的黑色长条气泡 / 浮动工具栏 (拷贝/查询/翻译)
-      if (window.getSelection) {
+    },
+    closeTextActionMenu(clearSelection = true) {
+      this.textActionMenuVisible = false;
+      if (clearSelection && window.getSelection) {
         try {
           window.getSelection().removeAllRanges();
         } catch (err) {
@@ -2330,9 +2358,80 @@ export default {
         }
       }
     },
+    handleSelectionChange() {
+      if (
+        !this.$store.getters.config ||
+        (this.$store.getters.config.selectionAction !== "过滤弹窗" &&
+          this.$store.getters.config.selectionAction !== "操作弹窗")
+      ) {
+        return;
+      }
+      const sel = window.getSelection ? window.getSelection() : null;
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        if (this.textActionMenuVisible && !this.isTouchActive) {
+          this.textActionMenuVisible = false;
+        }
+        return;
+      }
+      const text = sel.toString().trim();
+      if (!text) {
+        return;
+      }
+
+      // 校验选区是否属于阅读正文区域，避免设置、目录、搜索等外部选区误触发
+      const range = sel.getRangeAt(0);
+      const container =
+        this.$refs.contentRef ||
+        (this.$el && this.$el.querySelector(".content"));
+      if (container && range.commonAncestorContainer) {
+        const node = range.commonAncestorContainer;
+        const elem = node.nodeType === 1 ? node : node.parentNode;
+        if (elem && !container.contains(elem)) {
+          return;
+        }
+      }
+
+      if (this.selectionChangeTimer) {
+        clearTimeout(this.selectionChangeTimer);
+      }
+      // 手指拖拽选区中时防抖等待，手指抬起或PC选中文本时迅速响应
+      const delay = this.isTouchActive ? 250 : 80;
+      this.selectionChangeTimer = setTimeout(() => {
+        this.checkAndTriggerSelection();
+      }, delay);
+    },
+    checkAndTriggerSelection() {
+      if (
+        !this.$store.getters.config ||
+        (this.$store.getters.config.selectionAction !== "过滤弹窗" &&
+          this.$store.getters.config.selectionAction !== "操作弹窗")
+      ) {
+        return;
+      }
+      const sel = window.getSelection ? window.getSelection() : null;
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        return;
+      }
+      const text = sel.toString().trim();
+      if (!text) {
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const container =
+        this.$refs.contentRef ||
+        (this.$el && this.$el.querySelector(".content"));
+      if (container && range.commonAncestorContainer) {
+        const node = range.commonAncestorContainer;
+        const elem = node.nodeType === 1 ? node : node.parentNode;
+        if (elem && !container.contains(elem)) {
+          return;
+        }
+      }
+      this.showTextOperate(text, sel);
+    },
     handleActionCopy() {
       const text = this.selectedActionText;
-      this.textActionMenuVisible = false;
+      this.closeTextActionMenu(true);
       if (!text) return;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
@@ -2364,14 +2463,14 @@ export default {
     },
     handleActionAddBookmark() {
       const text = this.selectedActionText;
-      this.textActionMenuVisible = false;
+      this.closeTextActionMenu(true);
       if (text) {
         this.showAddBookmark(text);
       }
     },
     handleActionAddFilter() {
       const text = this.selectedActionText;
-      this.textActionMenuVisible = false;
+      this.closeTextActionMenu(true);
       if (text) {
         this.showTextFilterPrompt(text);
       }
