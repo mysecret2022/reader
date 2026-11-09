@@ -443,6 +443,32 @@
           >加载下一章</span
         >
       </div>
+
+      <!-- 仿安卓侧滑返回浮标指示器 (全屏边缘手势) -->
+      <transition name="edge-back-indicator">
+        <div
+          class="edge-back-bubble"
+          v-if="edgeBackIndicatorVisible"
+          :style="{
+            top: edgeBackIndicatorY + 'px',
+            transform: `translateY(-50%) scale(${edgeBackScale})`
+          }"
+        >
+          <div
+            class="edge-back-arrow"
+            :class="{ active: edgeBackMoveDistance >= 60 }"
+          >
+            <i class="el-icon-arrow-left"></i>
+          </div>
+        </div>
+      </transition>
+
+      <!-- “再次滑动返回书架”防误触确认胶囊提示 -->
+      <transition name="edge-toast-fade">
+        <div class="edge-back-toast" v-if="edgeBackToastVisible">
+          <i class="el-icon-arrow-left"></i> 再次滑动返回书架
+        </div>
+      </transition>
     </div>
   </div>
 </template>
@@ -762,10 +788,24 @@ export default {
       showPrevChapterSize: 0,
 
       speechMinutes: 0,
-      speechEndTime: 0
+      speechEndTime: 0,
+
+      // 仿安卓侧滑返回与防误触机制
+      isEdgeSwipe: false,
+      edgeBackIndicatorVisible: false,
+      edgeBackIndicatorY: 300,
+      edgeBackMoveDistance: 0,
+      edgeBackToastVisible: false,
+      lastEdgeBackTriggerTime: 0,
+      edgeBackToastTimer: null
     };
   },
   computed: {
+    edgeBackScale() {
+      // 随着手势拉动距离 0~60px 平滑放大
+      const progress = Math.min(Math.max(this.edgeBackMoveDistance / 60, 0), 1);
+      return (0.6 + progress * 0.4).toFixed(2);
+    },
     readingBook() {
       return this.$store.getters.readingBook || {};
     },
@@ -1817,8 +1857,19 @@ export default {
       // e.stopPropagation();
       this.lastTouch = false;
       this.lastMoveX = false;
+      this.isEdgeSwipe = false;
+      this.edgeBackMoveDistance = 0;
+
       if (e.touches && e.touches[0]) {
         this.lastTouch = e.touches[0];
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+
+        // 判定屏幕左边缘（距离左边界 <= 28px）：进入仿安卓侧滑手势
+        if (touchX <= 28) {
+          this.isEdgeSwipe = true;
+          this.edgeBackIndicatorY = touchY;
+        }
       }
     },
     handleTouchMove(e) {
@@ -1827,10 +1878,23 @@ export default {
       }
       if (e.touches && e.touches[0] && this.lastTouch) {
         this.lastMoveY = e.touches[0].clientY - this.lastTouch.clientY;
+        const moveX = e.touches[0].clientX - this.lastTouch.clientX;
+
+        // 如果是从左边缘起步的侧滑手势
+        if (this.isEdgeSwipe) {
+          if (moveX > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.edgeBackMoveDistance = moveX;
+            this.edgeBackIndicatorVisible = true;
+            this.edgeBackIndicatorY = e.touches[0].clientY;
+            return;
+          }
+        }
+
         if (this.isSlideRead) {
           e.preventDefault();
           e.stopPropagation();
-          const moveX = e.touches[0].clientX - this.lastTouch.clientX;
           this.contentStyle = {
             transform: `translateX(${this.transformX + moveX}px)`
           };
@@ -1849,6 +1913,35 @@ export default {
         }, 200);
         return;
       }
+
+      // 处理边缘侧滑返回手势
+      if (this.isEdgeSwipe) {
+        const triggered = this.edgeBackMoveDistance >= 60;
+        this.edgeBackIndicatorVisible = false;
+        this.isEdgeSwipe = false;
+        this.edgeBackMoveDistance = 0;
+
+        if (triggered) {
+          const now = Date.now();
+          // 如果在 2.5 秒内再次触发了边缘返回
+          if (now - this.lastEdgeBackTriggerTime < 2500) {
+            this.edgeBackToastVisible = false;
+            this.toShelf();
+            return;
+          }
+          // 第一次触发：弹出安卓经典的“再次滑动返回书架”防误触确认提示
+          this.lastEdgeBackTriggerTime = now;
+          this.edgeBackToastVisible = true;
+          if (this.edgeBackToastTimer) {
+            clearTimeout(this.edgeBackToastTimer);
+          }
+          this.edgeBackToastTimer = setTimeout(() => {
+            this.edgeBackToastVisible = false;
+          }, 2200);
+          return;
+        }
+      }
+
       if (this.lastMoveX) {
         this.transformX += this.lastMoveX;
         if (this.lastMoveX > 0) {
@@ -4187,5 +4280,88 @@ export default {
       color: #444;
     }
   }
+}
+
+/* 仿安卓侧滑返回浮标动画与样式 */
+.edge-back-bubble {
+  position: fixed;
+  left: 0;
+  z-index: 9999;
+  width: 44px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top-right-radius: 30px;
+  border-bottom-right-radius: 30px;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  transition: transform 0.1s ease-out;
+
+  .edge-back-arrow {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 20px;
+    font-weight: bold;
+    transform: translateX(-4px);
+    transition: all 0.15s ease;
+
+    &.active {
+      color: #409EFF;
+      transform: translateX(0) scale(1.15);
+    }
+  }
+}
+
+.edge-back-indicator-enter-active,
+.edge-back-indicator-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.edge-back-indicator-enter,
+.edge-back-indicator-leave-to {
+  opacity: 0;
+  transform: translateY(-50%) scale(0.5);
+}
+
+/* “再次滑动返回书架”防误触确认胶囊提示 */
+.edge-back-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  i {
+    font-size: 15px;
+    color: #409EFF;
+  }
+}
+
+.edge-toast-fade-enter-active,
+.edge-toast-fade-leave-active {
+  transition: opacity 0.25s, transform 0.25s;
+}
+
+.edge-toast-fade-enter,
+.edge-toast-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 15px);
 }
 </style>
