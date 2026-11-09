@@ -2315,25 +2315,50 @@ export default {
           return false;
         });
 
-        // 细分归类：中文优先、粤语次之、英语其后
-        const zhList = [];
-        const yueList = [];
-        const enList = [];
+        // 细分归类：中文优先、粤语次之、英语其后，并根据语音名称去重（解决 iOS/Safari 等系统上同一名称存在默认版与增强版的重复项）
+        const zhMap = new Map();
+        const yueMap = new Map();
+        const enMap = new Map();
+
         filtered.forEach(v => {
           const l = (v.lang || "").toLowerCase();
+          const cleanName = (v.name || "").trim();
           if (
             l.startsWith("zh-hk") ||
             l.startsWith("zh_hk") ||
             l.startsWith("zh-yue") ||
             l.startsWith("yue")
           ) {
-            yueList.push(v);
+            // 若同一名称存在多条（如普通版和增强版/高品质版），优先保留包含 enhanced/compact 或非 compact 的优质语音
+            if (
+              !yueMap.has(cleanName) ||
+              v.name.includes("Enhanced") ||
+              v.name.includes("增强")
+            ) {
+              yueMap.set(cleanName, v);
+            }
           } else if (l.startsWith("en")) {
-            enList.push(v);
+            if (
+              !enMap.has(cleanName) ||
+              v.name.includes("Enhanced") ||
+              v.name.includes("增强")
+            ) {
+              enMap.set(cleanName, v);
+            }
           } else {
-            zhList.push(v);
+            if (
+              !zhMap.has(cleanName) ||
+              v.name.includes("Enhanced") ||
+              v.name.includes("增强")
+            ) {
+              zhMap.set(cleanName, v);
+            }
           }
         });
+
+        const zhList = Array.from(zhMap.values());
+        const yueList = Array.from(yueMap.values());
+        const enList = Array.from(enMap.values());
 
         // 合并精选本地语音 (英语只保留前1~2个代表语音，避免英文语音占满)
         const selectedLocal = [...zhList, ...yueList, ...enList.slice(0, 2)];
