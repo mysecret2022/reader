@@ -1,39 +1,40 @@
-# AGENT_PROJECT_GUIDE (v2.0.7)
+# AGENT_PROJECT_GUIDE (v2.0.8)
 
 面向后续接手智能体的项目自说明与迭代指引文档。
 
 ---
 
 ## 1. 版本概述 (Version Summary)
-- **版本号**：`v2.0.7`
-- **定位**：长按划选文字屏幕乱跳、划选抬手误触发翻页跳转前一页 Bug 彻底修复，以及无感复制焦点锁定优化。
-- **上一版本**：`v2.0.6`
+- **版本号**：`v2.0.8`
+- **定位**：移动端选词气泡弹窗瞬间消失（毫秒级误关）Bug 根因彻底修复与生命周期状态隔离。
+- **上一版本**：`v2.0.7`
 
 ---
 
 ## 2. 核心架构与 Bug 修复记录 (Architectural Hardening & Fixes)
 
-### 2.1 长按划选文字屏幕乱跳与跳转前一页根因与彻底修复 (`Reader.vue`)
+### 2.1 气泡弹窗瞬间消失根因与彻底修复 (`Reader.vue`)
 - **根因分析**：
-  1. **视口位移干扰选区**：
-     在手机触摸滑动（`touchmove`）过程中，用户拖拽游标划选文字时，旧版事件监听未能在第一时间锁定正文视口。手指横向划选产生的微小或较大位移（`moveX`）直接被应用到 `contentStyle = { transform: translateX(...) }` 上，导致正在划选的正文在指尖下方左右位移。正文一动，浏览器底层的光标命中点随之改变，引发选区拉手和高亮在屏幕上剧烈跳动（“屏幕上面会乱跳”）。
-  2. **划词位移被误判为翻页手势**：
-     当用户完成划词抬起手指（`touchend`）时，由于从左向右划词产生了 `moveX > 30` 的累积正向位移，`handleTouchEnd` 将其误当成了“向右滑动屏幕翻页”的手势，从而强行触发了 `prevPage()`，导致刚选完字屏幕瞬间跳转到了前一页（“然后复制的内容会跳转到前一页”）。
-  3. **触控中提前触发选区销毁**：
-     旧逻辑中 `handleSelectionChange` 在 `isTouchActive === true`（手指仍在屏上）时仍启动了延时定时器，导致用户还没选完字，底层原生选区就提前被 `removeAllRanges()` 销毁，引发浏览器光标重置。
+  经双重执行链路排查，该现象由两个互锁的事件联动误杀导致：
+  1. **自解选区事件反向误杀**：
+     为屏蔽 iOS/Android 原生菜单，`showTextOperate` 在绘制自研高亮层后执行了 `sel.removeAllRanges()`。但浏览器底层在清空选区瞬间会向文档派发一次 `selectionchange` 事件；原先的 `handleSelectionChange` 中包含了一段代码：
+     ```javascript
+     if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+       if (this.textActionMenuVisible && !this.isTouchActive) {
+         this.textActionMenuVisible = false; // 误杀罪魁祸首！
+       }
+       return;
+     }
+     ```
+     由于 `sel.removeAllRanges()` 刚刚把 `rangeCount` 变为了 0，导致弹窗刚被设为 `true` 的微秒级瞬间，立即被紧随其后的 `selectionchange` 重置为了 `false`。
+  2. **移动端手势合成事件误触全局关闭**：
+     在 `watch: textActionMenuVisible` 中，原逻辑通过 `$nextTick` 立即挂载了全局 `pointerdown` 关闭监听。而在移动设备上，用户划词抬手（`touchend`）后，WebKit 内核会在数十至上百毫秒后向 `document` 派发该触控的合成微任务事件。该事件被刚刚挂载的 `closeHandler` 捕获，判定触控点不在气泡内，再次触发了关闭。
 
 - **技术解决方案**：
-  1. **划选状态严格锁定 (`isTextSelecting`)**：
-     - 在 `handleTouchStart` 中初始化 `isTextSelecting = false`。
-     - 在 `handleTouchMove` 顶部首先判断 `isTextSelecting` 或底层选区（`window.getSelection()`）：一旦检测到选词正在进行，立即将 `isTextSelecting` 标记为 `true` 并将位移重置为 `lastMoveX = 0`，**直接跳出事件，严禁改变 `contentStyle` 任何坐标**，正文稳如磐石，彻底消除选词晃动跳跃。
-     - 在 `handleSelectionChange` 中，只要手指仍在屏幕上（`isTouchActive === true`），仅记录 `isTextSelecting = true` 并立即退出，**绝不提前清空选区，也绝不提前弹窗打断用户的连续拉手选词体验**。
-  2. **抬手拦截翻页与坐标精确复位**：
-     - 在 `handleTouchEnd` 中，首先检测 `hasSelectedText`（处于划选状态或存在有效选中文本）。
-     - 一旦命中，立即清空位移 `this.lastMoveX = 0`，将微小位移瞬间复位到精确的 `translateX(${this.transformX}px)`，随后直接 `return`，**彻底掐死翻页逻辑（上一页/下一页）的触发路径**。
-     - 此时手指已经离开屏幕，再平稳调用 `checkAndTriggerSelection()`，提取高亮坐标、呈现自研高亮图层、屏蔽原生系统菜单并弹出操作气泡，整套流程严密流畅。
-  3. **复制焦点防跳与按钮事件隔离**：
-     - 在 `fallbackCopy` 中为隐藏的临时输入框补全安全样式：`readonly`、`pointer-events: none`、`position: fixed; top: -9999px; left: -9999px; opacity: 0`，彻底防止输入框聚焦拉动页面滚动。
-     - 为气泡弹窗内的【复制】、【添加书签】、【添加过滤规则】按钮全面绑定 `@click.stop.prevent` 与 `@touchend.stop.prevent`，杜绝任何穿透与冒泡。
+  1. **解除选区对气泡状态的绑定**：
+     在 `handleSelectionChange` 中彻底移除了“选区为空则关闭弹窗”的判断。由于项目已采用自研高亮图层（`selectionHighlightRects`），原生 DOM 选区的清空属于符合预期的屏蔽策略，弹窗的生命周期只由用户明确的退出动作控制。
+  2. **全局关闭监听延迟避让**：
+     在 `watch: textActionMenuVisible` 中，将全局点击关闭监听从微任务 `$nextTick` 改为安全延迟 220 毫秒后挂载。这一机制完美跨越了手机浏览器在抬手后的合成事件时间窗口，确保气泡稳固浮现，仅在用户后续主动点击空白处或操作按钮时才正常关闭。
 
 ---
 

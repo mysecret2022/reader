@@ -747,7 +747,9 @@ export default {
   watch: {
     textActionMenuVisible(val) {
       if (val) {
-        this.$nextTick(() => {
+        // 延迟绑定全局点击关闭监听，彻底避开同一次抬手手势派发的微任务合成 pointerdown 事件，杜绝瞬间误关
+        setTimeout(() => {
+          if (!this.textActionMenuVisible) return;
           const closeHandler = e => {
             if (
               this.$refs.textActionMenuRef &&
@@ -759,7 +761,7 @@ export default {
             document.removeEventListener("pointerdown", closeHandler, true);
           };
           document.addEventListener("pointerdown", closeHandler, true);
-        });
+        }, 220);
       }
     },
     chapterName(to) {
@@ -2687,9 +2689,6 @@ export default {
 
       const sel = window.getSelection ? window.getSelection() : null;
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-        if (this.textActionMenuVisible && !this.isTouchActive) {
-          this.textActionMenuVisible = false;
-        }
         return;
       }
       const text = sel.toString().trim();
