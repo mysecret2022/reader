@@ -2305,7 +2305,7 @@
       width="760px"
     >
       <el-alert
-        title="体检原理说明"
+        title="两阶段深度体检机制（L1 基础结构与软404过滤 + L2 通用高频词搜索与发现页兜底）"
         type="info"
         :closable="false"
         show-icon
@@ -2313,8 +2313,8 @@
       >
         <div style="font-size: 12px; line-height: 1.6; color: #475569;">
           <div>
-            <b>① 书名实测扫描（推荐）</b
-            >：模拟读者使用测试书名（如《斗罗大陆》）向各大书源网站发送并发搜索请求，若网站倒闭、超时无响应或结构报错，即精准判定失效。
+            <b>① 两阶段深度体检（推荐）</b
+            >：第一关拦截无搜索/发现规则或特征异常的源；第二关使用通用词并发实测，搜索为空时自动拉取发现页兜底验证，彻底杜绝误杀与漏放。
           </div>
           <div>
             <b>② 系统运行记录</b
@@ -2324,7 +2324,7 @@
       </el-alert>
 
       <el-tabs v-model="invalidSourceMode">
-        <el-tab-pane label="① 书名实测扫描" name="keyword">
+        <el-tab-pane label="① 两阶段智能体检" name="keyword">
           <div
             style="background: #f8fafc; padding: 14px 16px; border-radius: 6px; margin-bottom: 14px; border: 1px solid #e2e8f0;"
           >
@@ -2333,9 +2333,9 @@
                 <el-input
                   v-model="checkSourceKeyword"
                   size="small"
-                  placeholder="测试搜索书名"
+                  placeholder="测试搜索词 (默认: 的)"
                 >
-                  <template slot="prepend">测试书名</template>
+                  <template slot="prepend">测试词</template>
                 </el-input>
               </el-col>
               <el-col :span="6">
@@ -2710,7 +2710,7 @@ export default {
       checkingInvalidSources: false,
       invalidSourcesList: [],
       invalidSourceMode: "keyword",
-      checkSourceKeyword: "斗罗大陆",
+      checkSourceKeyword: "的",
       checkSourceTimeout: 5000,
       checkSourceConcurrent: 16,
       isScanningSources: false,
@@ -3292,52 +3292,144 @@ export default {
       });
       this.scanSourceLimitHandler = limitFunc;
 
+      // 解析提取书源的第一个发现页分类 URL
+      const extractFirstExploreUrl = exploreUrl => {
+        if (!exploreUrl) return null;
+        try {
+          const data = JSON.parse(exploreUrl);
+          if (Array.isArray(data) && data.length > 0 && data[0].url) {
+            return data[0].url;
+          }
+        } catch (e) {
+          // not json, continue
+        }
+        const lines = exploreUrl.replace(/\r\n/g, "\n").split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          if (line.includes("::")) {
+            const parts = line.split("::");
+            if (parts.length > 1 && parts[1].trim()) {
+              return parts[1].trim();
+            }
+          } else if (line.startsWith("http") || line.startsWith("/")) {
+            return line;
+          }
+        }
+        return null;
+      };
+
       this.bookSourceList.forEach(source => {
         limitFunc(async () => {
-          try {
-            const res = await Axios.post(
-              this.api + "/searchBook",
-              {
-                key: this.checkSourceKeyword,
-                bookSourceUrl: source.bookSourceUrl
-              },
-              {
-                timeout: timeout,
-                silent: true
-              }
-            );
-            if (!res.data.isSuccess) {
-              const errText = res.data.errorMsg || "解析失败或未返回有效内容";
-              this.invalidSourcesList.push({
-                bookSourceUrl: source.bookSourceUrl,
-                bookSourceName: source.bookSourceName || source.bookSourceUrl,
-                error: `[接口报错] ${errText}`
-              });
-            }
-          } catch (err) {
-            const errStr = (err && err.toString()) || "";
-            let reason = "网站无响应或访问故障";
-            if (errStr.includes("timeout")) {
-              reason = `响应超时 (> ${timeout}ms)`;
-            } else if (errStr.includes("Network Error")) {
-              reason = "网络中断或域名无法连接";
-            } else if (errStr.includes("404")) {
-              reason = "HTTP 404 (页面不存在或源失效)";
-            } else if (
-              errStr.includes("500") ||
-              errStr.includes("502") ||
-              errStr.includes("503")
-            ) {
-              reason = "HTTP 5xx (目标源服务器内部崩溃)";
-            } else if (errStr) {
-              reason = errStr;
-            }
+          // 第一关：反劫持与软 404 / 缺少基础检索规则过滤
+          const hasSearch = !!(source.searchUrl && source.searchUrl.trim());
+          const hasExplore = !!(source.exploreUrl && source.exploreUrl.trim());
+
+          if (!hasSearch && !hasExplore) {
             this.invalidSourcesList.push({
               bookSourceUrl: source.bookSourceUrl,
               bookSourceName: source.bookSourceName || source.bookSourceUrl,
-              error: reason
+              error:
+                "【规则缺失】未配置搜索地址 (searchUrl) 与发现规则 (exploreUrl)"
             });
+            return;
           }
+
+          // 第二关：通用高频词实测检索 + 发现页兜底
+          let searchSuccess = false;
+          let searchResultCount = 0;
+          let lastSearchError = "";
+
+          if (hasSearch) {
+            try {
+              const res = await Axios.post(
+                this.api + "/searchBook",
+                {
+                  key: this.checkSourceKeyword,
+                  bookSourceUrl: source.bookSourceUrl
+                },
+                {
+                  timeout: timeout,
+                  silent: true
+                }
+              );
+
+              if (res.data.isSuccess) {
+                const books = res.data.data;
+                if (Array.isArray(books) && books.length > 0) {
+                  searchSuccess = true;
+                  searchResultCount = books.length;
+                }
+              } else {
+                lastSearchError = res.data.errorMsg || "搜索接口解析失败";
+              }
+            } catch (err) {
+              const errStr = (err && err.toString()) || "";
+              if (errStr.includes("timeout")) {
+                lastSearchError = `搜索响应超时 (> ${timeout}ms)`;
+              } else if (errStr.includes("Network Error")) {
+                lastSearchError = "网络中断或域名无法连接";
+              } else if (errStr.includes("404")) {
+                lastSearchError = "HTTP 404 (页面不存在或源失效)";
+              } else if (
+                errStr.includes("500") ||
+                errStr.includes("502") ||
+                errStr.includes("503")
+              ) {
+                lastSearchError = "HTTP 5xx (目标源服务器内部崩溃)";
+              } else if (errStr) {
+                lastSearchError = errStr;
+              }
+            }
+          }
+
+          // 如果搜索已有结果，直接判定存活通过
+          if (searchSuccess && searchResultCount > 0) {
+            return;
+          }
+
+          // 发现页（Explore）兜底验证（解决部分站点搜特定词为空但分类完好的情况）
+          const firstExploreUrl = extractFirstExploreUrl(source.exploreUrl);
+          if (firstExploreUrl) {
+            try {
+              const exploreRes = await Axios.post(
+                this.api + "/exploreBook",
+                {
+                  ruleFindUrl: firstExploreUrl,
+                  bookSourceUrl: source.bookSourceUrl,
+                  page: 1
+                },
+                {
+                  timeout: timeout,
+                  silent: true
+                }
+              );
+
+              if (exploreRes.data.isSuccess) {
+                const exploreBooks = exploreRes.data.data;
+                if (Array.isArray(exploreBooks) && exploreBooks.length > 0) {
+                  // 发现页兜底成功，该书源判定为存活！
+                  return;
+                }
+              }
+            } catch (exploreErr) {
+              // 发现页探测失败
+            }
+          }
+
+          // 搜索与发现页兜底均未通过，判定为失效源
+          let failureReason = "搜索无结果且发现分类页为空或不可达";
+          if (lastSearchError) {
+            failureReason = `[接口报错] ${lastSearchError}`;
+          } else if (!hasSearch) {
+            failureReason = "未配置搜索规则且发现页拉取失败";
+          }
+
+          this.invalidSourcesList.push({
+            bookSourceUrl: source.bookSourceUrl,
+            bookSourceName: source.bookSourceName || source.bookSourceUrl,
+            error: failureReason
+          });
         });
       });
     },

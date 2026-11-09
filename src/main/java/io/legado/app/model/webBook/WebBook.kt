@@ -45,39 +45,62 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         key: String,
         page: Int? = 1
     ): List<SearchBook> {
+        val searchUrl = bookSource.searchUrl
+        if (searchUrl.isNullOrBlank()) {
+            throw IllegalArgumentException("书源未配置搜索规则 (searchUrl 为空)")
+        }
         val variableBook = SearchBook()
-        return bookSource.searchUrl?.let { searchUrl ->
-            val analyzeUrl = AnalyzeUrl(
-                mUrl = searchUrl,
-                key = key,
-                page = page,
-                baseUrl = bookSource.bookSourceUrl,
-                source = bookSource,
-                ruleData = variableBook,
-                headerMapF = bookSource.getHeaderMap(true),
-            )
-            var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
-            //检测书源是否已登录
-            bookSource.loginCheckJs?.let { checkJs ->
-                if (checkJs.isNotBlank()) {
-                    res = analyzeUrl.evalJS(checkJs, res) as StrResponse
-                }
+        val analyzeUrl = AnalyzeUrl(
+            mUrl = searchUrl,
+            key = key,
+            page = page,
+            baseUrl = bookSource.bookSourceUrl,
+            source = bookSource,
+            ruleData = variableBook,
+            headerMapF = bookSource.getHeaderMap(true),
+        )
+        val res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
+        val code = res.code()
+        if (code != 200) {
+            throw IllegalStateException("搜索 HTTP 状态码异常: $code")
+        }
+        val body = res.body ?: ""
+        val bodyLower = body.lowercase()
+        // 反劫持与软 404 / 停靠页指纹校验
+        if (body.toByteArray().size < 200) {
+            throw IllegalStateException("搜索响应内容过短 (< 200 字节)，疑似空白或已失效")
+        }
+        if (bodyLower.contains("domain for sale") ||
+            bodyLower.contains("domain is for sale") ||
+            bodyLower.contains("parking") ||
+            bodyLower.contains("域名出售") ||
+            bodyLower.contains("站点已关闭") ||
+            bodyLower.contains("网站已关闭") ||
+            bodyLower.contains("5秒后自动跳转") ||
+            (bodyLower.contains("cloudflare") && bodyLower.contains("attention required"))
+        ) {
+            throw IllegalStateException("命中域名停靠/防爬阻断特征页")
+        }
+        var processedRes = res
+        //检测书源是否已登录
+        bookSource.loginCheckJs?.let { checkJs ->
+            if (checkJs.isNotBlank()) {
+                processedRes = analyzeUrl.evalJS(checkJs, res) as StrResponse
             }
-            BookList.analyzeBookList(
-                res.body,
-                bookSource,
-                analyzeUrl,
-                res.url,
-                variableBook,
-                true,
-                debugLog = debugger
-            ).map {
-                it.tocHtml = ""
-                it.infoHtml = ""
-                it
-            }
-        } ?: arrayListOf()
-
+        }
+        return BookList.analyzeBookList(
+            processedRes.body,
+            bookSource,
+            analyzeUrl,
+            processedRes.url,
+            variableBook,
+            true,
+            debugLog = debugger
+        ).map {
+            it.tocHtml = ""
+            it.infoHtml = ""
+            it
+        }
     }
 
     /**
@@ -96,18 +119,39 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             ruleData = variableBook,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
+        val res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
+        val code = res.code()
+        if (code != 200) {
+            throw IllegalStateException("发现页 HTTP 状态码异常: $code")
+        }
+        val body = res.body ?: ""
+        val bodyLower = body.lowercase()
+        if (body.toByteArray().size < 200) {
+            throw IllegalStateException("发现页响应内容过短 (< 200 字节)，疑似空白或已失效")
+        }
+        if (bodyLower.contains("domain for sale") ||
+            bodyLower.contains("domain is for sale") ||
+            bodyLower.contains("parking") ||
+            bodyLower.contains("域名出售") ||
+            bodyLower.contains("站点已关闭") ||
+            bodyLower.contains("网站已关闭") ||
+            bodyLower.contains("5秒后自动跳转") ||
+            (bodyLower.contains("cloudflare") && bodyLower.contains("attention required"))
+        ) {
+            throw IllegalStateException("发现页命中域名停靠/防爬阻断特征页")
+        }
+        var processedRes = res
         //检测书源是否已登录
         bookSource.loginCheckJs?.let { checkJs ->
             if (checkJs.isNotBlank()) {
-                res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
+                processedRes = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
             }
         }
         return BookList.analyzeBookList(
-            res.body,
+            processedRes.body,
             bookSource,
             analyzeUrl,
-            res.url,
+            processedRes.url,
             variableBook,
             false,
             debugLog = debugger

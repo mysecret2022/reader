@@ -922,7 +922,7 @@ export default {
         size: 25
       },
       checkBookSourceConfig: {
-        keyword: "斗罗大陆",
+        keyword: "的",
         timeout: 5000,
         concurrent: 5
       },
@@ -2042,6 +2042,34 @@ export default {
       }
       this.isCheckingBookSource = true;
       this.$store.commit("setFailureIncludeTimeout", true);
+
+      // 提取书源首个发现分类
+      const extractFirstExploreUrl = exploreUrl => {
+        if (!exploreUrl) return null;
+        try {
+          const data = JSON.parse(exploreUrl);
+          if (Array.isArray(data) && data.length > 0 && data[0].url) {
+            return data[0].url;
+          }
+        } catch (e) {
+          // not json
+        }
+        const lines = exploreUrl.replace(/\r\n/g, "\n").split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          if (line.includes("::")) {
+            const parts = line.split("::");
+            if (parts.length > 1 && parts[1].trim()) {
+              return parts[1].trim();
+            }
+          } else if (line.startsWith("http") || line.startsWith("/")) {
+            return line;
+          }
+        }
+        return null;
+      };
+
       const limitFunc = LimitResquest(
         this.checkBookSourceConfig.concurrent,
         handler => {
@@ -2053,19 +2081,84 @@ export default {
           }
         }
       );
+
       this.bookSourceList.forEach(v => {
-        limitFunc(() => {
-          return Axios.post(
-            this.api + "/searchBook",
-            {
-              key: this.checkBookSourceConfig.keyword,
-              bookSourceUrl: v.bookSourceUrl
-            },
-            {
-              timeout: this.checkBookSourceConfig.timeout,
-              silent: true
+        limitFunc(async () => {
+          const hasSearch = !!(v.searchUrl && v.searchUrl.trim());
+          const hasExplore = !!(v.exploreUrl && v.exploreUrl.trim());
+
+          if (!hasSearch && !hasExplore) {
+            this.$store.commit("addFailureBookSource", {
+              bookSourceUrl: v.bookSourceUrl,
+              errorMsg: "未配置搜索与发现规则"
+            });
+            return;
+          }
+
+          let searchSuccess = false;
+          let lastSearchError = "";
+
+          if (hasSearch) {
+            try {
+              const res = await Axios.post(
+                this.api + "/searchBook",
+                {
+                  key: this.checkBookSourceConfig.keyword,
+                  bookSourceUrl: v.bookSourceUrl
+                },
+                {
+                  timeout: this.checkBookSourceConfig.timeout,
+                  silent: true
+                }
+              );
+              if (res.data.isSuccess) {
+                const books = res.data.data;
+                if (Array.isArray(books) && books.length > 0) {
+                  searchSuccess = true;
+                }
+              } else {
+                lastSearchError = res.data.errorMsg || "搜索接口解析失败";
+              }
+            } catch (err) {
+              lastSearchError = (err && err.toString()) || "搜索请求异常";
             }
-          );
+          }
+
+          if (searchSuccess) {
+            return;
+          }
+
+          // 发现页兜底
+          const firstExplore = extractFirstExploreUrl(v.exploreUrl);
+          if (firstExplore) {
+            try {
+              const exploreRes = await Axios.post(
+                this.api + "/exploreBook",
+                {
+                  ruleFindUrl: firstExplore,
+                  bookSourceUrl: v.bookSourceUrl,
+                  page: 1
+                },
+                {
+                  timeout: this.checkBookSourceConfig.timeout,
+                  silent: true
+                }
+              );
+              if (exploreRes.data.isSuccess) {
+                const exploreBooks = exploreRes.data.data;
+                if (Array.isArray(exploreBooks) && exploreBooks.length > 0) {
+                  return; // 发现页探测成功，存活！
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+
+          this.$store.commit("addFailureBookSource", {
+            bookSourceUrl: v.bookSourceUrl,
+            errorMsg: lastSearchError || "搜索无结果且发现页为空或不可达"
+          });
         });
       });
     },
