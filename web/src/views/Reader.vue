@@ -5,7 +5,10 @@
     :class="{
       night: isNight,
       day: !isNight,
-      'mini-interface': $store.state.miniInterface
+      'mini-interface': $store.state.miniInterface,
+      'suppress-callout':
+        $store.getters.config &&
+        $store.getters.config.selectionAction === '操作弹窗'
     }"
     ref="chapterWrapperRef"
   >
@@ -407,6 +410,7 @@
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
         @click="handlerClick"
+        @contextmenu="handleContextMenu"
       >
         <div class="content-inner" v-if="show">
           <Content
@@ -474,6 +478,36 @@
       <transition name="edge-toast-fade">
         <div class="edge-back-toast" v-if="edgeBackToastVisible">
           <i class="el-icon-arrow-left"></i> 再次滑动返回书架
+        </div>
+      </transition>
+
+      <!-- 选中文字快捷操作气泡弹窗 (替代系统原生菜单，支持复制、书签、过滤) -->
+      <transition name="text-action-fade">
+        <div
+          ref="textActionMenuRef"
+          class="text-action-popup"
+          :class="{ 'is-below': textActionMenuPos.placeBelow }"
+          v-if="textActionMenuVisible"
+          :style="{
+            top: textActionMenuPos.top + 'px',
+            left: textActionMenuPos.left + 'px'
+          }"
+          @click.stop
+        >
+          <div class="text-action-btn" @click="handleActionCopy">
+            <i class="el-icon-document-copy"></i>
+            <span>复制</span>
+          </div>
+          <div class="text-action-divider"></div>
+          <div class="text-action-btn" @click="handleActionAddBookmark">
+            <i class="el-icon-collection-tag"></i>
+            <span>添加书签</span>
+          </div>
+          <div class="text-action-divider"></div>
+          <div class="text-action-btn" @click="handleActionAddFilter">
+            <i class="el-icon-scissors"></i>
+            <span>添加过滤规则</span>
+          </div>
         </div>
       </transition>
     </div>
@@ -633,6 +667,23 @@ export default {
     }
   },
   watch: {
+    textActionMenuVisible(val) {
+      if (val) {
+        this.$nextTick(() => {
+          const closeHandler = e => {
+            if (
+              this.$refs.textActionMenuRef &&
+              this.$refs.textActionMenuRef.contains(e.target)
+            ) {
+              return;
+            }
+            this.textActionMenuVisible = false;
+            document.removeEventListener("pointerdown", closeHandler, true);
+          };
+          document.addEventListener("pointerdown", closeHandler, true);
+        });
+      }
+    },
     chapterName(to) {
       this.title = to;
     },
@@ -805,7 +856,16 @@ export default {
       edgeBackMoveDistance: 0,
       edgeBackToastVisible: false,
       lastEdgeBackTriggerTime: 0,
-      edgeBackToastTimer: null
+      edgeBackToastTimer: null,
+
+      // 自定义选中文本快捷菜单
+      textActionMenuVisible: false,
+      selectedActionText: "",
+      textActionMenuPos: {
+        top: 100,
+        left: 150,
+        placeBelow: false
+      }
     };
   },
   computed: {
@@ -1842,6 +1902,10 @@ export default {
       });
     },
     handlerClick(e) {
+      if (this.textActionMenuVisible) {
+        this.textActionMenuVisible = false;
+        return;
+      }
       if (this.isEpub) {
         return;
       }
@@ -1850,7 +1914,18 @@ export default {
       }
       this.ignoreNextClick = false;
     },
+    handleContextMenu(e) {
+      if (
+        this.$store.getters.config &&
+        this.$store.getters.config.selectionAction === "操作弹窗"
+      ) {
+        e.preventDefault();
+      }
+    },
     handleTouchStart(e) {
+      if (this.textActionMenuVisible) {
+        this.textActionMenuVisible = false;
+      }
       this.lastSelection = this.checkSelection();
       if (this.lastSelection) {
         return;
@@ -1931,7 +2006,12 @@ export default {
       }
       if (this.lastSelection) {
         setTimeout(() => {
-          this.showTextFilterPrompt(this.lastSelection);
+          if (
+            this.$store.getters.config.selectionAction === "过滤弹窗" ||
+            this.$store.getters.config.selectionAction === "操作弹窗"
+          ) {
+            this.showTextOperate(this.lastSelection);
+          }
           this.lastSelection = false;
         }, 200);
         return;
@@ -2180,8 +2260,10 @@ export default {
     },
     checkSelection(show) {
       let text = "";
+      let sel = null;
       if (window.getSelection) {
-        text = window.getSelection().toString();
+        sel = window.getSelection();
+        text = sel.toString();
       } else if (document.selection && document.selection.type != "Control") {
         text = document.selection.createRange().text;
       }
@@ -2191,30 +2273,107 @@ export default {
             this.$store.getters.config.selectionAction === "过滤弹窗" ||
             this.$store.getters.config.selectionAction === "操作弹窗"
           ) {
-            this.showTextOperate(text);
+            const currentSel = window.getSelection
+              ? window.getSelection()
+              : sel;
+            const currentText = currentSel ? currentSel.toString() : text;
+            this.showTextOperate(currentText || text, currentSel || sel);
           }
-        }, 200);
+        }, 80);
       }
       return text;
     },
-    async showTextOperate(text) {
-      const res = await this.$confirm(`请选择操作?`, "提示", {
-        confirmButtonText: "添加过滤规则",
-        cancelButtonText: "添加书签",
-        type: "warning",
-        closeOnClickModal: false,
-        closeOnPressEscape: false,
-        distinguishCancelAndClose: true
-      }).catch(action => {
-        return action === "close" ? "close" : false;
-      });
-      if (res === "close") {
+    showTextOperate(text, sel) {
+      if (!text || !text.trim()) {
         return;
       }
-      if (res) {
-        return this.showTextFilterPrompt(text);
+      this.selectedActionText = text.trim();
+
+      // 计算气泡弹窗在选区正上方/正下方的位置
+      let left = window.innerWidth / 2;
+      let top = window.innerHeight / 2;
+      let placeBelow = false;
+
+      if (sel && sel.rangeCount > 0) {
+        try {
+          const range = sel.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect && rect.width) {
+            left = rect.left + rect.width / 2;
+            // 尽量放置在选中文本上方 10px，如果太靠顶则放在选区下方 10px
+            if (rect.top >= 55) {
+              top = rect.top - 10;
+              placeBelow = false;
+            } else {
+              top = rect.bottom + 10;
+              placeBelow = true;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 边缘安全避让，防止超出屏幕
+      left = Math.max(135, Math.min(window.innerWidth - 135, left));
+      top = Math.max(20, Math.min(window.innerHeight - 50, top));
+
+      this.textActionMenuPos = { top, left, placeBelow };
+      this.textActionMenuVisible = true;
+
+      // 及时清空系统原生选区，消除 iOS/Android 自带的黑色长条气泡 / 浮动工具栏 (拷贝/查询/翻译)
+      if (window.getSelection) {
+        try {
+          window.getSelection().removeAllRanges();
+        } catch (err) {
+          // ignore
+        }
+      }
+    },
+    handleActionCopy() {
+      const text = this.selectedActionText;
+      this.textActionMenuVisible = false;
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          () => {
+            this.$message.success("已复制到剪贴板");
+          },
+          () => {
+            this.fallbackCopy(text);
+          }
+        );
       } else {
-        return this.showAddBookmark(text);
+        this.fallbackCopy(text);
+      }
+    },
+    fallbackCopy(text) {
+      const input = document.createElement("textarea");
+      input.value = text;
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      try {
+        document.execCommand("copy");
+        this.$message.success("已复制到剪贴板");
+      } catch (err) {
+        this.$message.error("复制失败，请重试");
+      }
+      document.body.removeChild(input);
+    },
+    handleActionAddBookmark() {
+      const text = this.selectedActionText;
+      this.textActionMenuVisible = false;
+      if (text) {
+        this.showAddBookmark(text);
+      }
+    },
+    handleActionAddFilter() {
+      const text = this.selectedActionText;
+      this.textActionMenuVisible = false;
+      if (text) {
+        this.showTextFilterPrompt(text);
       }
     },
     async showTextFilterPrompt(text) {
@@ -4404,5 +4563,86 @@ export default {
 .edge-toast-fade-leave-to {
   opacity: 0;
   transform: translate(-50%, 15px);
+}
+
+/* 屏蔽 iOS/移动端原生文本选择弹窗 */
+.chapter-wrapper.suppress-callout {
+  -webkit-touch-callout: none;
+
+  .content,
+  .content-inner,
+  .book-content,
+  .chapter-content {
+    -webkit-touch-callout: none;
+  }
+}
+
+/* 选中文字快捷操作气泡弹窗 (复制、添加书签、添加过滤规则) */
+.text-action-popup {
+  position: fixed;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 4px;
+  background: rgba(30, 30, 32, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -100%);
+  user-select: none;
+  -webkit-user-select: none;
+
+  &.is-below {
+    transform: translate(-50%, 0);
+  }
+
+  .text-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 13px;
+    color: #ffffff;
+    border-radius: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, opacity 0.15s;
+
+    i {
+      font-size: 14px;
+      color: #409eff;
+    }
+
+    &:active {
+      background: rgba(255, 255, 255, 0.15);
+      opacity: 0.85;
+    }
+  }
+
+  .text-action-divider {
+    width: 1px;
+    height: 14px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 2px;
+  }
+}
+
+.text-action-fade-enter-active,
+.text-action-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.text-action-fade-enter,
+.text-action-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -100%) scale(0.9);
+
+  &.is-below {
+    transform: translate(-50%, 0) scale(0.9);
+  }
 }
 </style>

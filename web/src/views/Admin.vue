@@ -4549,11 +4549,14 @@ export default {
 
 /* 顶部导航 */
 .admin-header {
-  height: 60px;
+  height: calc(60px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: calc(24px + env(safe-area-inset-left, 0px));
+  padding-right: calc(24px + env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: inherit;
   z-index: 10;
@@ -5130,8 +5133,11 @@ export default {
     overflow-x: hidden;
   }
   .admin-header {
-    height: 52px;
-    padding: 0 12px;
+    height: calc(52px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+    box-sizing: border-box;
   }
   .brand-logo i {
     font-size: 22px;
