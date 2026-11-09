@@ -21,8 +21,17 @@
               @click="setPageType(type)"
               >{{ type === "Kindle" ? "简洁" : "正常" }}</span
             >
+            <span
+              class="span-item"
+              :class="{ selected: !!config.edgeSwipeBack }"
+              @click="toggleEdgeSwipeBack"
+              >边缘识别</span
+            >
             <span class="small-tip"
               >❗️开启简洁模式会关闭动画以及首页的部分功能</span
+            >
+            <span class="small-tip" v-if="config.edgeSwipeBack"
+              >💡已开启屏幕双侧边缘滑动返回。在iOS全屏或网页中，右侧向左轻滑即可触发返回，完美避开系统自带手势冲突。</span
             >
           </div>
         </li>
@@ -573,6 +582,14 @@ export default {
     }
   },
   methods: {
+    toggleEdgeSwipeBack() {
+      const nextVal = !this.config.edgeSwipeBack;
+      this.$set(this.config, "edgeSwipeBack", nextVal);
+      this.$store.commit("setConfig", {
+        ...this.$store.state.config,
+        edgeSwipeBack: nextVal
+      });
+    },
     setPageType(type) {
       if (type === this.config.pageType) {
         return;

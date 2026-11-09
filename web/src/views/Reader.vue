@@ -444,10 +444,11 @@
         >
       </div>
 
-      <!-- 仿安卓侧滑返回浮标指示器 (全屏边缘手势) -->
+      <!-- 仿安卓侧滑返回浮标指示器 (左/右全屏边缘手势) -->
       <transition name="edge-back-indicator">
         <div
           class="edge-back-bubble"
+          :class="edgeSwipeDirection"
           v-if="edgeBackIndicatorVisible"
           :style="{
             top: edgeBackIndicatorY + 'px',
@@ -458,7 +459,13 @@
             class="edge-back-arrow"
             :class="{ active: edgeBackMoveDistance >= 60 }"
           >
-            <i class="el-icon-arrow-left"></i>
+            <i
+              :class="
+                edgeSwipeDirection === 'right'
+                  ? 'el-icon-arrow-right'
+                  : 'el-icon-arrow-left'
+              "
+            ></i>
           </div>
         </div>
       </transition>
@@ -790,8 +797,9 @@ export default {
       speechMinutes: 0,
       speechEndTime: 0,
 
-      // 仿安卓侧滑返回与防误触机制
+      // 仿安卓侧滑返回与防误触机制 (支持左侧与右侧双边缘)
       isEdgeSwipe: false,
+      edgeSwipeDirection: "left", // "left" 或 "right"
       edgeBackIndicatorVisible: false,
       edgeBackIndicatorY: 300,
       edgeBackMoveDistance: 0,
@@ -1865,10 +1873,22 @@ export default {
         const touchX = e.touches[0].clientX;
         const touchY = e.touches[0].clientY;
 
-        // 判定屏幕左边缘（距离左边界 <= 28px）：进入仿安卓侧滑手势
-        if (touchX <= 28) {
-          this.isEdgeSwipe = true;
-          this.edgeBackIndicatorY = touchY;
+        // 判定屏幕左边缘（距离左边界 <= 28px）或右边缘（距离右边界 <= 28px）：进入仿安卓侧滑手势 (需在“特殊模式”中开启“边缘识别”)
+        if (
+          this.$store.state.config &&
+          this.$store.state.config.edgeSwipeBack
+        ) {
+          const screenWidth =
+            window.innerWidth || document.documentElement.clientWidth || 375;
+          if (touchX <= 28) {
+            this.isEdgeSwipe = true;
+            this.edgeSwipeDirection = "left";
+            this.edgeBackIndicatorY = touchY;
+          } else if (touchX >= screenWidth - 28) {
+            this.isEdgeSwipe = true;
+            this.edgeSwipeDirection = "right";
+            this.edgeBackIndicatorY = touchY;
+          }
         }
       }
     },
@@ -1880,12 +1900,15 @@ export default {
         this.lastMoveY = e.touches[0].clientY - this.lastTouch.clientY;
         const moveX = e.touches[0].clientX - this.lastTouch.clientX;
 
-        // 如果是从左边缘起步的侧滑手势
+        // 如果是从左边缘或右边缘起步的侧滑手势
         if (this.isEdgeSwipe) {
-          if (moveX > 0) {
+          const isLeftValid = this.edgeSwipeDirection === "left" && moveX > 0;
+          const isRightValid = this.edgeSwipeDirection === "right" && moveX < 0;
+
+          if (isLeftValid || isRightValid) {
             e.preventDefault();
             e.stopPropagation();
-            this.edgeBackMoveDistance = moveX;
+            this.edgeBackMoveDistance = Math.abs(moveX);
             this.edgeBackIndicatorVisible = true;
             this.edgeBackIndicatorY = e.touches[0].clientY;
             return;
@@ -4300,6 +4323,24 @@ export default {
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.25);
   pointer-events: none;
   transition: transform 0.1s ease-out;
+
+  &.right {
+    left: auto;
+    right: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 30px;
+    border-bottom-left-radius: 30px;
+    box-shadow: -2px 2px 10px rgba(0, 0, 0, 0.25);
+
+    .edge-back-arrow {
+      transform: translateX(4px);
+
+      &.active {
+        transform: translateX(0) scale(1.15);
+      }
+    }
+  }
 
   .edge-back-arrow {
     color: rgba(255, 255, 255, 0.7);

@@ -82,7 +82,8 @@ const settings = {
     ...defaultDayConfig,
     customConfig: "内置白天",
     autoTheme: true, // 自动切换主题
-    pageType: "正常"
+    pageType: "正常",
+    edgeSwipeBack: false // 屏幕两侧边缘手势识别返回
   },
   speechVoiceConfig: {
     voiceName: "",
@@ -193,7 +194,8 @@ export const defaultBookmark = {
   content: ""
 };
 export const syncConfigFiled = Object.keys(defaultDayConfig).concat([
-  "contentBGImg"
+  "contentBGImg",
+  "edgeSwipeBack"
 ]);
 export const customFonts = [
   "custom-system",
