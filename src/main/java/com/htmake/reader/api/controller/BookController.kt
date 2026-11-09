@@ -1852,42 +1852,60 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
     suspend fun getBookShelfBooks(refresh: Boolean = false, userNameSpace: String): List<Book> {
         var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
-        if (bookshelf == null) {
+        if (bookshelf == null || bookshelf.size() == 0) {
             return arrayListOf<Book>()
         }
-        if (bookshelf.size() == 0) {
-            return arrayListOf<Book>()
-        }
-        var bookList = arrayListOf<Book>()
-        val concurrentCount = 16
-        val userBookSourceStringList = loadBookSourceStringList(userNameSpace)
-        val mutex = Mutex()
-        limitConcurrent(concurrentCount, 0, bookshelf.size()) {
-            var book = bookshelf.getJsonObject(it).mapTo(Book::class.java)
-            if (!book.isLocalBook() && book.canUpdate && refresh) {
+        val shelfSize = bookshelf.size()
+
+        // 当不刷新书架章节时，直接按顺序读取并转换，避免多协程竞争与书架顺序打乱
+        if (!refresh) {
+            val bookList = ArrayList<Book>(shelfSize)
+            for (i in 0 until shelfSize) {
                 try {
-                    var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace, userBookSourceStringList)
-                    if (bookSource != null) {
-                        withContext(Dispatchers.IO) {
-                            var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace, false, mutex)
-                            if (bookChapterList.size > 0) {
-                                var bookChapter = bookChapterList.last()
-                                book.latestChapterTitle = bookChapter.title
-                            }
-                            if (bookChapterList.size - book.totalChapterNum > 0) {
-                                book.lastCheckTime = System.currentTimeMillis()
-                                book.lastCheckCount = bookChapterList.size - book.totalChapterNum
-                            }
-                            book.totalChapterNum = bookChapterList.size
-                        }
-                    }
-                } catch(e: Exception) {
+                    val book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
+                    bookList.add(book)
+                } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
-            bookList.add(book)
+            return bookList
         }
-        return bookList
+
+        // 当需要刷新章节时，使用固定下标数组槽位填充，保证线程绝对安全且保持原有书架顺序
+        val bookArr = arrayOfNulls<Book>(shelfSize)
+        val concurrentCount = 16
+        val userBookSourceStringList = loadBookSourceStringList(userNameSpace)
+        val mutex = Mutex()
+        limitConcurrent(concurrentCount, 0, shelfSize) { it ->
+            try {
+                var book = bookshelf.getJsonObject(it).mapTo(Book::class.java)
+                if (!book.isLocalBook() && book.canUpdate) {
+                    try {
+                        var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace, userBookSourceStringList)
+                        if (bookSource != null) {
+                            withContext(Dispatchers.IO) {
+                                var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace, false, mutex)
+                                if (bookChapterList.isNotEmpty()) {
+                                    var bookChapter = bookChapterList.last()
+                                    book.latestChapterTitle = bookChapter.title
+                                }
+                                if (bookChapterList.size - book.totalChapterNum > 0) {
+                                    book.lastCheckTime = System.currentTimeMillis()
+                                    book.lastCheckCount = bookChapterList.size - book.totalChapterNum
+                                }
+                                book.totalChapterNum = bookChapterList.size
+                            }
+                        }
+                    } catch(e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                bookArr[it] = book
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return bookArr.filterNotNull()
     }
 
 

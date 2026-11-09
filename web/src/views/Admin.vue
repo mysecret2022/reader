@@ -392,93 +392,79 @@
               {{ filteredSources.length }} 条)
             </h2>
             <div class="filter-actions">
-              <el-input
-                v-model="sourceSearchKey"
-                placeholder="搜索书源名称或域名..."
-                size="small"
-                prefix-icon="el-icon-search"
-                clearable
-                style="width: 170px; margin-right: 8px;"
-              ></el-input>
-              <el-select
-                v-model="sourceTypeFilter"
-                size="small"
-                placeholder="书源类型"
-                style="width: 110px; margin-right: 8px;"
-              >
-                <el-option label="全部类型" value="all"></el-option>
-                <el-option label="包含 @js" value="js"></el-option>
-                <el-option label="支持 webview" value="webview"></el-option>
-                <el-option label="标准纯净源" value="normal"></el-option>
-              </el-select>
-              <el-button
-                type="warning"
-                size="small"
-                icon="el-icon-discover"
-                @click="openExploreDialog"
-              >
-                探索书源
-              </el-button>
-              <el-button
-                type="primary"
-                size="small"
-                icon="el-icon-upload2"
-                @click="openImportSourceDialog"
-              >
-                导入书源
-              </el-button>
-              <el-button
-                type="success"
-                size="small"
-                icon="el-icon-link"
-                @click="loadRemoteBookSource"
-              >
-                远程书源
-              </el-button>
-              <el-button
-                type="info"
-                size="small"
-                icon="el-icon-first-aid-kit"
-                :loading="checkingInvalidSources"
-                @click="checkAndShowInvalidSources"
-              >
-                失效书源
-              </el-button>
-              <el-button
-                size="small"
-                icon="el-icon-video-play"
-                @click="debugBookSource"
-              >
-                调试书源
-              </el-button>
-              <el-button
-                type="primary"
-                plain
-                size="small"
-                icon="el-icon-connection"
-                @click="syncAdminSources"
-                title="将管理员配置的默认书源同步至当前账户"
-              >
-                同步管理员源
-              </el-button>
-              <el-button
-                type="success"
-                plain
-                size="small"
-                icon="el-icon-check"
-                @click="batchToggleSources(true)"
-              >
-                全部启用
-              </el-button>
-              <el-button
-                type="danger"
-                plain
-                size="small"
-                icon="el-icon-close"
-                @click="batchToggleSources(false)"
-              >
-                全部禁用
-              </el-button>
+              <div class="source-filter-row">
+                <el-input
+                  v-model="sourceSearchKey"
+                  placeholder="搜索书源名称或域名..."
+                  size="small"
+                  prefix-icon="el-icon-search"
+                  clearable
+                  class="source-search-input"
+                ></el-input>
+                <el-select
+                  v-model="sourceTypeFilter"
+                  size="small"
+                  placeholder="书源类型"
+                  class="source-type-select"
+                >
+                  <el-option label="全部类型" value="all"></el-option>
+                  <el-option label="包含 @js" value="js"></el-option>
+                  <el-option label="支持 webview" value="webview"></el-option>
+                  <el-option label="标准纯净源" value="normal"></el-option>
+                </el-select>
+              </div>
+              <div class="source-action-grid">
+                <el-button
+                  type="primary"
+                  size="small"
+                  icon="el-icon-upload2"
+                  @click="openImportSourceDialog"
+                >
+                  导入书源
+                </el-button>
+                <el-button
+                  type="success"
+                  size="small"
+                  icon="el-icon-link"
+                  @click="loadRemoteBookSource"
+                >
+                  远程书源
+                </el-button>
+                <el-button
+                  type="info"
+                  size="small"
+                  icon="el-icon-first-aid-kit"
+                  :loading="checkingInvalidSources"
+                  @click="checkAndShowInvalidSources"
+                >
+                  失效书源
+                </el-button>
+                <el-button
+                  size="small"
+                  icon="el-icon-video-play"
+                  @click="debugBookSource"
+                >
+                  调试书源
+                </el-button>
+                <el-button
+                  type="success"
+                  plain
+                  size="small"
+                  icon="el-icon-check"
+                  @click="batchToggleSources(true)"
+                >
+                  全部启用
+                </el-button>
+                <el-button
+                  type="danger"
+                  plain
+                  size="small"
+                  icon="el-icon-close"
+                  @click="batchToggleSources(false)"
+                >
+                  全部禁用
+                </el-button>
+              </div>
             </div>
           </div>
 
@@ -969,27 +955,21 @@
                 </h3>
               </div>
             </div>
-            <div
-              style="padding: 16px; display: flex; flex-direction: column; gap: 16px;"
-            >
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <span style="font-weight: bold; width: 110px;"
-                  >当前登录账号:</span
-                >
+            <div class="user-space-info-body">
+              <div class="user-space-row">
+                <span class="user-space-label">当前登录账号:</span>
                 <el-tag size="medium" type="primary">{{
                   currentUser ? currentUser.username : "未知"
                 }}</el-tag>
               </div>
 
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <span style="font-weight: bold; width: 110px;"
-                  >工作空间 (userNS):</span
-                >
-                <template v-if="isAdmin">
+              <div class="user-space-row">
+                <span class="user-space-label">工作空间 (userNS):</span>
+                <div class="user-space-controls" v-if="isAdmin">
                   <el-select
                     v-model="userNS"
                     size="small"
-                    style="width: 240px;"
+                    class="user-ns-select"
                     placeholder="切换用户空间"
                   >
                     <el-option
@@ -1015,7 +995,7 @@
                   >
                     加载用户空间
                   </el-button>
-                </template>
+                </div>
                 <span v-else style="color: #64748b; font-size: 13px;">
                   <el-tag size="small" type="info">{{
                     userNS || (currentUser && currentUser.username) || "default"
@@ -1037,14 +1017,14 @@
                 </span>
               </div>
             </div>
-            <div style="padding: 16px; display: flex; gap: 20px;">
-              <el-card shadow="hover" style="flex: 1;">
+            <div class="user-config-cards">
+              <el-card shadow="hover" class="user-config-card">
                 <div slot="header">
                   <span style="font-weight: bold;"
                     ><i class="el-icon-upload2"></i> 备份用户配置</span
                   >
                 </div>
-                <p style="font-size: 13px; color: #64748b; line-height: 1.6;">
+                <p class="user-config-desc">
                   将当前终端已保存的阅读习惯（字体、背景、翻页方式）、书架分组与排序方案、搜索配置等备份至后端服务器。
                 </p>
                 <el-button
@@ -1058,13 +1038,13 @@
                 </el-button>
               </el-card>
 
-              <el-card shadow="hover" style="flex: 1;">
+              <el-card shadow="hover" class="user-config-card">
                 <div slot="header">
                   <span style="font-weight: bold;"
                     ><i class="el-icon-download"></i> 同步用户配置</span
                   >
                 </div>
-                <p style="font-size: 13px; color: #64748b; line-height: 1.6;">
+                <p class="user-config-desc">
                   从后端服务器拉取之前备份的用户配置数据，覆盖当前终端本地存储并即时生效。
                 </p>
                 <el-button
@@ -2638,7 +2618,7 @@ export default {
         cacheChapterContent: false,
         defaultVoice: "zh-CN-XiaoxiaoNeural",
         concurrentSearchCount: 24,
-        version: this.$store ? this.$store.state.version || "2.0.0" : "2.0.0"
+        version: this.$store ? this.$store.state.version || "2.0.1" : "2.0.1"
       },
       savingCloudSync: false,
       triggeringSync: false,
@@ -4848,6 +4828,69 @@ export default {
   word-break: break-all;
 }
 
+.source-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.source-search-input {
+  width: 180px;
+}
+.source-type-select {
+  width: 120px;
+}
+.source-action-grid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.source-action-grid .el-button {
+  margin-left: 0 !important;
+}
+
+.user-space-info-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.user-space-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.user-space-label {
+  font-weight: bold;
+  width: 120px;
+  flex-shrink: 0;
+}
+.user-space-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.user-ns-select {
+  width: 240px;
+}
+.user-config-cards {
+  padding: 16px;
+  display: flex;
+  gap: 20px;
+}
+.user-config-card {
+  flex: 1;
+}
+.user-config-desc {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
 /* 移动端与自适应优化 */
 @media (max-width: 768px) {
   .admin-container {
@@ -4956,6 +4999,131 @@ export default {
     gap: 10px;
     margin-bottom: 14px;
   }
+  .filter-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .source-filter-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+  .source-filter-row .source-search-input {
+    flex: 1 1 auto;
+    width: auto !important;
+  }
+  .source-filter-row .source-type-select {
+    width: 110px !important;
+    flex-shrink: 0;
+  }
+  .source-action-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .source-action-grid .el-button {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 8px 4px !important;
+    font-size: 12px !important;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* 书架二级标签页胶囊横滑样式 */
+  .shelf-tabs.el-tabs--border-card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .shelf-tabs.el-tabs--border-card > .el-tabs__header {
+    background: transparent !important;
+    border-bottom: none !important;
+    margin-bottom: 12px !important;
+  }
+  .shelf-tabs .el-tabs__nav-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .shelf-tabs .el-tabs__nav-wrap::-webkit-scrollbar {
+    display: none;
+  }
+  .shelf-tabs .el-tabs__nav-scroll {
+    overflow: visible !important;
+  }
+  .shelf-tabs .el-tabs__nav {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    border: none !important;
+    float: none !important;
+  }
+  .shelf-tabs.el-tabs--border-card > .el-tabs__header .el-tabs__item {
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 20px !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+    color: #64748b !important;
+    height: 32px !important;
+    line-height: 30px !important;
+    padding: 0 14px !important;
+    font-size: 13px !important;
+    margin-right: 0 !important;
+    flex-shrink: 0 !important;
+    transition: all 0.2s ease !important;
+  }
+  .shelf-tabs.el-tabs--border-card > .el-tabs__header .el-tabs__item.is-active {
+    background: #409eff !important;
+    color: #fff !important;
+    border-color: #409eff !important;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(64, 158, 255, 0.35);
+  }
+  .shelf-tabs.el-tabs--border-card > .el-tabs__content {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  /* 用户空间与配置卡片移动端适配 */
+  .user-space-info-body {
+    padding: 12px;
+  }
+  .user-space-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .user-space-label {
+    width: 100%;
+    font-size: 13px;
+  }
+  .user-space-controls {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .user-space-controls .user-ns-select {
+    width: 100% !important;
+  }
+  .user-space-controls .el-button {
+    width: 100%;
+  }
+  .user-config-cards {
+    flex-direction: column !important;
+    padding: 12px;
+    gap: 14px;
+  }
+  .user-config-card {
+    width: 100% !important;
+  }
+  .user-config-card .el-button {
+    width: 100% !important;
+  }
+
   .pane-actions,
   .pane-search-actions {
     width: 100%;
