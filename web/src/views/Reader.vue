@@ -2983,49 +2983,24 @@ export default {
       if (this.showAddBookmarking) {
         return;
       }
-      let pureText = text.replace(/^\s+/, "").replace(/\s+$/, "");
-      // console.log(pureText);
-      const paragraph = this.getContentMatchParagraph(pureText, 1, 0.7);
-      if (!paragraph) {
-        this.$message.error("选择1-2段整段文字才能定位段落");
+      let pureText = text ? text.replace(/^\s+/, "").replace(/\s+$/, "") : "";
+      if (!pureText) {
         return;
       }
-      const paragraphLength = 5;
-      const paragraphTextLength = 150;
-      const paragraphList = [paragraph];
-      let bookText = paragraph.innerText + "\n";
-      if (
-        paragraphList.length < paragraphLength &&
-        bookText.length < paragraphTextLength
-      ) {
-        // 补全内容
-        let paragraphIndex = -1;
-        const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
-        for (let i = 0; i < list.length; i++) {
-          if (paragraphIndex > 0 && i > paragraphIndex) {
-            paragraphList.push(list[i]);
-            bookText += list[i].innerText + "\n";
-            if (
-              paragraphList.length >= paragraphLength ||
-              bookText.length >= paragraphTextLength
-            ) {
-              break;
-            }
-          } else if (paragraphList[paragraphList.length - 1] === list[i]) {
-            paragraphIndex = i;
-          }
-        }
+      const paragraph = this.getContentMatchParagraph(pureText, 1, 0.6);
+      if (!paragraph) {
+        this.$message.error("未能定位选中文本所在的段落");
+        return;
       }
-      // console.log(paragraphList, bookText);
-      bookText = bookText.replace(/\\n*$/, "");
 
+      // 忠实呈现用户选择：书签内容严格只保存并展示用户实际划选的高亮片段，彻底移除补全拼接后续段落的旧逻辑
       const bookmark = Object.assign({}, defaultBookmark, {
         bookName: this.$store.getters.readingBook.name,
         bookAuthor: this.$store.getters.readingBook.author,
         chapterIndex: this.chapterIndex,
         chapterPos: this.currentPage,
         chapterName: this.title,
-        bookText: bookText,
+        bookText: pureText,
         content: ""
       });
       this.showAddBookmarking = true;
@@ -4175,17 +4150,36 @@ export default {
       eventBus.$emit("showBookmarkDialog", book);
     },
     getContentMatchParagraph(text, distance, minDistance) {
-      distance = distance || 0.7;
-      // 正则过滤标点符号后，近似匹配每一段内容
-      let paragraphList = text
-        .replace(/\\n+/g, "\n")
-        .split(/\n+/)
-        .map(v => v.replace(symboRegex, ""))
-        .filter(v => v);
+      if (!text || !text.trim()) return null;
+      const cleanTarget = text.replace(symboRegex, "").trim();
+      if (!cleanTarget) return null;
+
       try {
         const list = this.$refs.bookContentRef.$el.querySelectorAll(
           ".reading-chapter h3,p"
         );
+        if (!list || !list.length) return null;
+
+        // 1. 优先精准子串/包含匹配：只要某段落包含用户划选的文字，直接命中该段落
+        for (let i = 0; i < list.length; i++) {
+          const rawText = list[i].innerText || "";
+          if (rawText.includes(text.trim())) {
+            return list[i];
+          }
+          const cleanParagraph = rawText.replace(symboRegex, "").trim();
+          if (cleanParagraph && cleanParagraph.includes(cleanTarget)) {
+            return list[i];
+          }
+        }
+
+        // 2. 备选多段模糊比对 (兼容旧格式或跨段书签)
+        distance = distance || 0.7;
+        let paragraphList = text
+          .replace(/\\n+/g, "\n")
+          .split(/\n+/)
+          .map(v => v.replace(symboRegex, "").trim())
+          .filter(v => v);
+
         let paragraph = null;
         for (let i = 0; i < list.length; i++) {
           let isMatch = true;
@@ -4195,7 +4189,7 @@ export default {
             // 过滤所有字符
             let content = null;
             while (i + pos < list.length) {
-              content = list[i + pos].innerText.replace(symboRegex, "");
+              content = list[i + pos].innerText.replace(symboRegex, "").trim();
               if (!content.length) {
                 pos++;
                 startPos++;
@@ -4224,7 +4218,7 @@ export default {
         if (paragraph) {
           return paragraph;
         }
-        if (distance - 0.1 >= minDistance) {
+        if (minDistance && distance - 0.1 >= minDistance) {
           return this.getContentMatchParagraph(
             text,
             distance - 0.1,
