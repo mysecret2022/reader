@@ -74,6 +74,7 @@
             @refresh="refreshCatalog"
             :visible="popCataVisible"
             @close="popCataVisible = false"
+            @openCache="openOfflineCacheFromCatalog"
           />
 
           <div class="tool-icon" slot="reference">
@@ -206,6 +207,15 @@
           <div
             class="float-btn"
             :style="popupAbsoluteBtnStyle"
+            title="离线缓存"
+            @click="openOfflineCacheDialog"
+            v-if="!isEpub && !isCarToon && !isAudio"
+          >
+            <i class="el-icon-download"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
             @click="toogleNight"
           >
             <i class="el-icon-moon" v-if="!isNight"></i>
@@ -226,46 +236,15 @@
         </div>
         <span class="progress-tip">{{ formatProgressTip() }}</span>
       </div>
-      <div class="cache-content-zone" v-if="showCacheContentZone">
-        <div>
-          缓存章节
-        </div>
-        <div
-          class="cache-content-btn"
-          v-show="!isCachingContent"
-          @click="cacheChapterContent(50)"
-        >
-          后面50章
-        </div>
-        <div
-          class="cache-content-btn"
-          v-show="!isCachingContent"
-          @click="cacheChapterContent(100)"
-        >
-          后面100章
-        </div>
-        <div
-          class="cache-content-btn"
-          v-show="!isCachingContent"
-          @click="cacheChapterContent(true)"
-        >
-          后面全部
-        </div>
-        <div class="caching-tip" v-show="isCachingContent">
-          {{ cachingContentTip }}
-        </div>
-        <div
-          class="caching-cancel-btn"
-          v-show="isCachingContent"
-          @click="cancelCaching"
-        >
-          <i class="el-icon-close"></i>
-        </div>
-      </div>
       <div class="tools">
-        <div class="tool-icon progress-text" @click="showCacheContent">
+        <div class="tool-icon progress-text" @click="openOfflineCacheDialog">
           <span v-if="$store.state.miniInterface">阅读进度: </span>
           {{ readingProgress }}
+          <i
+            class="el-icon-download"
+            style="margin-left: 4px; font-size: 13px;"
+            title="离线缓存"
+          ></i>
         </div>
         <div
           class="tool-icon"
@@ -435,6 +414,8 @@
             @epubLocationChange="epubLocationChangeHandler"
             @epubClickHash="epubClickHash"
             @epubKeydown="keydownHandler($event, true)"
+            @refreshContent="refreshContent"
+            @changeBookSource="popBookSourceVisible = true"
           />
         </div>
         <!-- 仿真翻页 3D 纸张拟真翻页图层 -->
@@ -583,6 +564,116 @@
         </div>
       </transition>
     </div>
+
+    <!-- 离线缓存管理弹窗 -->
+    <el-dialog
+      title="离线缓存管理"
+      :visible.sync="showOfflineCacheDialog"
+      :width="$store.state.miniInterface ? '92%' : '480px'"
+      custom-class="offline-cache-dialog"
+      append-to-body
+      :close-on-click-modal="!isCachingContent"
+    >
+      <div class="offline-cache-content" v-if="$store.getters.readingBook">
+        <!-- 统计状态卡片 -->
+        <div class="cache-status-card">
+          <div class="status-header">
+            <span class="book-name-tag">{{
+              $store.getters.readingBook.name
+            }}</span>
+            <span class="cache-size-text" v-if="cachedStats.sizeText"
+              >已占用存储：{{ cachedStats.sizeText }}</span
+            >
+          </div>
+          <div class="status-progress-info">
+            <span
+              >已缓存在手机：<strong>{{ cachedStats.cachedCount }}</strong> /
+              {{ catalog.length }} 章</span
+            >
+            <span class="status-percent">{{ cachedPercent }}%</span>
+          </div>
+          <el-progress
+            :percentage="cachedPercent"
+            :stroke-width="8"
+            :show-text="false"
+            :status="cachedPercent === 100 ? 'success' : undefined"
+          ></el-progress>
+        </div>
+
+        <!-- 正在缓存中的动态进度 -->
+        <div class="active-caching-box" v-if="isCachingContent">
+          <div class="active-caching-header">
+            <span><i class="el-icon-loading"></i> {{ cachingContentTip }}</span>
+            <el-button type="danger" size="mini" plain @click="cancelCaching"
+              >停止缓存</el-button
+            >
+          </div>
+          <el-progress
+            :percentage="cachingStepPercent"
+            :stroke-width="6"
+            color="#409EFF"
+          ></el-progress>
+        </div>
+
+        <!-- 批量缓存操作区 -->
+        <div class="cache-actions-section" v-show="!isCachingContent">
+          <div class="section-title">批量缓存后续章节至手机存储：</div>
+          <div class="cache-btns-grid">
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              icon="el-icon-download"
+              @click="cacheChapterContent(20)"
+            >
+              缓存后 20 章
+            </el-button>
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              icon="el-icon-download"
+              @click="cacheChapterContent(50)"
+            >
+              缓存后 50 章
+            </el-button>
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              icon="el-icon-download"
+              @click="cacheChapterContent(100)"
+            >
+              缓存后 100 章
+            </el-button>
+            <el-button
+              type="success"
+              size="small"
+              icon="el-icon-folder-checked"
+              @click="cacheChapterContent(true)"
+            >
+              缓存全本书籍
+            </el-button>
+          </div>
+        </div>
+
+        <!-- 缓存清理区 -->
+        <div
+          class="cache-footer-actions"
+          v-if="cachedStats.cachedCount > 0 && !isCachingContent"
+        >
+          <el-button
+            type="text"
+            size="small"
+            style="color: #F56C6C;"
+            icon="el-icon-delete"
+            @click="clearCurrentBookCache"
+          >
+            清空本书离线缓存 (释放手机存储空间)
+          </el-button>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -600,7 +691,8 @@ import { simplized, traditionalized } from "../plugins/chinese";
 import {
   LimitResquest,
   networkFirstRequest,
-  editDistance
+  editDistance,
+  formatSize
 } from "../plugins/helper";
 import { defaultReplaceRule, defaultBookmark } from "../plugins/config.js";
 import eventBus from "../plugins/eventBus";
@@ -679,8 +771,10 @@ export default {
       document.title = this.$store.getters.readingBook.name;
     }
     this.formatTime();
+    this.computeBookCacheStats();
     this.timer = setInterval(() => {
       this.formatTime();
+      this.computeBookCacheStats();
     }, 5000);
     this.unwatchFn = this.$store.watch(
       state => state.config,
@@ -837,29 +931,8 @@ export default {
       }
     },
     currentPage(val, oldVal) {
-      // 还剩两页的时候，预读下一章节
-      if (val !== oldVal && val >= this.totalPages - 2) {
-        if (
-          this.$store.getters.readingBook.index <
-          this.$store.getters.readingBook.catalog.length - 1
-        ) {
-          if (!this.isScrollRead) {
-            if (!this.preCaching) {
-              this.preCaching = true;
-              this.getBookContent(
-                this.$store.getters.readingBook.index + 1,
-                {
-                  timeout: 30000,
-                  silent: true
-                },
-                false,
-                true
-              ).then(() => {
-                this.preCaching = false;
-              });
-            }
-          }
-        }
+      if (val !== oldVal) {
+        this.checkReadingProgress();
       }
     },
     filterRules() {
@@ -912,6 +985,18 @@ export default {
       showCacheContentZone: false,
       isCachingContent: false,
       cachingContentTip: "",
+      showOfflineCacheDialog: false,
+      cachedStats: {
+        cachedCount: 0,
+        totalBytes: 0,
+        sizeText: "0 B",
+        cachedMap: {}
+      },
+      totalCachingTarget: 0,
+      currentCachingProgress: 0,
+      isSilentPreloading: false,
+      hasPreloadedThisChapter: false,
+      singlePageDwellTimer: null,
 
       autoReading: false,
       showChapterList: [],
@@ -959,6 +1044,20 @@ export default {
     };
   },
   computed: {
+    cachedPercent() {
+      if (!this.catalog || !this.catalog.length) return 0;
+      const count = this.cachedStats.cachedCount || 0;
+      return Math.min(100, Math.round((count / this.catalog.length) * 100));
+    },
+    cachingStepPercent() {
+      if (!this.totalCachingTarget) return 0;
+      return Math.min(
+        100,
+        Math.round(
+          (this.currentCachingProgress / this.totalCachingTarget) * 100
+        )
+      );
+    },
     edgeBackScale() {
       // 随着手势拉动距离 0~60px 平滑放大
       const progress = Math.min(Math.max(this.edgeBackMoveDistance / 60, 0), 1);
@@ -1460,6 +1559,12 @@ export default {
         });
       }
       let bookUrl = this.$store.getters.readingBook.bookUrl;
+      this.hasPreloadedThisChapter = false;
+      this.isSilentPreloading = false;
+      if (this.singlePageDwellTimer) {
+        clearTimeout(this.singlePageDwellTimer);
+        this.singlePageDwellTimer = null;
+      }
       try {
         // 保存阅读进度
         let book = { ...this.$store.getters.readingBook };
@@ -1518,6 +1623,14 @@ export default {
             this.error = false;
             this.show = true;
             this.$emit("showContent");
+            if (this.singlePageDwellTimer) {
+              clearTimeout(this.singlePageDwellTimer);
+              this.singlePageDwellTimer = null;
+            }
+            // 若为单页内容（或用户持续在该章节阅读），停留阅读超过 6 秒后，判定已阅读 1/3 并触发预读后续 1 章
+            this.singlePageDwellTimer = setTimeout(() => {
+              this.checkReadingProgress();
+            }, 6000);
           } else {
             this.content = "获取章节内容失败！\n" + res.data.errorMsg;
             this.addChapterContentToCache({
@@ -3352,6 +3465,9 @@ export default {
           }
         }
       }
+      if (this.isScrollRead) {
+        this.checkReadingProgress();
+      }
       this.lastScrollTop = scrollTop;
       this.scrollTimer && clearTimeout(this.scrollTimer);
       this.scrollTimer = setTimeout(this.saveReadingPosition, 100);
@@ -3575,50 +3691,220 @@ export default {
         this.computePages();
       }
     },
-    showCacheContent() {
-      this.showCacheContentZone = !this.showCacheContentZone;
+    openOfflineCacheDialog() {
+      this.showOfflineCacheDialog = true;
+      this.computeBookCacheStats();
     },
-    cacheChapterContent(cacheCount) {
-      //
-      let cacheChapterList = [];
-      if (cacheCount === true) {
-        //
-        cacheChapterList = cacheChapterList.concat(
-          this.catalog.slice(this.chapterIndex + 1, this.catalog.length)
-        );
-      } else {
-        //
-        cacheChapterList = cacheChapterList.concat(
-          this.catalog.slice(
-            this.chapterIndex + 1,
-            Math.min(this.catalog.length, this.chapterIndex + 1 + cacheCount)
-          )
-        );
-      }
-      if (!cacheChapterList.length) {
-        this.$message.error("不需要缓存");
+    openOfflineCacheFromCatalog() {
+      this.popCataVisible = false;
+      this.openOfflineCacheDialog();
+    },
+    async computeBookCacheStats() {
+      const book = this.$store.getters.readingBook;
+      if (!book || !book.bookUrl || !window.$cacheStorage) {
+        this.cachedStats = {
+          cachedCount: 0,
+          totalBytes: 0,
+          sizeText: "0 B",
+          cachedMap: {}
+        };
         return;
       }
+      const cachePrefix =
+        "localCache@" +
+        book.name +
+        "_" +
+        book.author +
+        "@" +
+        book.bookUrl +
+        "@chapterContent-";
+      const cachedMap = {};
+      let totalBytes = 0;
+      let count = 0;
+      try {
+        await window.$cacheStorage.iterate((value, key) => {
+          if (key && key.startsWith(cachePrefix)) {
+            const idxStr = key.replace(cachePrefix, "");
+            const idx = parseInt(idxStr);
+            if (!isNaN(idx)) {
+              cachedMap[idx] = true;
+              count++;
+              if (value && typeof value === "object") {
+                const str = JSON.stringify(value);
+                totalBytes += str.length * 2;
+              } else if (typeof value === "string") {
+                totalBytes += value.length * 2;
+              }
+            }
+          }
+        });
+        this.cachedStats = {
+          cachedCount: count,
+          totalBytes: totalBytes,
+          sizeText: formatSize(totalBytes),
+          cachedMap: cachedMap
+        };
+      } catch (e) {
+        // ignore
+      }
+    },
+    checkReadingProgress() {
+      if (this.hasPreloadedThisChapter) return;
+      const book = this.$store.getters.readingBook;
+      if (!book || !book.catalog || !book.catalog.length) return;
+      const currentIdx =
+        typeof book.index === "number" ? book.index : this.chapterIndex;
+      if (currentIdx >= book.catalog.length - 1) return;
+
+      let reachedOneThird = false;
+      if (this.isScrollRead) {
+        const scrollTop =
+          document.documentElement.scrollTop || document.body.scrollTop;
+        const scrollableHeight =
+          document.documentElement.scrollHeight - this.windowSize.height;
+        const progress =
+          scrollableHeight > 0 ? scrollTop / scrollableHeight : 0;
+        if (progress >= 0.33) {
+          reachedOneThird = true;
+        }
+      } else {
+        if (this.totalPages > 1) {
+          // 当翻过当前章节前 1/3 的页数时触发（例如 3 页翻到第 2 页，或 6 页翻到第 3 页）
+          const progress = (this.currentPage - 1) / this.totalPages;
+          if (
+            progress >= 0.33 ||
+            this.currentPage >= Math.ceil(this.totalPages / 3.0)
+          ) {
+            reachedOneThird = true;
+          }
+        } else {
+          // 只有 1 页的短章节，停留达到设定时间后判定已读 1/3
+          reachedOneThird = true;
+        }
+      }
+
+      if (reachedOneThird) {
+        this.hasPreloadedThisChapter = true;
+        this.triggerSilentPreload(currentIdx);
+      }
+    },
+    triggerSilentPreload(currentIndex) {
+      if (this.isSilentPreloading) return;
+      const book = this.$store.getters.readingBook;
+      if (!book || !book.bookUrl || !this.catalog || !this.catalog.length)
+        return;
+
+      // 严格只预读后续 1 章
+      const nextIdx = currentIndex + 1;
+      if (nextIdx >= this.catalog.length) return;
+      const chapter = this.catalog[nextIdx];
+      if (!chapter) return;
+
+      const cacheKey =
+        "localCache@" +
+        book.name +
+        "_" +
+        book.author +
+        "@" +
+        book.bookUrl +
+        "@chapterContent-" +
+        chapter.index;
+
+      if (window.$cacheStorage) {
+        window.$cacheStorage
+          .getItem(cacheKey)
+          .then(cached => {
+            // 若后续 1 章已经在手机存储中，直接跳过，零网络开销
+            if (cached) return;
+
+            this.isSilentPreloading = true;
+            this.getBookContent(
+              chapter.index,
+              { timeout: 18000, silent: true },
+              false,
+              true
+            )
+              .then(res => {
+                this.isSilentPreloading = false;
+                if (res && res.data && res.data.isSuccess) {
+                  this.computeBookCacheStats();
+                  if (
+                    this.$refs.popCata &&
+                    this.$refs.popCata.computeCachedCata
+                  ) {
+                    this.$refs.popCata.computeCachedCata();
+                  }
+                }
+              })
+              .catch(() => {
+                this.isSilentPreloading = false;
+              });
+          })
+          .catch(() => {
+            this.isSilentPreloading = false;
+          });
+      }
+    },
+    cacheChapterContent(cacheCount) {
+      if (!this.catalog || !this.catalog.length) {
+        this.$message.warning("尚未加载目录，无法执行离线缓存");
+        return;
+      }
+      let cacheChapterList = [];
+      const currentIdx =
+        this.chapterIndex >= 0
+          ? this.chapterIndex
+          : (this.$store.getters.readingBook &&
+              this.$store.getters.readingBook.index) ||
+            0;
+      if (cacheCount === true) {
+        cacheChapterList = this.catalog.slice(currentIdx + 1);
+        if (!cacheChapterList.length) {
+          cacheChapterList = [...this.catalog];
+        }
+      } else {
+        const start = currentIdx + 1;
+        const end = Math.min(this.catalog.length, start + cacheCount);
+        cacheChapterList = this.catalog.slice(start, end);
+      }
+      if (!cacheChapterList.length) {
+        this.$message.info("后续没有更多章节需要缓存");
+        return;
+      }
+
+      const uncachedList = cacheChapterList.filter(
+        v => !this.cachedStats.cachedMap[v.index]
+      );
+      if (!uncachedList.length) {
+        this.$message.success("所选章节已全部保存在手机存储中，无需重复下载！");
+        return;
+      }
+
       this.isCachingContent = true;
-      this.cachingContentTip = "正在缓存章节  0/" + cacheChapterList.length;
-      this.cachingHandler = LimitResquest(2, handler => {
-        this.cachingContentTip =
-          "正在缓存章节  " +
-          handler.requestCount +
-          "/" +
-          cacheChapterList.length;
+      this.totalCachingTarget = uncachedList.length;
+      this.currentCachingProgress = 0;
+      this.cachingContentTip = `正在缓存：0 / ${uncachedList.length} 章`;
+
+      this.cachingHandler = LimitResquest(3, handler => {
+        this.currentCachingProgress = handler.requestCount;
+        this.cachingContentTip = `正在缓存：${handler.requestCount} / ${uncachedList.length} 章`;
         if (handler.isEnd()) {
-          this.$message.success("缓存完成");
+          this.$message.success("批量离线缓存下载完成！");
           this.isCachingContent = false;
           this.cachingContentTip = "";
+          this.computeBookCacheStats();
+          if (this.$refs.popCata && this.$refs.popCata.computeCachedCata) {
+            this.$refs.popCata.computeCachedCata();
+          }
         }
       });
-      cacheChapterList.forEach(v => {
+
+      uncachedList.forEach(v => {
         this.cachingHandler(() => {
           return this.getBookContent(
             v.index,
             {
-              timeout: 30000,
+              timeout: 25000,
               silent: true
             },
             false,
@@ -3632,6 +3918,47 @@ export default {
         this.cachingHandler.cancel();
         this.isCachingContent = false;
         this.cachingContentTip = "";
+        this.$message.info("已停止缓存");
+        this.computeBookCacheStats();
+      }
+    },
+    async clearCurrentBookCache() {
+      const confirmed = await this.$confirm(
+        "确定要清空本书在手机浏览器中的全部离线缓存吗？（清空后释放存储，但离线阅读需重新下载）",
+        "提示",
+        {
+          confirmButtonText: "确定清空",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => false);
+      if (!confirmed) return;
+
+      const book = this.$store.getters.readingBook;
+      if (!book || !book.bookUrl || !window.$cacheStorage) return;
+      const cachePrefix =
+        "localCache@" +
+        book.name +
+        "_" +
+        book.author +
+        "@" +
+        book.bookUrl +
+        "@chapterContent-";
+      const keysToRemove = [];
+      await window.$cacheStorage.iterate((value, key) => {
+        if (key && key.startsWith(cachePrefix)) {
+          keysToRemove.push(key);
+        }
+      });
+      await Promise.all(
+        keysToRemove.map(k => window.$cacheStorage.removeItem(k))
+      );
+      this.$message.success(
+        `已成功清空本书离线缓存，共清理 ${keysToRemove.length} 个章节`
+      );
+      await this.computeBookCacheStats();
+      if (this.$refs.popCata && this.$refs.popCata.computeCachedCata) {
+        this.$refs.popCata.computeCachedCata();
       }
     },
     startAutoReading() {
@@ -4976,5 +5303,171 @@ export default {
   height: 100%;
   pointer-events: none;
   z-index: 15;
+}
+
+.offline-cache-dialog {
+  border-radius: 12px !important;
+  overflow: hidden;
+
+  .el-dialog__header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f0f2f5;
+
+    .el-dialog__title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #303133;
+    }
+  }
+
+  .el-dialog__body {
+    padding: 16px 20px 20px;
+  }
+}
+
+.offline-cache-content {
+  .cache-status-card {
+    background: #f7f9fc;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    border: 1px solid #ebeef5;
+
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+
+      .book-name-tag {
+        font-weight: 600;
+        font-size: 15px;
+        color: #303133;
+        max-width: 65%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cache-size-text {
+        font-size: 12px;
+        color: #909399;
+      }
+    }
+
+    .status-progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #606266;
+      margin-bottom: 8px;
+
+      strong {
+        color: #409EFF;
+        font-size: 14px;
+      }
+
+      .status-percent {
+        font-weight: 600;
+        color: #67C23A;
+      }
+    }
+  }
+
+  .active-caching-box {
+    background: #ecf5ff;
+    border: 1px solid #d9ecff;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+
+    .active-caching-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #409EFF;
+      font-weight: 500;
+    }
+  }
+
+  .cache-actions-section {
+    margin-bottom: 12px;
+
+    .section-title {
+      font-size: 13px;
+      color: #606266;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
+    .cache-btns-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+
+      .el-button {
+        margin-left: 0 !important;
+        width: 100%;
+      }
+    }
+  }
+
+  .cache-footer-actions {
+    text-align: center;
+    padding-top: 10px;
+    border-top: 1px dashed #ebeef5;
+  }
+}
+
+.night-theme, .night {
+  .offline-cache-dialog {
+    background: #21252b !important;
+
+    .el-dialog__header {
+      border-bottom-color: #2c313a;
+
+      .el-dialog__title {
+        color: #d7dae0;
+      }
+
+      .el-dialog__close {
+        color: #abb2bf;
+      }
+    }
+
+    .cache-status-card {
+      background: #1e2227;
+      border-color: #2c313a;
+
+      .status-header {
+        .book-name-tag {
+          color: #e5c07b;
+        }
+
+        .cache-size-text {
+          color: #5c6370;
+        }
+      }
+
+      .status-progress-info {
+        color: #abb2bf;
+      }
+    }
+
+    .active-caching-box {
+      background: #282c34;
+      border-color: #3e4451;
+    }
+
+    .cache-actions-section .section-title {
+      color: #abb2bf;
+    }
+
+    .cache-footer-actions {
+      border-top-color: #2c313a;
+    }
+  }
 }
 </style>

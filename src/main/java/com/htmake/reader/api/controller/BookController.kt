@@ -602,9 +602,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             }
             try {
-                content = withTimeoutOrNull(15000L) {
+                content = withTimeoutOrNull(25000L) {
                     WebBook(bookSource ?: "", appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
-                } ?: throw Exception("获取章节正文超时(15秒)")
+                } ?: throw Exception("获取章节正文超时(源站点响应过慢或失效)")
                 if (appConfig.cacheChapterContent && chapterCacheFile != null) {
                     chapterCacheFile.writeText(content)
                     // 保存图片
@@ -624,6 +624,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         val info = mutableMapOf<String, Any>("sourceUrl" to bookSourceObject.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString())
                         addInvalidBookSource(bookSourceObject.bookSourceUrl, info, userNameSpace)
                     }
+                }
+                if (e is java.net.SocketTimeoutException || e.toString().contains("SocketTimeoutException", ignoreCase = true)) {
+                    throw Exception("当前书源网络连接超时(源站点响应慢或失效)，建议点击【书源】进行切换")
                 }
                 throw e
             }

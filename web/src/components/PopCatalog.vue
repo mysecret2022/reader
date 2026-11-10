@@ -6,6 +6,14 @@
         <span v-if="catalog.length">({{ catalog.length }})</span>
       </div>
       <div :class="{ 'title-btn': true }">
+        <span
+          class="span-btn"
+          v-if="catalog.length"
+          @click="$emit('openCache')"
+          style="color: #409EFF;"
+        >
+          <i class="el-icon-download"></i> 缓存
+        </span>
         <span class="span-btn" v-if="catalog.length" @click="asc = !asc">{{
           asc ? "倒序" : "顺序"
         }}</span>
@@ -49,7 +57,14 @@
               cached: cachedCataMap[note.index]
             }"
           >
-            {{ note.title }}
+            <span>{{ note.title }}</span>
+            <span
+              v-if="cachedCataMap[note.index]"
+              class="cached-badge"
+              title="已离线缓存"
+            >
+              已缓
+            </span>
           </div>
         </div>
       </div>
@@ -365,6 +380,17 @@ export default {
 
       .cached {
         color: #444;
+      }
+
+      .cached-badge {
+        float: right;
+        font-size: 11px;
+        color: #67C23A;
+        background: rgba(103, 194, 58, 0.12);
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-top: 2px;
+        font-weight: normal;
       }
 
       .selected .log-text {

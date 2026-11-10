@@ -50,6 +50,44 @@ export default {
       if (this.isScrollRead) {
         return this.renderScrollChapterList();
       }
+      if (this.error) {
+        return (
+          <div
+            class="content-body chapter-content reading-chapter chapter-error-container"
+            style={this.containerStyle}
+          >
+            <h3 data-pos={0}>{this.title}</h3>
+            <div class="chapter-error-card">
+              <div class="error-icon">
+                <i class="el-icon-warning-outline"></i>
+              </div>
+              <div class="error-msg-box">
+                {this.content.split(/\n+/).map(line => (
+                  <p class="error-line">{line}</p>
+                ))}
+              </div>
+              <div class="error-actions-group">
+                <el-button
+                  type="primary"
+                  size="small"
+                  icon="el-icon-refresh"
+                  onClick={() => this.$emit("refreshContent")}
+                >
+                  重试获取本章
+                </el-button>
+                <el-button
+                  type="warning"
+                  size="small"
+                  icon="el-icon-menu"
+                  onClick={() => this.$emit("changeBookSource")}
+                >
+                  一键换源
+                </el-button>
+              </div>
+            </div>
+          </div>
+        );
+      }
       let wordCount = this.title.length + 2; // 2为两个换行符
       return (
         <div
@@ -212,6 +250,51 @@ export default {
                   <div class="volume-content">
                     <h3 data-pos={0}>{chapter.title}</h3>
                     <p class="volume-tag">{chapter.content}</p>
+                  </div>
+                </div>
+              );
+            }
+            if (chapter.error) {
+              return (
+                <div
+                  class={[
+                    "chapter-content",
+                    "chapter-error-container",
+                    this.readingBook.index === chapter.index
+                      ? "reading-chapter"
+                      : ""
+                  ]}
+                  data-index={chapter.index}
+                  style={this.containerStyle}
+                >
+                  <h3 data-pos={0}>{chapter.title}</h3>
+                  <div class="chapter-error-card">
+                    <div class="error-icon">
+                      <i class="el-icon-warning-outline"></i>
+                    </div>
+                    <div class="error-msg-box">
+                      {chapter.content.split(/\n+/).map(line => (
+                        <p class="error-line">{line}</p>
+                      ))}
+                    </div>
+                    <div class="error-actions-group">
+                      <el-button
+                        type="primary"
+                        size="small"
+                        icon="el-icon-refresh"
+                        onClick={() => this.$emit("refreshContent")}
+                      >
+                        重试获取本章
+                      </el-button>
+                      <el-button
+                        type="warning"
+                        size="small"
+                        icon="el-icon-menu"
+                        onClick={() => this.$emit("changeBookSource")}
+                      >
+                        一键换源
+                      </el-button>
+                    </div>
                   </div>
                 </div>
               );
@@ -793,6 +876,55 @@ h3.reading {
   width: 100%;
   min-height: calc(var(--vh, 1vh) * 50);
   // pointer-events: none;
+}
+.chapter-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  box-sizing: border-box;
+
+  h3 {
+    margin-bottom: 24px;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .chapter-error-card {
+    max-width: 480px;
+    width: 100%;
+    background: rgba(230, 162, 60, 0.08);
+    border: 1px dashed rgba(230, 162, 60, 0.4);
+    border-radius: 12px;
+    padding: 24px 20px;
+    text-align: center;
+    box-sizing: border-box;
+
+    .error-icon {
+      font-size: 38px;
+      color: #e6a23c;
+      margin-bottom: 12px;
+    }
+
+    .error-msg-box {
+      margin-bottom: 20px;
+
+      .error-line {
+        margin: 6px 0;
+        font-size: 14px;
+        line-height: 1.6;
+        opacity: 0.85;
+      }
+    }
+
+    .error-actions-group {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+  }
 }
 </style>
 <style lang="stylus">
