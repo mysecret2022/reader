@@ -3905,6 +3905,18 @@ export default {
       }
       this.loadingCovers = true;
       this.candidateCovers = [];
+      const stopSSE = () => {
+        this.loadingCovers = false;
+        if (this.coverEventSource) {
+          try {
+            this.coverEventSource.close();
+          } catch (e) {
+            // ignore
+          }
+          this.coverEventSource = null;
+        }
+      };
+
       const seen = new Set();
       const currentCover = book.customCoverUrl || book.coverUrl;
       if (currentCover) {
@@ -3925,10 +3937,16 @@ export default {
         });
         seen.add(book.coverUrl);
       }
+      if (this.candidateCovers.length >= 10) {
+        this.loadingCovers = false;
+        return;
+      }
+
       const buildURL = require("axios/lib/helpers/buildURL");
       const params = {
         name: book.name,
         author: book.author || "",
+        url: book.bookUrl || "",
         searchSize: 15
       };
       if (this.$store.state.token) {
@@ -3942,8 +3960,12 @@ export default {
           try {
             const res = JSON.parse(e.data);
             if (res.data && Array.isArray(res.data)) {
-              res.data.forEach(item => {
-                if (item.coverUrl && !seen.has(item.coverUrl)) {
+              for (const item of res.data) {
+                if (
+                  item.coverUrl &&
+                  item.coverUrl.startsWith("http") &&
+                  !seen.has(item.coverUrl)
+                ) {
                   seen.add(item.coverUrl);
                   const name = item.originName || item.origin || "在线书源";
                   this.candidateCovers.push({
@@ -3952,24 +3974,17 @@ export default {
                     sourceName: name,
                     originName: name
                   });
+                  if (this.candidateCovers.length >= 10) {
+                    stopSSE();
+                    break;
+                  }
                 }
-              });
+              }
             }
           } catch (err) {
             // ignore JSON parse error
           }
         });
-        const stopSSE = () => {
-          this.loadingCovers = false;
-          if (this.coverEventSource) {
-            try {
-              this.coverEventSource.close();
-            } catch (e) {
-              // ignore
-            }
-            this.coverEventSource = null;
-          }
-        };
         es.addEventListener("end", stopSSE);
         es.addEventListener("error", stopSSE);
         setTimeout(stopSSE, 10000);

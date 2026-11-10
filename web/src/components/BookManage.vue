@@ -449,6 +449,18 @@ export default {
       }
       this.loadingCovers = true;
       this.candidateCovers = [];
+      const stopSSE = () => {
+        this.loadingCovers = false;
+        if (this.coverEventSource) {
+          try {
+            this.coverEventSource.close();
+          } catch (e) {
+            // ignore
+          }
+          this.coverEventSource = null;
+        }
+      };
+
       const seen = new Set();
       const currentCover = book.customCoverUrl || book.coverUrl;
       if (currentCover) {
@@ -482,7 +494,7 @@ export default {
               res.data.isSuccess &&
               Array.isArray(res.data.data)
             ) {
-              res.data.data.forEach(item => {
+              for (const item of res.data.data) {
                 if (
                   item.coverUrl &&
                   item.coverUrl.startsWith("http") &&
@@ -496,11 +508,20 @@ export default {
                     sourceName: name,
                     originName: name
                   });
+                  if (this.candidateCovers.length >= 10) {
+                    stopSSE();
+                    break;
+                  }
                 }
-              });
+              }
             }
           })
           .catch(() => {});
+      }
+
+      if (this.candidateCovers.length >= 10) {
+        this.loadingCovers = false;
+        return;
       }
 
       // 2. 启动 SSE 在线全网书源实时扫描拉取最新封面
@@ -508,6 +529,7 @@ export default {
       const params = {
         name: book.name,
         author: book.author || "",
+        url: book.bookUrl || "",
         searchSize: 15
       };
       if (this.$store.state.token) {
@@ -521,7 +543,7 @@ export default {
           try {
             const res = JSON.parse(e.data);
             if (res.data && Array.isArray(res.data)) {
-              res.data.forEach(item => {
+              for (const item of res.data) {
                 if (
                   item.coverUrl &&
                   item.coverUrl.startsWith("http") &&
@@ -535,24 +557,17 @@ export default {
                     sourceName: name,
                     originName: name
                   });
+                  if (this.candidateCovers.length >= 10) {
+                    stopSSE();
+                    break;
+                  }
                 }
-              });
+              }
             }
           } catch (err) {
             // ignore
           }
         });
-        const stopSSE = () => {
-          this.loadingCovers = false;
-          if (this.coverEventSource) {
-            try {
-              this.coverEventSource.close();
-            } catch (e) {
-              // ignore
-            }
-            this.coverEventSource = null;
-          }
-        };
         es.addEventListener("end", stopSSE);
         es.addEventListener("error", stopSSE);
         setTimeout(stopSSE, 10000);

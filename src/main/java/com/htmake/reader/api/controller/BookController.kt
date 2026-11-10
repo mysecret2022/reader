@@ -1012,15 +1012,12 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             response.end("data: " + jsonEncode(returnData.setErrorMsg("未配置书源"), false) + "\n\n")
             return
         }
-        if (bookUrl.isNullOrEmpty()) {
-            response.write("event: error\n")
-            response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入书籍链接"), false) + "\n\n")
-            return
-        }
-
-        var book = getShelfBookByURL(bookUrl, userNameSpace)
-        if (book == null) {
-            book = bookInfoCache.getAsString(bookUrl)?.toMap()?.toDataClass()
+        var book: Book? = null
+        if (!bookUrl.isNullOrEmpty()) {
+            book = getShelfBookByURL(bookUrl, userNameSpace)
+            if (book == null) {
+                book = bookInfoCache.getAsString(bookUrl)?.toMap()?.toDataClass()
+            }
         }
         if (book == null) {
             val name = if (context.request().method() == HttpMethod.POST) {
@@ -1039,7 +1036,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     book = Book().apply {
                         this.name = name
                         this.author = author
-                        this.bookUrl = bookUrl
+                        this.bookUrl = bookUrl ?: ""
                         setRootDir(getWorkDir())
                         setUserNameSpace(userNameSpace)
                     }
@@ -1048,7 +1045,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         if (book == null) {
             response.write("event: error\n")
-            response.end("data: " + jsonEncode(returnData.setErrorMsg("书籍信息错误"), false) + "\n\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入书籍链接或书名"), false) + "\n\n")
             return
         }
         if (refresh > 0 || lastIndex >= userBookSourceList.size - 1) {
