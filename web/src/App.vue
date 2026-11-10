@@ -330,6 +330,12 @@ export default {
       `${window.innerHeight * 0.01}px`
     );
     window.reader = this;
+    if (window.__deferredPrompt || window.deferredPrompt) {
+      this.$store.commit(
+        "setPwaInstallPrompt",
+        window.__deferredPrompt || window.deferredPrompt
+      );
+    }
   },
   computed: {
     isNight() {

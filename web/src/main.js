@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import Vue from "vue";
 import App from "./App.vue";
 import router from "./router";
@@ -47,6 +48,30 @@ try {
 
   registerServiceWorker();
 
+  // 监听 PWA 安装事件 beforeinstallprompt
+  window.deferredPrompt = window.__deferredPrompt || null;
+  if (window.deferredPrompt) {
+    store.commit("setPwaInstallPrompt", window.deferredPrompt);
+  }
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    window.deferredPrompt = e;
+    window.__deferredPrompt = e;
+    store.commit("setPwaInstallPrompt", e);
+  });
+  window.addEventListener("pwa-prompt-available", e => {
+    if (e && e.detail) {
+      window.deferredPrompt = e.detail;
+      window.__deferredPrompt = e.detail;
+      store.commit("setPwaInstallPrompt", e.detail);
+    }
+  });
+  window.addEventListener("appinstalled", () => {
+    window.deferredPrompt = null;
+    window.__deferredPrompt = null;
+    store.commit("setPwaInstallPrompt", null);
+  });
+
   Vue.config.productionTip = false;
 
   Vue.use(VueLazyload, {
@@ -67,6 +92,13 @@ try {
             window.matchMedia("(display-mode: " + displayMode + ")").matches
         );
       },
+      canInstallPwa() {
+        return (
+          Boolean(this.$store.state.pwaInstallPrompt) &&
+          !this.isPWA &&
+          !this.isWebApp
+        );
+      },
       isNightTheme() {
         return this.$store.getters.isNight;
       },
@@ -75,6 +107,39 @@ try {
       }
     },
     methods: {
+      async installPwa() {
+        const promptEvent =
+          this.$store.state.pwaInstallPrompt ||
+          window.deferredPrompt ||
+          window.__deferredPrompt;
+        if (!promptEvent) {
+          this.$message.info("暂未检测到满足安装条件，或当前环境已安装应用");
+          return;
+        }
+        try {
+          if (typeof promptEvent.prompt === "function") {
+            await promptEvent.prompt();
+            if (promptEvent.userChoice) {
+              const choiceResult = await promptEvent.userChoice;
+              if (choiceResult && choiceResult.outcome === "accepted") {
+                this.$message.success("正在添加到手机桌面...");
+                this.$store.commit("setPwaInstallPrompt", null);
+                window.deferredPrompt = null;
+                window.__deferredPrompt = null;
+              } else {
+                this.$message.info("已取消安装");
+              }
+            }
+          } else {
+            this.$message.info(
+              "当前浏览器不支持直接唤起安装，请通过浏览器菜单【添加到主屏幕】进行安装"
+            );
+          }
+        } catch (err) {
+          console.error("PWA install error:", err);
+          this.$message.error("唤起安装失败: " + (err.message || err));
+        }
+      },
       getImagePath(url, useSW) {
         if (
           url &&

@@ -219,6 +219,28 @@
             </el-button>
           </div>
         </div>
+
+        <!-- 5. 安装至手机桌面 (PWA) -->
+        <div
+          class="setting-wrapper"
+          v-if="canInstallPwa"
+          style="margin-top: 28px;"
+        >
+          <div class="setting-title">
+            桌面快捷方式
+          </div>
+          <div class="setting-item">
+            <el-button
+              type="success"
+              size="small"
+              icon="el-icon-mobile-phone"
+              style="width: 100%; border-radius: 8px; font-weight: bold;"
+              @click="installPwa"
+            >
+              📲 安装到手机桌面
+            </el-button>
+          </div>
+        </div>
       </div>
     </div>
     <div
@@ -238,6 +260,13 @@
           ({{ bookList.length }})
         </div>
         <div class="shelf-title-actions">
+          <div
+            class="title-btn pwa-install-title-btn"
+            v-if="canInstallPwa"
+            @click="installPwa"
+          >
+            📲 安装到手机桌面
+          </div>
           <div
             class="title-btn"
             v-if="$store.getters.isNormalPage && isSearchResult"
@@ -274,6 +303,36 @@
           </div>
         </div>
       </div>
+      <!-- PWA 桌面安装横幅提醒 -->
+      <transition name="el-fade-in-linear">
+        <div
+          class="pwa-install-banner"
+          v-if="canInstallPwa && showPwaBanner && !isSearchResult"
+        >
+          <div class="pwa-banner-left">
+            <i class="el-icon-mobile-phone pwa-banner-icon"></i>
+            <span class="pwa-banner-text"
+              >可将阅读安装至手机桌面，享受离线阅读与全屏沉浸体验</span
+            >
+          </div>
+          <div class="pwa-banner-right">
+            <el-button
+              type="primary"
+              size="mini"
+              round
+              class="pwa-install-btn"
+              @click="installPwa"
+            >
+              📲 安装到手机桌面
+            </el-button>
+            <i
+              class="el-icon-close pwa-banner-close"
+              title="稍后再说"
+              @click="showPwaBanner = false"
+            ></i>
+          </div>
+        </div>
+      </transition>
       <div class="book-group-wrapper" v-if="!isSearchResult">
         <el-tabs class="book-group-tabs" v-model="showBookGroupString" stretch>
           <el-tab-pane
@@ -875,6 +934,7 @@ export default {
       searchLastIndex: -1,
 
       showBookEditButton: false,
+      showPwaBanner: true,
 
       popExploreVisible: false,
       loadingMore: false,
@@ -1036,6 +1096,24 @@ export default {
     eventBus.$on("openCoverPicker", book => {
       this.openCoverPicker(book);
     });
+    window.addEventListener(
+      "beforeinstallprompt",
+      this.handleBeforeInstallPrompt
+    );
+    window.addEventListener("appinstalled", this.handleAppInstalled);
+    if (window.__deferredPrompt || window.deferredPrompt) {
+      this.$store.commit(
+        "setPwaInstallPrompt",
+        window.__deferredPrompt || window.deferredPrompt
+      );
+    }
+  },
+  beforeDestroy() {
+    window.removeEventListener(
+      "beforeinstallprompt",
+      this.handleBeforeInstallPrompt
+    );
+    window.removeEventListener("appinstalled", this.handleAppInstalled);
   },
   activated() {
     document.title = "阅读";
@@ -1045,6 +1123,19 @@ export default {
     }
   },
   methods: {
+    handleBeforeInstallPrompt(e) {
+      e.preventDefault();
+      window.deferredPrompt = e;
+      window.__deferredPrompt = e;
+      this.$store.commit("setPwaInstallPrompt", e);
+      this.showPwaBanner = true;
+    },
+    handleAppInstalled() {
+      window.deferredPrompt = null;
+      window.__deferredPrompt = null;
+      this.$store.commit("setPwaInstallPrompt", null);
+      this.showPwaBanner = false;
+    },
     openCoverPicker(book) {
       if (!book) return;
       this.currentCoverBook = book;
@@ -3487,6 +3578,58 @@ export default {
       }
     }
 
+    .pwa-install-title-btn {
+      color: #67c23a;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      &:hover {
+        opacity: 0.8;
+      }
+    }
+
+    .pwa-install-banner {
+      margin: 8px 0 14px 0;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, rgba(103, 194, 58, 0.1) 100%);
+      border: 1px solid rgba(64, 158, 255, 0.25);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-sizing: border-box;
+
+      .pwa-banner-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #303133;
+
+        .pwa-banner-icon {
+          font-size: 18px;
+          color: #409EFF;
+        }
+      }
+
+      .pwa-banner-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+
+        .pwa-banner-close {
+          cursor: pointer;
+          color: #909399;
+          font-size: 16px;
+          transition: color 0.2s;
+          &:hover {
+            color: #606266;
+          }
+        }
+      }
+    }
+
     >>>.el-icon-loading {
       font-size: 36px;
       color: #B5B5B5;
@@ -3648,6 +3791,19 @@ export default {
   }
   >>>.shelf-wrapper {
     background-color: #222;
+  }
+  >>>.pwa-install-banner {
+    background: linear-gradient(135deg, rgba(64, 158, 255, 0.08) 0%, rgba(103, 194, 58, 0.08) 100%);
+    border-color: rgba(255, 255, 255, 0.15);
+    .pwa-banner-left {
+      color: #ccc;
+    }
+    .pwa-banner-right .pwa-banner-close {
+      color: #777;
+      &:hover {
+        color: #aaa;
+      }
+    }
   }
   >>>.el-input__inner {
     background-color: #444;
@@ -3854,6 +4010,22 @@ export default {
 
       .shelf-title {
         padding: 20px 24px 0 24px;
+      }
+
+      .pwa-install-banner {
+        margin: 8px 24px 10px 24px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+
+        .pwa-banner-right {
+          width: 100%;
+          justify-content: space-between;
+
+          .pwa-install-btn {
+            flex: 1;
+          }
+        }
       }
 
       .book-group-wrapper {

@@ -107,6 +107,7 @@ module.exports = {
       // swSrc is required in InjectManifest mode.
       // swSrc: "src/service-worker.js"
       // ignoreURLParametersMatching: [new RegExp("accessToken")],
+      importWorkboxFrom: "local",
       exclude: ["index.html"],
       importScripts: ["sw.js"],
       cleanupOutdatedCaches: true,

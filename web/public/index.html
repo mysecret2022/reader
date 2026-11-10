@@ -25,6 +25,15 @@
     <link rel="stylesheet" href="<%= BASE_URL %>fonts/shouti/shouti.css" />
     <title>阅读</title>
     <script>
+      // 预先捕获原生 PWA 安装事件 beforeinstallprompt，避免首屏未加载完成时丢失
+      window.__deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__deferredPrompt = e;
+        window.dispatchEvent(new CustomEvent('pwa-prompt-available', { detail: e }));
+      });
+    </script>
+    <script>
       // 通用加载脚本方法
       function loadScript(src, callback, async) {
         var script = document.createElement('script');

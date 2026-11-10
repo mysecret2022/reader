@@ -66,9 +66,13 @@ export default new Vuex.Store({
     customConfigList: [].concat(settings.customConfigList),
     showBookInfo: {},
     cachingBookList: [],
-    bookmarks: []
+    bookmarks: [],
+    pwaInstallPrompt: null
   },
   mutations: {
+    setPwaInstallPrompt(state, prompt) {
+      state.pwaInstallPrompt = prompt;
+    },
     setShelfBooks(state, books) {
       // 过滤一下不用的字段，省点内存
       window.shelfBooks = books;
