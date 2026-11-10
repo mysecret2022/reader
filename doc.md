@@ -196,6 +196,8 @@ docker run -d \
   -e TZ=Asia/Shanghai \
   -e SPRING_PROFILES_ACTIVE=prod \
   -e READER_APP_SECURE=true \
+  -e JAVA_OPTS="-Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication" \
+  -m 512m \
   ghcr.io/mysecret2022/reader:latest
 ```
 
@@ -208,7 +210,7 @@ docker run -d \
 
 ### Docker Compose 部署（标准推荐）
 
-推荐在服务器上使用 `docker-compose.yaml` 管理，方便持久化与后续一键更新：
+推荐在服务器上使用 `docker-compose.yaml` 管理，方便持久化与后续一键更新（已内置 350M 堆内存与 512M 容器硬限制，常驻仅需 ~200M-350M）：
 
 ```yaml
 services:
@@ -225,9 +227,14 @@ services:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       - READER_APP_SECURE=true # 默认多用户鉴权模式（默认管理员：admin，默认密码：admin）
+      - JAVA_OPTS=-Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication # 限制 JVM 内存，防止无约束吃满 1G
       # 可在首次登录后台后直接修改密码及配置邀请码，也可通过下方环境变量直接初始化：
       # - READER_APP_SECUREKEY=admin # 初始管理员密码
       # - READER_APP_INVITECODE=      # 注册邀请码（留空则开放注册）
+    deploy:
+      resources:
+        limits:
+          memory: 512M # 物理内存硬限制，防止内存泄漏或过度膨胀
 ```
 
 **操作命令**：

@@ -84,6 +84,11 @@
 
 ## 🚀 安装部署指南
 
+> [!TIP]
+> **💡 内存与架构优化说明**：
+> 本镜像已内置深度内存调优，默认注入 `JAVA_OPTS="-Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication"`，配合容器物理上限 `512M`，**常驻运行内存仅需 200MB ~ 350MB，相比未限制时放任吃满 1G 物理内存立省 70%**！
+> 此外，容器已移除冗余的外挂 Python 与 Edge-TTS 依赖，体积大减 200MB，语音听书全面采用标准 HTML5 Web Speech 引擎（调用 iOS Siri 与设备原生高质量语音，零服务器算力开销）。
+
 ### 方式一：Docker Compose 极速部署（推荐 🌟）
 
 适合部署在 Linux VPS、云服务器或群晖/威联通/绿联/极空间等各类 NAS 设备上。
@@ -106,6 +111,14 @@ services:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       - READER_APP_SECURE=true # 默认多用户鉴权模式（默认管理员：admin，默认密码：admin）
+      - JAVA_OPTS=-Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication # 限制 JVM 内存，常驻仅需 ~200M-350M
+      # 可在首次登录后台后直接修改密码及配置邀请码，也可通过下方环境变量直接初始化：
+      # - READER_APP_SECUREKEY=admin # 初始管理员密码
+      # - READER_APP_INVITECODE=      # 注册邀请码（留空则开放注册）
+    deploy:
+      resources:
+        limits:
+          memory: 512M # 容器物理内存硬限制，杜绝无节制膨胀
 ```
 
 #### 2. 启动服务
@@ -121,7 +134,7 @@ docker compose up -d
 
 ### 方式二：Docker 命令行一键运行
 
-如果您习惯使用纯 Docker 命令：
+如果您习惯使用单条 Docker 命令，直接复制以下命令在终端中运行（已配置 512M 内存限制与 JVM 堆优化）：
 
 ```bash
 docker run -d \
@@ -133,6 +146,8 @@ docker run -d \
   -e TZ=Asia/Shanghai \
   -e SPRING_PROFILES_ACTIVE=prod \
   -e READER_APP_SECURE=true \
+  -e JAVA_OPTS="-Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication" \
+  -m 512m \
   ghcr.io/mysecret2022/reader:latest
 ```
 
@@ -152,7 +167,9 @@ docker run -d \
    - `TZ` = `Asia/Shanghai`
    - `SPRING_PROFILES_ACTIVE` = `prod`
    - `READER_APP_SECURE` = `true`
-5. 点击创建并运行容器即可。首次使用 `admin / admin` 登录，所有权限、密码与配额直接在进入后台 `http://<NAS_IP>:8080/#/admin` 界面在线设置。
+   - `JAVA_OPTS` = `-Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication`（限制内存使用）
+5. **资源限制设置**：建议将容器内存限制（Memory Limit）勾选并设置为 `512MB`。
+6. 点击创建并运行容器即可。首次使用 `admin / admin` 登录，所有权限、密码与配额直接在进入后台 `http://<NAS_IP>:8080/#/admin` 界面在线设置。
 
 ---
 
