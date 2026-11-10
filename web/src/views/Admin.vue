@@ -2593,7 +2593,7 @@
 
 <script>
 import Axios from "../plugins/axios";
-import { LimitResquest } from "../plugins/helper";
+import { LimitResquest, buildURL } from "../plugins/helper";
 import eventBus from "../plugins/eventBus";
 import { getCache, setCache } from "../plugins/cache";
 import WebDAV from "../components/WebDAV.vue";
@@ -3942,7 +3942,6 @@ export default {
         return;
       }
 
-      const buildURL = require("axios/lib/helpers/buildURL");
       const params = {
         name: book.name,
         author: book.author || "",

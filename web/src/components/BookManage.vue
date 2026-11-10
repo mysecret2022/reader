@@ -252,8 +252,7 @@
 import { mapGetters } from "vuex";
 import Axios from "../plugins/axios";
 import eventBus from "../plugins/eventBus";
-const buildURL = require("axios/lib/helpers/buildURL");
-import { LimitResquest } from "../plugins/helper";
+import { LimitResquest, buildURL } from "../plugins/helper";
 
 export default {
   model: {
@@ -525,7 +524,6 @@ export default {
       }
 
       // 2. 启动 SSE 在线全网书源实时扫描拉取最新封面
-      const buildURL = require("axios/lib/helpers/buildURL");
       const params = {
         name: book.name,
         author: book.author || "",

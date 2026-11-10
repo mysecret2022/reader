@@ -1558,6 +1558,22 @@ export default {
           background: "rgba(0,0,0,0)"
         });
       }
+      if (this.loadingSafetyTimer) {
+        clearTimeout(this.loadingSafetyTimer);
+        this.loadingSafetyTimer = null;
+      }
+      this.loadingSafetyTimer = setTimeout(() => {
+        if (this.loading && typeof this.loading.close === "function") {
+          this.loading.close();
+        }
+        if (!this.show) {
+          this.show = true;
+          this.error = true;
+          this.content = "获取章节内容超时，建议尝试换源后重试！";
+          this.$message.warning("获取章节内容超时，建议切换书源");
+        }
+      }, 15000);
+
       let bookUrl = this.$store.getters.readingBook.bookUrl;
       this.hasPreloadedThisChapter = false;
       this.isSilentPreloading = false;
@@ -1578,13 +1594,19 @@ export default {
       this.toTop(0);
       // 如果超出目录范围，尝试刷新目录
       if (!this.$store.getters.readingBook.catalog[index]) {
+        if (this.loadingSafetyTimer) {
+          clearTimeout(this.loadingSafetyTimer);
+          this.loadingSafetyTimer = null;
+        }
         if (this.tryRefresh) {
           this.tryRefresh = false;
           this.content = "获取章节内容失败，请更新目录！";
           this.error = true;
           this.show = true;
           this.$emit("showContent");
-          this.loading.close();
+          if (this.loading && typeof this.loading.close === "function") {
+            this.loading.close();
+          }
         } else {
           this.tryRefresh = true;
           this.refreshCatalog();
@@ -1596,88 +1618,101 @@ export default {
       let chapterIndex = this.$store.getters.readingBook.catalog[index].index;
       this.title = chapterName;
       const now = new Date().getTime();
-      this.getBookContent(chapterIndex, {}, refresh).then(
-        res => {
-          if (
-            bookUrl !== this.$store.getters.readingBook.bookUrl ||
-            index !== this.$store.getters.readingBook.index
-          ) {
-            // 已经换书或者换章节了
-            return;
-          }
-          if (now + 100 > new Date().getTime()) {
-            // 不超过 100ms 假定为获取缓存，此时发送进度保存请求
-            this.saveBookProgress();
-          }
-          if (res.data.isSuccess) {
-            let data = res.data.data;
-            this.content = this.filterContent(data);
-            this.addChapterContentToCache({
-              bookUrl,
-              index: index,
-              title: chapterName,
-              content: res.data.data,
-              error: false
-            });
-            this.loading.close();
-            this.error = false;
-            this.show = true;
-            this.$emit("showContent");
-            if (this.singlePageDwellTimer) {
-              clearTimeout(this.singlePageDwellTimer);
-              this.singlePageDwellTimer = null;
+      this.getBookContent(chapterIndex, {}, refresh)
+        .then(
+          res => {
+            if (
+              bookUrl !== this.$store.getters.readingBook.bookUrl ||
+              index !== this.$store.getters.readingBook.index
+            ) {
+              // 已经换书或者换章节了
+              return;
             }
-            // 若为单页内容（或用户持续在该章节阅读），停留阅读超过 6 秒后，判定已阅读 1/3 并触发预读后续 1 章
-            this.singlePageDwellTimer = setTimeout(() => {
-              this.checkReadingProgress();
-            }, 6000);
-          } else {
-            this.content = "获取章节内容失败！\n" + res.data.errorMsg;
+            if (now + 100 > new Date().getTime()) {
+              // 不超过 100ms 假定为获取缓存，此时发送进度保存请求
+              this.saveBookProgress();
+            }
+            try {
+              if (res.data.isSuccess) {
+                let data = res.data.data;
+                this.content = this.filterContent(data);
+                this.addChapterContentToCache({
+                  bookUrl,
+                  index: index,
+                  title: chapterName,
+                  content: res.data.data,
+                  error: false
+                });
+                this.error = false;
+                this.show = true;
+                this.$emit("showContent");
+                if (this.singlePageDwellTimer) {
+                  clearTimeout(this.singlePageDwellTimer);
+                  this.singlePageDwellTimer = null;
+                }
+                // 若为单页内容（或用户持续在该章节阅读），停留阅读超过 6 秒后，判定已阅读 1/3 并触发预读后续 1 章
+                this.singlePageDwellTimer = setTimeout(() => {
+                  this.checkReadingProgress();
+                }, 6000);
+              } else {
+                this.content = "获取章节内容失败！\n" + res.data.errorMsg;
+                this.addChapterContentToCache({
+                  bookUrl,
+                  index: index,
+                  title: chapterName,
+                  content: "获取章节内容失败！\n" + res.data.errorMsg,
+                  error: true
+                });
+                this.error = true;
+                this.show = true;
+                this.$emit("showContent");
+              }
+            } catch (err) {
+              this.content = "解析章节内容失败！\n" + err.toString();
+              this.error = true;
+              this.show = true;
+              this.$emit("showContent");
+            }
+            if (this.isScrollRead) {
+              this.computeShowChapterList();
+            }
+          },
+          error => {
+            if (
+              bookUrl !== this.$store.getters.readingBook.bookUrl ||
+              index !== this.$store.getters.readingBook.index
+            ) {
+              // 已经换书或者换章节了
+              return;
+            }
+            this.content = "获取章节内容失败！\n" + (error && error.toString());
             this.addChapterContentToCache({
               bookUrl,
               index: index,
               title: chapterName,
-              content: "获取章节内容失败！\n" + res.data.errorMsg,
+              content: "获取章节内容失败！\n" + (error && error.toString()),
               error: true
             });
             this.error = true;
             this.show = true;
             this.$emit("showContent");
+            this.$message.error(
+              "获取章节内容失败 " + (error && error.toString())
+            );
+            if (this.isScrollRead) {
+              this.computeShowChapterList();
+            }
+          }
+        )
+        .finally(() => {
+          if (this.loadingSafetyTimer) {
+            clearTimeout(this.loadingSafetyTimer);
+            this.loadingSafetyTimer = null;
+          }
+          if (this.loading && typeof this.loading.close === "function") {
             this.loading.close();
           }
-          if (this.isScrollRead) {
-            this.computeShowChapterList();
-          }
-        },
-        error => {
-          if (
-            bookUrl !== this.$store.getters.readingBook.bookUrl ||
-            index !== this.$store.getters.readingBook.index
-          ) {
-            // 已经换书或者换章节了
-            return;
-          }
-          this.content = "获取章节内容失败！\n" + (error && error.toString());
-          this.addChapterContentToCache({
-            bookUrl,
-            index: index,
-            title: chapterName,
-            content: "获取章节内容失败！\n" + (error && error.toString()),
-            error: true
-          });
-          this.error = true;
-          this.show = true;
-          this.$emit("showContent");
-          this.loading.close();
-          this.$message.error(
-            "获取章节内容失败 " + (error && error.toString())
-          );
-          if (this.isScrollRead) {
-            this.computeShowChapterList();
-          }
-          throw error;
-        }
-      );
+        });
     },
     filterContent(content) {
       if (this.isEpub || this.isAudio) {

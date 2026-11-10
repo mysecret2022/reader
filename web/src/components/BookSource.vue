@@ -86,7 +86,7 @@
 <script>
 import jump from "../plugins/jump";
 import Axios from "../plugins/axios";
-const buildURL = require("axios/lib/helpers/buildURL");
+import { buildURL } from "../plugins/helper";
 
 export default {
   name: "BookSource",
@@ -364,13 +364,20 @@ export default {
       };
       this.loadingMore = true;
 
-      const url = buildURL(this.api + "/searchBookSourceSSE", params);
+      try {
+        const url = buildURL(this.api + "/searchBookSourceSSE", params);
 
-      tryClose();
+        tryClose();
 
-      this.searchEventSource = new EventSource(url, {
-        withCredentials: true
-      });
+        this.searchEventSource = new EventSource(url, {
+          withCredentials: true
+        });
+      } catch (err) {
+        this.loadingMore = false;
+        tryClose();
+        this.$message.error("发起换源检索失败，请重试");
+        return;
+      }
       this.searchEventSource.addEventListener("error", e => {
         this.loadingMore = false;
         tryClose();

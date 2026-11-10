@@ -850,8 +850,7 @@ import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
 import { setCache, getCache } from "../plugins/cache";
 import eventBus from "../plugins/eventBus";
-import { formatSize, LimitResquest } from "../plugins/helper";
-const buildURL = require("axios/lib/helpers/buildURL");
+import { formatSize, LimitResquest, buildURL } from "../plugins/helper";
 import { isInContainer } from "element-ui/src/utils/dom";
 import Vue from "vue";
 
@@ -1142,7 +1141,6 @@ export default {
       }
 
       // 2. 启动 SSE 在线全网书源实时扫描拉取最新封面
-      const buildURL = require("axios/lib/helpers/buildURL");
       const params = {
         name: book.name,
         author: book.author || "",

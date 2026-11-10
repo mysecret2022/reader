@@ -226,3 +226,27 @@ export const removeFont = function(fontName) {
     node.remove();
   }
 };
+
+export const buildURL = function(url, params) {
+  if (!params) {
+    return url;
+  }
+  const parts = [];
+  Object.keys(params).forEach(key => {
+    const val = params[key];
+    if (val === null || typeof val === "undefined") {
+      return;
+    }
+    if (Array.isArray(val)) {
+      val.forEach(v => {
+        parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(v));
+      });
+    } else {
+      parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(val));
+    }
+  });
+  if (parts.length > 0) {
+    url += (url.indexOf("?") === -1 ? "?" : "&") + parts.join("&");
+  }
+  return url;
+};
