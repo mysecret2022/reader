@@ -70,6 +70,9 @@ try {
     window.deferredPrompt = null;
     window.__deferredPrompt = null;
     store.commit("setPwaInstallPrompt", null);
+    if (Vue.prototype.$message) {
+      Vue.prototype.$message.success("应用已成功安装到桌面！");
+    }
   });
 
   Vue.config.productionTip = false;
@@ -84,12 +87,15 @@ try {
         return this.$store.getters.api;
       },
       isWebApp() {
-        return window.navigator.standalone;
+        return Boolean(window.navigator && window.navigator.standalone);
       },
       isPWA() {
-        return ["fullscreen", "standalone", "minimal-ui"].some(
-          displayMode =>
-            window.matchMedia("(display-mode: " + displayMode + ")").matches
+        return Boolean(
+          window.matchMedia &&
+            ["fullscreen", "standalone", "minimal-ui"].some(
+              displayMode =>
+                window.matchMedia("(display-mode: " + displayMode + ")").matches
+            )
         );
       },
       canInstallPwa() {
@@ -119,13 +125,15 @@ try {
         try {
           if (typeof promptEvent.prompt === "function") {
             await promptEvent.prompt();
+            // 原生 BeforeInstallPromptEvent.prompt() 仅允许调用一次，调用后立即置空状态，防止重复调用抛出异常
+            this.$store.commit("setPwaInstallPrompt", null);
+            window.deferredPrompt = null;
+            window.__deferredPrompt = null;
+
             if (promptEvent.userChoice) {
               const choiceResult = await promptEvent.userChoice;
               if (choiceResult && choiceResult.outcome === "accepted") {
                 this.$message.success("正在添加到手机桌面...");
-                this.$store.commit("setPwaInstallPrompt", null);
-                window.deferredPrompt = null;
-                window.__deferredPrompt = null;
               } else {
                 this.$message.info("已取消安装");
               }
@@ -136,6 +144,9 @@ try {
             );
           }
         } catch (err) {
+          this.$store.commit("setPwaInstallPrompt", null);
+          window.deferredPrompt = null;
+          window.__deferredPrompt = null;
           console.error("PWA install error:", err);
           this.$message.error("唤起安装失败: " + (err.message || err));
         }

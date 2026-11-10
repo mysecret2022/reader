@@ -262,7 +262,7 @@
         <div class="shelf-title-actions">
           <div
             class="title-btn pwa-install-title-btn"
-            v-if="canInstallPwa"
+            v-if="canInstallPwa && !isSearchResult"
             @click="installPwa"
           >
             📲 安装到手机桌面
@@ -3581,6 +3581,7 @@ export default {
     .pwa-install-title-btn {
       color: #67c23a;
       font-weight: bold;
+      white-space: nowrap;
       transition: all 0.3s ease;
       &:hover {
         opacity: 0.8;
@@ -3791,6 +3792,9 @@ export default {
   }
   >>>.shelf-wrapper {
     background-color: #222;
+  }
+  >>>.pwa-install-title-btn {
+    color: #85ce61;
   }
   >>>.pwa-install-banner {
     background: linear-gradient(135deg, rgba(64, 158, 255, 0.08) 0%, rgba(103, 194, 58, 0.08) 100%);
@@ -4010,6 +4014,15 @@ export default {
 
       .shelf-title {
         padding: 20px 24px 0 24px;
+
+        .shelf-title-actions {
+          gap: 8px;
+
+          .pwa-install-title-btn {
+            font-size: 13px;
+            white-space: nowrap;
+          }
+        }
       }
 
       .pwa-install-banner {
