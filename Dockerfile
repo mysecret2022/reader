@@ -1,22 +1,21 @@
 FROM eclipse-temurin:11-jre
 
-# 安装 tini 进程守护、时区以及 Python3 和微软语音支撑环境
+# 安装 tini 进程守护、时区与 CA 证书
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini tzdata ca-certificates python3 python3-pip \
-    && pip install --no-cache-dir --break-system-packages edge-tts \
+    && apt-get install -y --no-install-recommends tini tzdata ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# 设置默认上海时区
-ENV TZ=Asia/Shanghai
+# 设置默认上海时区与默认 JVM 内存控制参数（初始 128M，最大 350M，启用 G1 垃圾回收与字符串去重）
+ENV TZ=Asia/Shanghai \
+    JAVA_OPTS="-Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication"
 
 WORKDIR /app
 
-# 拷贝包含可执行 JAR 包、微软 Edge TTS 语音服务与启动入口
+# 拷贝可执行 JAR 包与启动入口
 COPY build/libs/reader-*.jar /app/bin/reader.jar
-COPY server/bin/tts_server.py /app/bin/tts_server.py
 COPY entrypoint.sh /app/entrypoint.sh
 
-RUN chmod +x /app/entrypoint.sh /app/bin/tts_server.py
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8080
 

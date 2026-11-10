@@ -72,28 +72,28 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "browsertest.html"
   },
   {
-    "revision": "38606d3ffc11c69dc363",
+    "revision": "6e164a9e22121b3baf58",
     "url": "css/admin.7d693403.css"
   },
   {
-    "revision": "11f50f6e3c79806a33d7",
+    "revision": "dfe0338b2f213d42b622",
     "url": "css/admin~index.d55d2547.css"
   },
   {
-    "revision": "263b1f71364e35587c30",
+    "revision": "4a24da04e72bac33c69f",
     "url": "css/app.055f48cc.css"
   },
   {
-    "revision": "e0323b1fc2f85a84a8b7",
+    "revision": "4883febb6e355826041e",
     "url": "css/chunk-vendors.7c015469.css"
   },
   {
-    "revision": "8f057bbd7efe663b3337",
+    "revision": "b18281f374623a74f1b4",
     "url": "css/index.43cf8bfd.css"
   },
   {
-    "revision": "0d7a4d040d8e0daeec65",
-    "url": "css/reader.53baaaa1.css"
+    "revision": "02e0e338401a3950e998",
+    "url": "css/reader.fdb39d77.css"
   },
   {
     "revision": "df863889d631065094e569d3d1143504",
@@ -1364,32 +1364,28 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "img/noImage.7443b2ba.png"
   },
   {
-    "revision": "38606d3ffc11c69dc363",
-    "url": "js/admin.777779b0.js"
+    "revision": "6e164a9e22121b3baf58",
+    "url": "js/admin.79204ac3.js"
   },
   {
-    "revision": "11f50f6e3c79806a33d7",
-    "url": "js/admin~index.05ca1b6e.js"
+    "revision": "dfe0338b2f213d42b622",
+    "url": "js/admin~index.12bc6d6e.js"
   },
   {
-    "revision": "263b1f71364e35587c30",
-    "url": "js/app.4e913bd9.js"
+    "revision": "4a24da04e72bac33c69f",
+    "url": "js/app.7c42ff60.js"
   },
   {
-    "revision": "e0323b1fc2f85a84a8b7",
-    "url": "js/chunk-vendors.affecf97.js"
+    "revision": "4883febb6e355826041e",
+    "url": "js/chunk-vendors.776f9f11.js"
   },
   {
-    "revision": "8f057bbd7efe663b3337",
-    "url": "js/index.06ef2f97.js"
+    "revision": "b18281f374623a74f1b4",
+    "url": "js/index.b2bb1326.js"
   },
   {
-    "revision": "971a8dabb3206b93b71c",
-    "url": "js/index~reader.930f1039.js"
-  },
-  {
-    "revision": "0d7a4d040d8e0daeec65",
-    "url": "js/reader.d6a1d391.js"
+    "revision": "02e0e338401a3950e998",
+    "url": "js/reader.c62531ac.js"
   },
   {
     "revision": "f0d07c276d4b9114ca5639c2417340b9",

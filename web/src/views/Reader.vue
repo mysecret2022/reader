@@ -604,7 +604,6 @@ import {
 } from "../plugins/helper";
 import { defaultReplaceRule, defaultBookmark } from "../plugins/config.js";
 import eventBus from "../plugins/eventBus";
-import { TTSQueuePlayer } from "../plugins/ttsQueuePlayer";
 // eslint-disable-next-line no-useless-escape
 const symboRegex = /[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&\(\)*+,-\./:;<=>?@\[\]^_`{\|}~，。？《》；：、«]/g;
 
@@ -904,11 +903,7 @@ export default {
       voiceList: [],
       speechSpeaking: false,
       showSpeechConfig: true,
-      edgeAudio: null,
-      ttsQueuePlayer: null,
-      loadingNextChapterForSpeech: false,
       speechParagraphIndex: -1,
-      audioPreloadCache: {},
 
       currentParagraph: null,
 
@@ -2933,56 +2928,6 @@ export default {
       }
     },
     fetchVoiceList() {
-      const msVoices = [
-        {
-          id: "zh-CN-XiaoxiaoNeural",
-          name: "晓晓 (女声·小说优选)",
-          isEdge: true,
-          lang: "zh-CN"
-        },
-        {
-          id: "zh-CN-YunxiNeural",
-          name: "云希 (男声·生动多情)",
-          isEdge: true,
-          lang: "zh-CN"
-        },
-        {
-          id: "zh-CN-YunjianNeural",
-          name: "云健 (男声·热血沉稳)",
-          isEdge: true,
-          lang: "zh-CN"
-        },
-        {
-          id: "zh-CN-XiaoyiNeural",
-          name: "晓伊 (女声·灵动甜美)",
-          isEdge: true,
-          lang: "zh-CN"
-        },
-        {
-          id: "zh-CN-YunyangNeural",
-          name: "云扬 (男声·专业播音)",
-          isEdge: true,
-          lang: "zh-CN"
-        },
-        {
-          id: "zh-CN-liaoning-XiaobeiNeural",
-          name: "晓北 (东北女声·幽默)",
-          isEdge: true,
-          lang: "zh-CN"
-        },
-        {
-          id: "zh-HK-HiuMaanNeural",
-          name: "晓曼 (粤语女声·标准)",
-          isEdge: true,
-          lang: "zh-HK"
-        },
-        {
-          id: "zh-TW-HsiaoChenNeural",
-          name: "晓臻 (国语女声·台湾)",
-          isEdge: true,
-          lang: "zh-TW"
-        }
-      ];
       let localVoices = [];
       if (window.speechSynthesis && window.speechSynthesis.getVoices) {
         // 本地系统语音仅保留：中文普通话、粤语、英语各精选语音，其他外语一概过滤
@@ -3088,8 +3033,8 @@ export default {
         });
       }
 
-      // 本地语音置顶排在最前作为默认首选，Edge 在线语音紧随其后
-      this.voiceList = [...localVoices, ...msVoices];
+      // 本地高质量系统语音
+      this.voiceList = localVoices;
       if (!this.voiceName && this.voiceList.length) {
         this.voiceName = this.voiceList[0].name;
       }
@@ -3124,38 +3069,6 @@ export default {
       return Array.from(list).filter(
         el => el && el.innerText && el.innerText.trim().length > 0
       );
-    },
-    preloadNextAudios(list, currentIndex, voice) {
-      if (!voice || !voice.isEdge || !list || !list.length) return;
-      for (let k = 1; k <= 2; k++) {
-        const nextIdx = currentIndex + k;
-        if (nextIdx < list.length) {
-          const nextText = list[nextIdx].innerText.trim();
-          if (nextText) {
-            const cacheKey = `${voice.id}_${this.speechRate}_${this.speechPitch}_${nextText}`;
-            if (!this.audioPreloadCache[cacheKey]) {
-              const url = `${this.api}/tts?text=${encodeURIComponent(
-                nextText
-              )}&voice=${encodeURIComponent(voice.id)}&rate=${
-                this.speechRate
-              }&pitch=${this.speechPitch}`;
-              fetch(url)
-                .then(res => {
-                  if (res.ok) return res.blob();
-                  return null;
-                })
-                .then(blob => {
-                  if (blob) {
-                    this.audioPreloadCache[cacheKey] = URL.createObjectURL(
-                      blob
-                    );
-                  }
-                })
-                .catch(() => {});
-            }
-          }
-        }
-      }
     },
     startSpeech(targetIndex) {
       if (this.error) {
@@ -3209,138 +3122,37 @@ export default {
       this.speechSpeaking = true;
       this.skipAutoNext = false;
 
-      if (voice.isEdge) {
-        if (!this.ttsQueuePlayer) {
-          this.ttsQueuePlayer = new TTSQueuePlayer({
-            apiBase: this.api,
-            voice: voice.id,
-            rate: this.speechRate,
-            pitch: this.speechPitch,
-            bookName: this.$store.getters.readingBook
-              ? this.$store.getters.readingBook.name
-              : "Reader",
-            title: this.title || "正文朗读",
-            onChunkStart: () => {
-              if (this.speechParagraphIndex < paragraphs.length) {
-                const curP = paragraphs[this.speechParagraphIndex];
-                if (curP) {
-                  paragraphs.forEach(p => {
-                    if (p !== curP && p.className.includes("reading")) {
-                      p.className = p.className
-                        .replace(/\breading\b/g, "")
-                        .trim();
-                    }
-                  });
-                  curP.className = "reading";
-                  this.showParagraph(curP, true);
-                }
-              }
-            },
-            onChunkEnd: () => {
-              if (this.speechParagraphIndex + 1 < paragraphs.length) {
-                this.speechParagraphIndex++;
-              }
-            },
-            onNearEnd: () => {
-              // 倒数第2块提前静默预加载下一章正文，避免 iOS 锁屏 Audio Session 断链
-              if (
-                !this.loadingNextChapterForSpeech &&
-                this.chapterIndex + 1 < (this.catalog ? this.catalog.length : 0)
-              ) {
-                this.loadingNextChapterForSpeech = true;
-                const nextChapter = this.catalog[this.chapterIndex + 1];
-                if (nextChapter && nextChapter.url) {
-                  this.getContent(nextChapter.url).then(
-                    () => {
-                      this.loadingNextChapterForSpeech = false;
-                    },
-                    () => {
-                      this.loadingNextChapterForSpeech = false;
-                    }
-                  );
-                }
-              }
-            },
-            onQueueEmpty: () => {
-              if (!this.skipAutoNext && this.speechSpeaking) {
-                this.$once("showContent", () => {
-                  setTimeout(() => {
-                    this.speechParagraphIndex = 0;
-                    this.startSpeech(0);
-                  }, 300);
-                });
-                this.toNextChapter();
-              }
-            },
-            onError: () => {
-              // 容错处理
-            }
-          });
-        } else {
-          this.ttsQueuePlayer.voice = voice.id;
-          this.ttsQueuePlayer.rate = this.speechRate;
-          this.ttsQueuePlayer.pitch = this.speechPitch;
-          this.ttsQueuePlayer.title = this.title || "正文朗读";
-          this.ttsQueuePlayer.bookName = this.$store.getters.readingBook
-            ? this.$store.getters.readingBook.name
-            : "Reader";
-        }
-
-        // 收集从当前段落到本章末尾的文本进行分块朗读
-        const remainingParagraphs = paragraphs.slice(idx);
-        const fullChapterText = remainingParagraphs
-          .map(p => p.innerText.trim())
-          .filter(t => t.length > 0)
-          .join("\n");
-
-        this.ttsQueuePlayer.loadText(fullChapterText, {
-          title: this.title || "正文朗读",
-          bookName: this.$store.getters.readingBook
-            ? this.$store.getters.readingBook.name
-            : "Reader"
-        });
-
-        // 触发播放 (内部包含 iOS 瞬时静音帧解锁与 Chunk[0] 极速出声)
-        this.ttsQueuePlayer.play();
-      } else {
-        if (window.speechSynthesis && window.speechSynthesis.speaking) {
-          window.speechSynthesis.cancel();
-        }
-        this.utterance = new SpeechSynthesisUtterance(paragraph.innerText);
-
-        this.utterance.onstart = () => {
-          this.speechSpeaking = true;
-          this.skipAutoNext = false;
-        };
-        this.utterance.onend = () => {
-          if (!this.skipAutoNext) {
-            this.speechNext();
-          } else {
-            this.skipAutoNext = false;
-            this.speechSpeaking = false;
-          }
-        };
-        this.utterance.onerror = () => {
-          this.speechSpeaking = false;
-        };
-        if (voice.nativeVoice) {
-          this.utterance.voice = voice.nativeVoice;
-        }
-        this.utterance.pitch = this.speechPitch;
-        this.utterance.rate = this.speechRate;
-        window.speechSynthesis.speak(this.utterance);
+      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
       }
+      this.utterance = new SpeechSynthesisUtterance(paragraph.innerText);
+
+      this.utterance.onstart = () => {
+        this.speechSpeaking = true;
+        this.skipAutoNext = false;
+      };
+      this.utterance.onend = () => {
+        if (!this.skipAutoNext) {
+          this.speechNext();
+        } else {
+          this.skipAutoNext = false;
+          this.speechSpeaking = false;
+        }
+      };
+      this.utterance.onerror = () => {
+        this.speechSpeaking = false;
+      };
+      if (voice.nativeVoice) {
+        this.utterance.voice = voice.nativeVoice;
+      }
+      this.utterance.pitch = this.speechPitch;
+      this.utterance.rate = this.speechRate;
+      window.speechSynthesis.speak(this.utterance);
     },
     stopSpeech() {
       try {
         this.skipAutoNext = true;
         this.speechSpeaking = false;
-        if (this.ttsQueuePlayer) {
-          this.ttsQueuePlayer.stop();
-        }
-        if (this.edgeAudio) {
-          this.edgeAudio.pause();
-        }
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }

@@ -18,11 +18,9 @@ elif [ -d /logs ] && [ ! -L /app/logs ]; then
 fi
 mkdir -p /app/logs /logs 2>/dev/null || true
 
-# 启动 Edge TTS 微软神经语音后台微服务（若存在）
-if [ -f /app/bin/tts_server.py ]; then
-    echo "Starting Microsoft Edge TTS microservice..."
-    python3 /app/bin/tts_server.py &
-fi
+# 默认 JVM 内存控制参数（初始堆 128M，最大堆 350M，启用 G1GC 与字符串去重）
+# 支持通过环境变量 JAVA_OPTS 灵活覆盖
+JAVA_OPTS="${JAVA_OPTS:--Xms128m -Xmx350m -XX:+UseG1GC -XX:+UseStringDeduplication}"
 
-# 启动阅读主服务
-exec java -jar /app/bin/reader.jar "$@"
+echo "Starting Reader with JAVA_OPTS: ${JAVA_OPTS}"
+exec java $JAVA_OPTS -jar /app/bin/reader.jar "$@"
