@@ -508,7 +508,7 @@ export default {
                     sourceName: name,
                     originName: name
                   });
-                  if (this.candidateCovers.length >= 10) {
+                  if (this.candidateCovers.length >= 5) {
                     stopSSE();
                     break;
                   }
@@ -519,7 +519,7 @@ export default {
           .catch(() => {});
       }
 
-      if (this.candidateCovers.length >= 10) {
+      if (this.candidateCovers.length >= 5) {
         this.loadingCovers = false;
         return;
       }
@@ -557,7 +557,7 @@ export default {
                     sourceName: name,
                     originName: name
                   });
-                  if (this.candidateCovers.length >= 10) {
+                  if (this.candidateCovers.length >= 5) {
                     stopSSE();
                     break;
                   }
