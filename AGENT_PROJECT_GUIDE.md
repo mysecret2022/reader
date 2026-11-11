@@ -85,12 +85,15 @@
      - 在 PC 端鼠标拖拽划选正文时，若划选时长超过 80ms，`selectionchange` 的 80ms 防抖定时器会在鼠标按键尚未松开时提前触发并渲染出操作弹窗（`textActionMenuVisible = true`）；当用户松开鼠标左键时，浏览器立即派发合成 `click` 点击事件打在正文容器 `handlerClick` 上，`handlerClick` 判定 `textActionMenuVisible === true` 立即调用 `closeTextActionMenu(true)` 将其秒关。
      - 若划选时长短于 80ms，合成 `click` 先于防抖定时器触发并下穿到 `eventHandler(e)`，导致意外触发上下翻页或唤起阅读菜单；
      - 原有逻辑在弹出与关闭时无条件执行 `removeAllRanges()`，虽抑制了移动端原生弹窗，但导致 PC 端原生文字蓝色高亮丢失并破坏了键盘 `Ctrl+C` 原生快捷复制体验。
+     - 原有事件拦截机制中直接将 `ignoreNextClick = true` 置位并 `return`，但未配置超时自愈机制，导致后续正常点击（如点击翻页或唤起菜单）被意外吞没，用户需要双击甚至三击才能翻页；
+     - `textActionMenuVisible` 在 `watch` 中注册的全局 `pointerdown` 监听器为匿名函数，在按钮点击或组件卸载时无法解绑，形成事件泄漏与幽灵拦截。
    - **解决方案**：
      - 严格隔离移动端触屏与 PC 鼠标交互链路：保持移动端触控路径（`handleTouchStart`/`handleTouchMove`/`handleTouchEnd`）100% 不变；
      - 在 `.content` 正文容器监听 `@mousedown="handleContentMouseDown"`，鼠标左键按下时置位 `isMouseDown = true` 并重置 `justSelectedOnPC = false`；在 `mounted` 及 `activated` 注册全局 `window.addEventListener("mouseup", this.handleGlobalMouseUp)` 确保在视口任何位置抬手均能可靠重置 `isMouseDown = false`，并在 `beforeDestroy`/`deactivated` 妥善清理；
      - 在 `handleSelectionChange` 中增加 `if (this.isTouchActive || this.isMouseDown) return;` 门禁，彻底杜绝鼠标拖拽划选中途提前触发防抖弹窗；
-     - 在 `handleGlobalMouseUp` 中检测非移动端/触屏下的有效正文选区，置位 `justSelectedOnPC = true` 并触发弹窗显示；
-     - 在 `handlerClick` 头部优先拦截 `if (this.justSelectedOnPC)`，安全吸收划选释放后的合成 `click` 事件并重置状态，既杜绝弹窗秒关，又彻底避免误翻页与误唤菜单；
+     - 在 `handleGlobalMouseUp` 中增加 `wasMouseDown` 严格来源校验与 `selectionChangeTimer` 清理，检测非移动端/触屏下的有效正文选区，置位 `justSelectedOnPC = true`（配合 200ms 超时防呆）并触发弹窗显示；
+     - 在 `handlerClick` 头部优先拦截 `if (this.justSelectedOnPC)`，安全吸收划选释放后的合成 `click` 事件并增加 150ms 超时重置 `ignoreNextClick = false`，既杜绝弹窗秒关，又彻底避免误翻页与后续点击被误吞；
+     - 气泡菜单容器增加 `@mousedown.stop` 阻断内部按钮点击穿透至正文；并对全局 `pointerdown` 监听与定时器引入集中句柄管理，在关闭、失活与销毁时百分之百释放；
      - 仅在移动端 (`this.isMobile || this.isTouchActive`) 提取选区后执行 `removeAllRanges()` 压制系统菜单，PC 端保留原生蓝色选区高亮并完美支持 `Ctrl+C`。
 
 ---

@@ -535,6 +535,7 @@
             left: textActionMenuPos.left + 'px'
           }"
           @click.stop
+          @mousedown.stop
         >
           <div
             class="text-action-btn"
@@ -837,8 +838,29 @@ export default {
     }
     document.removeEventListener("selectionchange", this.handleSelectionChange);
     window.removeEventListener("mouseup", this.handleGlobalMouseUp);
+    if (this.textActionMenuCloseHandler) {
+      document.removeEventListener(
+        "pointerdown",
+        this.textActionMenuCloseHandler,
+        true
+      );
+      this.textActionMenuCloseHandler = null;
+    }
+    if (this.textActionMenuTimer) {
+      clearTimeout(this.textActionMenuTimer);
+      this.textActionMenuTimer = null;
+    }
+    if (this.justSelectedOnPCTimer) {
+      clearTimeout(this.justSelectedOnPCTimer);
+      this.justSelectedOnPCTimer = null;
+    }
+    if (this.ignoreNextClickTimer) {
+      clearTimeout(this.ignoreNextClickTimer);
+      this.ignoreNextClickTimer = null;
+    }
     this.isMouseDown = false;
     this.justSelectedOnPC = false;
+    this.ignoreNextClick = false;
     if (this.selectionChangeTimer) {
       clearTimeout(this.selectionChangeTimer);
       this.selectionChangeTimer = null;
@@ -847,8 +869,29 @@ export default {
   beforeDestroy() {
     document.removeEventListener("selectionchange", this.handleSelectionChange);
     window.removeEventListener("mouseup", this.handleGlobalMouseUp);
+    if (this.textActionMenuCloseHandler) {
+      document.removeEventListener(
+        "pointerdown",
+        this.textActionMenuCloseHandler,
+        true
+      );
+      this.textActionMenuCloseHandler = null;
+    }
+    if (this.textActionMenuTimer) {
+      clearTimeout(this.textActionMenuTimer);
+      this.textActionMenuTimer = null;
+    }
+    if (this.justSelectedOnPCTimer) {
+      clearTimeout(this.justSelectedOnPCTimer);
+      this.justSelectedOnPCTimer = null;
+    }
+    if (this.ignoreNextClickTimer) {
+      clearTimeout(this.ignoreNextClickTimer);
+      this.ignoreNextClickTimer = null;
+    }
     this.isMouseDown = false;
     this.justSelectedOnPC = false;
+    this.ignoreNextClick = false;
     if (this.selectionChangeTimer) {
       clearTimeout(this.selectionChangeTimer);
       this.selectionChangeTimer = null;
@@ -857,10 +900,22 @@ export default {
   watch: {
     textActionMenuVisible(val) {
       if (val) {
+        if (this.textActionMenuTimer) {
+          clearTimeout(this.textActionMenuTimer);
+          this.textActionMenuTimer = null;
+        }
+        if (this.textActionMenuCloseHandler) {
+          document.removeEventListener(
+            "pointerdown",
+            this.textActionMenuCloseHandler,
+            true
+          );
+          this.textActionMenuCloseHandler = null;
+        }
         // 延迟绑定全局点击关闭监听，彻底避开同一次抬手手势派发的微任务合成 pointerdown 事件，杜绝瞬间误关
-        setTimeout(() => {
+        this.textActionMenuTimer = setTimeout(() => {
           if (!this.textActionMenuVisible) return;
-          const closeHandler = e => {
+          this.textActionMenuCloseHandler = e => {
             if (
               this.$refs.textActionMenuRef &&
               this.$refs.textActionMenuRef.contains(e.target)
@@ -868,10 +923,26 @@ export default {
               return;
             }
             this.closeTextActionMenu(true);
-            document.removeEventListener("pointerdown", closeHandler, true);
           };
-          document.addEventListener("pointerdown", closeHandler, true);
+          document.addEventListener(
+            "pointerdown",
+            this.textActionMenuCloseHandler,
+            true
+          );
         }, 220);
+      } else {
+        if (this.textActionMenuCloseHandler) {
+          document.removeEventListener(
+            "pointerdown",
+            this.textActionMenuCloseHandler,
+            true
+          );
+          this.textActionMenuCloseHandler = null;
+        }
+        if (this.textActionMenuTimer) {
+          clearTimeout(this.textActionMenuTimer);
+          this.textActionMenuTimer = null;
+        }
       }
     },
     chapterName(to) {
@@ -1059,9 +1130,13 @@ export default {
       isDismissingMenu: false,
       isTextSelecting: false,
 
-      // PC 鼠标文本选择状态跟踪
+      // PC 鼠标文本选择状态跟踪与弹窗清理句柄
       isMouseDown: false,
-      justSelectedOnPC: false
+      justSelectedOnPC: false,
+      textActionMenuCloseHandler: null,
+      textActionMenuTimer: null,
+      justSelectedOnPCTimer: null,
+      ignoreNextClickTimer: null
     };
   },
   computed: {
@@ -2288,15 +2363,36 @@ export default {
       if (this.justSelectedOnPC) {
         this.justSelectedOnPC = false;
         this.ignoreNextClick = true;
+        if (this.ignoreNextClickTimer) {
+          clearTimeout(this.ignoreNextClickTimer);
+        }
+        this.ignoreNextClickTimer = setTimeout(() => {
+          this.ignoreNextClick = false;
+          this.ignoreNextClickTimer = null;
+        }, 150);
         return;
       }
       if (this.textActionMenuVisible) {
         this.closeTextActionMenu(true);
         this.ignoreNextClick = true;
+        if (this.ignoreNextClickTimer) {
+          clearTimeout(this.ignoreNextClickTimer);
+        }
+        this.ignoreNextClickTimer = setTimeout(() => {
+          this.ignoreNextClick = false;
+          this.ignoreNextClickTimer = null;
+        }, 150);
         return;
       }
       if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
         this.ignoreNextClick = true;
+        if (this.ignoreNextClickTimer) {
+          clearTimeout(this.ignoreNextClickTimer);
+        }
+        this.ignoreNextClickTimer = setTimeout(() => {
+          this.ignoreNextClick = false;
+          this.ignoreNextClickTimer = null;
+        }, 150);
         return;
       }
       if (this.isEpub) {
@@ -2445,13 +2541,21 @@ export default {
       if (e.button === 0) {
         this.isMouseDown = true;
         this.justSelectedOnPC = false;
+        if (this.justSelectedOnPCTimer) {
+          clearTimeout(this.justSelectedOnPCTimer);
+          this.justSelectedOnPCTimer = null;
+        }
       }
     },
     handleMouseUp() {
       // PC 鼠标抬起事件统一由全局 handleGlobalMouseUp 处理
     },
     handleGlobalMouseUp(e) {
+      const wasMouseDown = this.isMouseDown;
       this.isMouseDown = false;
+      if (!wasMouseDown) {
+        return;
+      }
       if (this.isMobile || this.isTouchActive) {
         return;
       }
@@ -2490,7 +2594,18 @@ export default {
           return;
         }
       }
+      if (this.selectionChangeTimer) {
+        clearTimeout(this.selectionChangeTimer);
+        this.selectionChangeTimer = null;
+      }
       this.justSelectedOnPC = true;
+      if (this.justSelectedOnPCTimer) {
+        clearTimeout(this.justSelectedOnPCTimer);
+      }
+      this.justSelectedOnPCTimer = setTimeout(() => {
+        this.justSelectedOnPC = false;
+        this.justSelectedOnPCTimer = null;
+      }, 200);
       this.checkAndTriggerSelection();
     },
     handleTouchEnd() {
@@ -2871,6 +2986,18 @@ export default {
       this.textActionMenuVisible = false;
       this.lastSelection = null;
       this.isTextSelecting = false;
+      if (this.textActionMenuCloseHandler) {
+        document.removeEventListener(
+          "pointerdown",
+          this.textActionMenuCloseHandler,
+          true
+        );
+        this.textActionMenuCloseHandler = null;
+      }
+      if (this.textActionMenuTimer) {
+        clearTimeout(this.textActionMenuTimer);
+        this.textActionMenuTimer = null;
+      }
       if (clearHighlight) {
         this.selectionHighlightRects = [];
       }
