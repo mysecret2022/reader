@@ -19,4 +19,5 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '0.8' # 核心占用硬限制不超过 80%，为单核 VPS 预留 20% 算力保障 SSH 顺畅与防宕机
           memory: 512M # 物理内存硬限制，防止内存泄漏或过度膨胀
