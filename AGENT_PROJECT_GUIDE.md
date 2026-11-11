@@ -70,6 +70,15 @@
 4. **管理控制台默认配置版本号回退值过旧**：
    - **原因**：`Admin.vue` 中 `systemConfig.version` 缺省 fallback 为 `2.0.1`。
    - **解决方案**：同步升级为 `2.1.0`。
+5. **主页 F5 刷新重复拉取所有封面图片与浏览器缓存失效**：
+   - **原因**：后端在返回封面图片与文件时，响应头使用了非法格式 `Cache-Control: 86400`（缺少 `public, max-age=` 前缀），违反 RFC 7234/9111 规范。浏览器将其判定为无效头而完全不缓存，每次 F5 刷新时视口内所有小说封面都重新发起网络下载。
+   - **解决方案**：在 `BookController.kt` 与 `WebdavController.kt` 中规范化缓存控制头为 `Cache-Control: public, max-age=86400`，图片一次加载后直接从浏览器本地强缓存读取，F5 刷新秒开零网络开销。
+6. **手动修改小说封面时持续转圈无限拉取**：
+   - **原因**：前端 `Index.vue` 与 `BookManage.vue` 在换封面时，判断现有可用封面数量的代码在异步书源请求完成前被同步执行，导致无条件发起全网 SSE 长连接扫描；若全网可用封面少于 5 张，需空等 10 秒超时；且关闭弹窗或点击选定封面后未切断 SSE 连接，后台持续并发请求失效的第三方图床死链。
+   - **解决方案**：改为 `async/await` 优先读取本地书源；满足 3 张候选封面即停止后续全网扫描；增加统一的 `stopCoverSSE()` 管理，弹窗关闭 (`closeCoverPicker`)、选定封面 (`applyCover`) 及组件销毁 (`beforeDestroy`) 时立即切断长连接并清理定时器，安全超时缩短至 6 秒。
+7. **登录界面账号密码框首次点击光标无法准确定位**：
+   - **原因**：胶囊型输入外层为普通 `<div>`，左侧存在 43px 的内边距与图标区域。图标未设置穿透，点击打在图标或空白区时事件不转发给内部 `<input>`，导致首次点击无效，用户需二次点击靠右文本区；同时 placeholder 在获得焦点时瞬间设置 `visibility: hidden` 引发 Shadow DOM 重新排版导致光标微抖动。
+   - **解决方案**：将输入外层替换为原生语义化 `<label class="input-wrapper">` 并设置 `cursor: text`；图标增加 `pointer-events: none; user-select: none;`；移除 placeholder 的 `visibility: hidden` 仅保留 `opacity: 0` 平滑过渡；并在页面挂载时自动聚焦到用户名输入框。
 
 ---
 

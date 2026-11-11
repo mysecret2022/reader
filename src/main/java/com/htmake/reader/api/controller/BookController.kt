@@ -199,7 +199,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var cacheFile = File(cachePath)
         if (cacheFile.exists()) {
             logger.info("send cache: {}", cacheFile)
-            context.response().putHeader("Cache-Control", "86400").sendFile(cacheFile.toString())
+            context.response().putHeader("Cache-Control", "public, max-age=86400").sendFile(cacheFile.toString())
             return;
         }
 
@@ -211,7 +211,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             webClient.getAbs(coverUrl).timeout(3000).send {
                 var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
                 if (bodyBytes != null) {
-                    var res = context.response().putHeader("Cache-Control", "86400")
+                    var res = context.response().putHeader("Cache-Control", "public, max-age=86400")
                     cacheFile.writeBytes(bodyBytes)
                     res.sendFile(cacheFile.toString())
                 } else {
@@ -2658,7 +2658,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             context.success(returnData.setErrorMsg("路径不存在"))
             return
         }
-        context.response().putHeader("Cache-Control", "86400")
+        context.response().putHeader("Cache-Control", "public, max-age=86400")
                         .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(file.name, "UTF-8"))
                         .sendFile(file.toString())
     }
@@ -3011,7 +3011,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
         if (bookInfo.isLocalBook()) {
             val localFile = bookInfo.getLocalFile()
-            context.response().putHeader("Cache-Control", "300")
+            context.response().putHeader("Cache-Control", "public, max-age=300")
                             .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(localFile.name, "UTF-8"))
                             .sendFile(localFile.toString())
             return
@@ -3028,7 +3028,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             exportToTxt(exportDir, bookInfo, bookSource, userNameSpace)
         }
-        context.response().putHeader("Cache-Control", "300")
+        context.response().putHeader("Cache-Control", "public, max-age=300")
                         .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(bookFile.name, "UTF-8"))
                         .sendFile(bookFile.toString())
     }

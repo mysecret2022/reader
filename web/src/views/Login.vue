@@ -61,12 +61,13 @@
       <!-- 表单区域 -->
       <form @submit.prevent="handleSubmit" class="login-form">
         <!-- 账号 -->
-        <div
+        <label
           class="input-wrapper"
           :class="{ focused: usernameFocus || loginForm.username }"
         >
           <span class="input-icon"><i class="el-icon-user"></i></span>
           <input
+            ref="usernameInput"
             type="text"
             v-model="loginForm.username"
             placeholder="请输入账号"
@@ -78,10 +79,10 @@
             @focus="usernameFocus = true"
             @blur="usernameFocus = false"
           />
-        </div>
+        </label>
 
         <!-- 密码 -->
-        <div
+        <label
           class="input-wrapper"
           :class="{ focused: passwordFocus || loginForm.password }"
         >
@@ -99,16 +100,16 @@
           <button
             type="button"
             class="input-action-btn"
-            @click="showPassword = !showPassword"
+            @click.stop="showPassword = !showPassword"
             :title="showPassword ? '隐藏密码' : '显示密码'"
           >
             <i :class="showPassword ? 'el-icon-view' : 'el-icon-lock'"></i>
           </button>
-        </div>
+        </label>
 
         <!-- 注册邀请码 (注册时展开) -->
         <transition name="fade">
-          <div
+          <label
             class="input-wrapper"
             v-if="!isLogin"
             :class="{ focused: codeFocus || loginForm.code }"
@@ -123,7 +124,7 @@
               @focus="codeFocus = true"
               @blur="codeFocus = false"
             />
-          </div>
+          </label>
         </transition>
 
         <!-- 记住状态与操作 -->
@@ -202,6 +203,13 @@ export default {
         code: ""
       }
     };
+  },
+  mounted() {
+    this.$nextTick(() => {
+      if (this.$refs.usernameInput && !this.loginForm.username) {
+        this.$refs.usernameInput.focus();
+      }
+    });
   },
   methods: {
     switchMode(isLogin) {
@@ -474,6 +482,7 @@ export default {
   padding: 0 14px;
   backdrop-filter: blur(10px);
   transition: all 0.25s ease;
+  cursor: text;
 }
 
 .input-wrapper.focused,
@@ -489,6 +498,8 @@ export default {
   margin-right: 10px;
   display: flex;
   align-items: center;
+  pointer-events: none;
+  user-select: none;
 }
 
 .firefly-input {
@@ -510,7 +521,6 @@ export default {
 .input-wrapper.focused .firefly-input::placeholder,
 .firefly-input:focus::placeholder {
   opacity: 0;
-  visibility: hidden;
 }
 
 .input-action-btn {

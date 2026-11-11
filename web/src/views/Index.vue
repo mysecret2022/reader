@@ -831,7 +831,8 @@
       :visible.sync="showCoverPicker"
       width="560px"
       append-to-body
-      :before-close="() => (showCoverPicker = false)"
+      :before-close="closeCoverPicker"
+      @close="closeCoverPicker"
     >
       <div v-if="currentCoverBook" class="cover-picker-content">
         <div style="margin-bottom: 14px; display: flex; gap: 8px;">
@@ -1109,6 +1110,7 @@ export default {
     }
   },
   beforeDestroy() {
+    this.stopCoverSSE();
     window.removeEventListener(
       "beforeinstallprompt",
       this.handleBeforeInstallPrompt
@@ -1144,8 +1146,12 @@ export default {
       this.showCoverPicker = true;
       this.fetchBookCovers(book);
     },
-    fetchBookCovers(book) {
-      if (!book || !book.name) return;
+    stopCoverSSE() {
+      this.loadingCovers = false;
+      if (this.coverTimeoutTimer) {
+        clearTimeout(this.coverTimeoutTimer);
+        this.coverTimeoutTimer = null;
+      }
       if (this.coverEventSource) {
         try {
           this.coverEventSource.close();
@@ -1154,19 +1160,16 @@ export default {
         }
         this.coverEventSource = null;
       }
+    },
+    closeCoverPicker() {
+      this.stopCoverSSE();
+      this.showCoverPicker = false;
+    },
+    async fetchBookCovers(book) {
+      if (!book || !book.name) return;
+      this.stopCoverSSE();
       this.loadingCovers = true;
       this.candidateCovers = [];
-      const stopSSE = () => {
-        this.loadingCovers = false;
-        if (this.coverEventSource) {
-          try {
-            this.coverEventSource.close();
-          } catch (e) {
-            // ignore
-          }
-          this.coverEventSource = null;
-        }
-      };
 
       const seen = new Set();
       const currentCover = book.customCoverUrl || book.coverUrl;
@@ -1191,52 +1194,49 @@ export default {
 
       // 1. 先尝试快速读取后端已缓存的书源
       if (book.bookUrl) {
-        Axios.post(this.api + "/getAvailableBookSource", {
-          url: book.bookUrl,
-          refresh: 0
-        })
-          .then(res => {
-            if (
-              res.data &&
-              res.data.isSuccess &&
-              Array.isArray(res.data.data)
-            ) {
-              for (const item of res.data.data) {
-                if (
-                  item.coverUrl &&
-                  item.coverUrl.startsWith("http") &&
-                  !seen.has(item.coverUrl)
-                ) {
-                  seen.add(item.coverUrl);
-                  const name = item.originName || item.origin || "本地源";
-                  this.candidateCovers.push({
-                    url: item.coverUrl,
-                    coverUrl: item.coverUrl,
-                    sourceName: name,
-                    originName: name
-                  });
-                  if (this.candidateCovers.length >= 5) {
-                    stopSSE();
-                    break;
-                  }
-                }
+        try {
+          const res = await Axios.post(this.api + "/getAvailableBookSource", {
+            url: book.bookUrl,
+            refresh: 0
+          });
+          if (!this.showCoverPicker) return;
+          if (res.data && res.data.isSuccess && Array.isArray(res.data.data)) {
+            for (const item of res.data.data) {
+              if (
+                item.coverUrl &&
+                item.coverUrl.startsWith("http") &&
+                !seen.has(item.coverUrl)
+              ) {
+                seen.add(item.coverUrl);
+                const name = item.originName || item.origin || "本地源";
+                this.candidateCovers.push({
+                  url: item.coverUrl,
+                  coverUrl: item.coverUrl,
+                  sourceName: name,
+                  originName: name
+                });
               }
             }
-          })
-          .catch(() => {});
+          }
+        } catch (e) {
+          // ignore
+        }
       }
 
-      if (this.candidateCovers.length >= 5) {
+      if (!this.showCoverPicker) return;
+
+      // 如果已有至少3张候选封面，不再耗时全网扫描
+      if (this.candidateCovers.length >= 3) {
         this.loadingCovers = false;
         return;
       }
 
-      // 2. 启动 SSE 在线全网书源实时扫描拉取最新封面
+      // 2. 候选较少时，启动 SSE 在线全网书源实时扫描拉取最新封面
       const params = {
         name: book.name,
         author: book.author || "",
         url: book.bookUrl || "",
-        searchSize: 15
+        searchSize: 10
       };
       if (this.$store.state.token) {
         params.accessToken = this.$store.state.token;
@@ -1246,6 +1246,10 @@ export default {
         const es = new EventSource(sseUrl);
         this.coverEventSource = es;
         es.addEventListener("message", e => {
+          if (!this.showCoverPicker) {
+            this.stopCoverSSE();
+            return;
+          }
           try {
             const res = JSON.parse(e.data);
             if (res.data && Array.isArray(res.data)) {
@@ -1263,8 +1267,8 @@ export default {
                     sourceName: name,
                     originName: name
                   });
-                  if (this.candidateCovers.length >= 5) {
-                    stopSSE();
+                  if (this.candidateCovers.length >= 6) {
+                    this.stopCoverSSE();
                     break;
                   }
                 }
@@ -1274,11 +1278,12 @@ export default {
             // ignore
           }
         });
-        es.addEventListener("end", stopSSE);
-        es.addEventListener("error", stopSSE);
-        setTimeout(stopSSE, 10000);
+        const onEnd = () => this.stopCoverSSE();
+        es.addEventListener("end", onEnd);
+        es.addEventListener("error", onEnd);
+        this.coverTimeoutTimer = setTimeout(onEnd, 6000);
       } catch (err) {
-        this.loadingCovers = false;
+        this.stopCoverSSE();
       }
     },
     onCoverImgError(e) {
@@ -1292,6 +1297,7 @@ export default {
         this.$message.error("请选择或输入封面图片链接");
         return;
       }
+      this.stopCoverSSE();
       const updatedBook = Object.assign({}, this.currentCoverBook, {
         customCoverUrl: coverUrl,
         coverUrl: coverUrl

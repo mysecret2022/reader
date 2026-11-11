@@ -374,7 +374,7 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             context.response().setStatusCode(405).end()
             return
         }
-        context.response().putHeader("Cache-Control", "86400")
+        context.response().putHeader("Cache-Control", "public, max-age=86400")
                         .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(file.name, "UTF-8"))
                         .sendFile(file.toString())
     }
@@ -606,7 +606,7 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             return
         }
         context.response()
-                .putHeader("Cache-Control", "86400")
+                .putHeader("Cache-Control", "public, max-age=86400")
                 .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(file.name, "UTF-8"))
                 .sendFile(file.toString())
     }
