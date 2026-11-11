@@ -29,6 +29,18 @@ const routes = [
       import(/* webpackChunkName: "admin" */ "../views/Admin.vue")
   },
   {
+    path: "/bookSourceManage",
+    name: "BookSourceManage",
+    component: () =>
+      import(
+        /* webpackChunkName: "book-source-manage" */ "../views/BookSourceManage.vue"
+      )
+  },
+  {
+    path: "/book-source-manage",
+    redirect: "/bookSourceManage"
+  },
+  {
     path: "/:username",
     name: "UserSpace",
     component: () =>

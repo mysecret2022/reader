@@ -39,6 +39,31 @@
             >
           </div>
         </li>
+        <li>
+          <span class="setting-item-title">自动换源</span>
+          <div
+            class="selection-zone"
+            style="display: flex; align-items: center; min-height: 28px;"
+          >
+            <el-tooltip
+              class="item"
+              effect="dark"
+              content="当读到本章一半且下一章未就绪时，后台自动为您优选接力书源"
+              placement="top"
+            >
+              <el-switch
+                v-model="config.autoChangeSource"
+                active-color="#13ce66"
+                inactive-color="#dcdfe6"
+                @change="onAutoChangeSourceSwitch"
+              >
+              </el-switch>
+            </el-tooltip>
+            <span class="small-tip" style="margin-top: 0; margin-left: 10px;"
+              >当读到本章一半且下一章未就绪时，后台自动为您优选接力书源</span
+            >
+          </div>
+        </li>
         <el-divider></el-divider>
         <li>
           <span class="setting-item-title">配置方案</span>
@@ -518,6 +543,9 @@ export default {
     this.config = {
       ...settings.config,
       ...this.config,
+      autoChangeSource: !!(
+        this.$store.state.config && this.$store.state.config.autoChangeSource
+      ),
       selectionAction:
         this.$store.state.config.selectionAction === "过滤弹窗"
           ? "操作弹窗"
@@ -561,6 +589,13 @@ export default {
       this.$store.commit("setConfig", {
         ...this.$store.state.config,
         edgeSwipeBack: nextVal
+      });
+    },
+    onAutoChangeSourceSwitch(val) {
+      this.$set(this.config, "autoChangeSource", val);
+      this.$store.commit("setConfig", {
+        ...this.$store.state.config,
+        autoChangeSource: val
       });
     },
     setPageType(type) {

@@ -12,6 +12,27 @@
     }"
     ref="chapterWrapperRef"
   >
+    <!-- 智能无感自动换源 顶部悬浮胶囊提示 -->
+    <transition name="slide-down-capsule">
+      <div
+        v-if="autoSwitchCapsuleVisible"
+        class="auto-switch-capsule"
+        :class="{ night: isNight }"
+      >
+        <i class="el-icon-connection capsule-icon"></i>
+        <span class="capsule-text"
+          >原书源响应慢，已为您自动接力至【{{ autoSwitchNewSource }}】</span
+        >
+        <span class="capsule-revert-btn" @click="revertPreviousSource"
+          >撤回</span
+        >
+        <i
+          class="el-icon-close capsule-close"
+          @click="autoSwitchCapsuleVisible = false"
+        ></i>
+      </div>
+    </transition>
+
     <div class="tool-bar" :style="leftBarTheme">
       <div class="tools">
         <el-popover
@@ -887,6 +908,18 @@ export default {
       clearTimeout(this.selectionChangeTimer);
       this.selectionChangeTimer = null;
     }
+    if (this.chapterHalfCheckTimer) {
+      clearTimeout(this.chapterHalfCheckTimer);
+      this.chapterHalfCheckTimer = null;
+    }
+    if (this.dwellRecheckTimer) {
+      clearTimeout(this.dwellRecheckTimer);
+      this.dwellRecheckTimer = null;
+    }
+    if (this.autoSwitchCapsuleTimer) {
+      clearTimeout(this.autoSwitchCapsuleTimer);
+      this.autoSwitchCapsuleTimer = null;
+    }
   },
   beforeDestroy() {
     document.removeEventListener("selectionchange", this.handleSelectionChange);
@@ -917,6 +950,18 @@ export default {
     if (this.selectionChangeTimer) {
       clearTimeout(this.selectionChangeTimer);
       this.selectionChangeTimer = null;
+    }
+    if (this.chapterHalfCheckTimer) {
+      clearTimeout(this.chapterHalfCheckTimer);
+      this.chapterHalfCheckTimer = null;
+    }
+    if (this.dwellRecheckTimer) {
+      clearTimeout(this.dwellRecheckTimer);
+      this.dwellRecheckTimer = null;
+    }
+    if (this.autoSwitchCapsuleTimer) {
+      clearTimeout(this.autoSwitchCapsuleTimer);
+      this.autoSwitchCapsuleTimer = null;
     }
   },
   watch: {
@@ -1043,6 +1088,7 @@ export default {
     currentPage(val, oldVal) {
       if (val !== oldVal) {
         this.checkReadingProgress();
+        this.checkAutoSourceSwitch();
       }
     },
     filterRules() {
@@ -1110,6 +1156,15 @@ export default {
       isSilentPreloading: false,
       hasPreloadedThisChapter: false,
       singlePageDwellTimer: null,
+      autoSwitchCapsuleVisible: false,
+      autoSwitchNewSource: "",
+      autoSwitchCapsuleTimer: null,
+      previousSourceRecord: null,
+      isAutoSwitchingSource: false,
+      hasCheckedAutoSourceSwitchThisChapter: false,
+      chapterEntryTime: 0,
+      chapterHalfCheckTimer: null,
+      dwellRecheckTimer: null,
 
       autoReading: false,
       showChapterList: [],
@@ -1962,6 +2017,19 @@ export default {
       let bookUrl = this.$store.getters.readingBook.bookUrl;
       this.hasPreloadedThisChapter = false;
       this.isSilentPreloading = false;
+      this.chapterEntryTime = Date.now();
+      this.hasCheckedAutoSourceSwitchThisChapter = false;
+      if (this.chapterHalfCheckTimer) {
+        clearTimeout(this.chapterHalfCheckTimer);
+        this.chapterHalfCheckTimer = null;
+      }
+      if (this.dwellRecheckTimer) {
+        clearTimeout(this.dwellRecheckTimer);
+        this.dwellRecheckTimer = null;
+      }
+      this.chapterHalfCheckTimer = setTimeout(() => {
+        this.checkAutoSourceSwitch();
+      }, 8000);
       if (this.singlePageDwellTimer) {
         clearTimeout(this.singlePageDwellTimer);
         this.singlePageDwellTimer = null;
@@ -3969,6 +4037,7 @@ export default {
       }
       if (this.isScrollRead) {
         this.checkReadingProgress();
+        this.checkAutoSourceSwitch();
       }
       this.lastScrollTop = scrollTop;
       this.scrollTimer && clearTimeout(this.scrollTimer);
@@ -4345,6 +4414,490 @@ export default {
           .catch(() => {
             this.isSilentPreloading = false;
           });
+      }
+    },
+    checkAutoSourceSwitch() {
+      // 1. 严格校验是否开启自动换源开关 (默认严格关闭 false)
+      const config =
+        this.config || (this.$store && this.$store.state.config) || {};
+      if (!config.autoChangeSource) return;
+      if (this.isAutoSwitchingSource) return;
+      if (this.hasCheckedAutoSourceSwitchThisChapter) return;
+
+      const book = this.$store.getters.readingBook;
+      if (!book || !book.bookUrl || !book.catalog || !book.catalog.length)
+        return;
+      const currentIdx =
+        typeof book.index === "number" ? book.index : this.chapterIndex;
+      const nextIdx = currentIdx + 1;
+      if (nextIdx >= book.catalog.length) return;
+
+      // 2. 判定当前章节阅读进度是否 >= 0.5 (1/2)
+      let reachedHalf = false;
+      if (this.isScrollRead) {
+        const scrollTop =
+          document.documentElement.scrollTop || document.body.scrollTop;
+        const scrollableHeight =
+          document.documentElement.scrollHeight - this.windowSize.height;
+        const progress =
+          scrollableHeight > 0 ? scrollTop / scrollableHeight : 0;
+        if (progress >= 0.5) {
+          reachedHalf = true;
+        }
+      } else {
+        if (this.totalPages > 1) {
+          if (this.currentPage / this.totalPages >= 0.5) {
+            reachedHalf = true;
+          }
+        } else {
+          reachedHalf = true;
+        }
+      }
+      if (!reachedHalf) return;
+
+      // 3. 判定在当前章节驻留阅读时间是否 >= 8 秒 (防止快速连续翻页假触发)
+      const dwell = Date.now() - (this.chapterEntryTime || 0);
+      if (dwell < 8000) {
+        if (!this.dwellRecheckTimer) {
+          this.dwellRecheckTimer = setTimeout(() => {
+            this.dwellRecheckTimer = null;
+            this.checkAutoSourceSwitch();
+          }, 8000 - dwell + 100);
+        }
+        return;
+      }
+
+      // 标记本章已触发检查，避免同一章节反复执行
+      this.hasCheckedAutoSourceSwitchThisChapter = true;
+
+      // 4. 检查下一章 (index + 1) 是否已在内存缓存或 IndexedDB 中就绪
+      this.isNextChapterCached(book, nextIdx).then(cached => {
+        if (cached) {
+          // 下一章已就绪，无需换源
+          return;
+        }
+        // 下一章未就绪，后台无感智能换源
+        this.performSilentAutoSourceSwitch(book, currentIdx, nextIdx);
+      });
+    },
+
+    async isNextChapterCached(book, nextIdx) {
+      if (!book || !book.catalog || !book.catalog[nextIdx]) return false;
+      const nextChapter = book.catalog[nextIdx];
+
+      // 优先检查内存中章节缓存
+      if (
+        this.chapterContentCache &&
+        this.chapterContentCache.bookUrl === book.bookUrl &&
+        this.chapterContentCache.chapters[nextIdx] &&
+        !this.chapterContentCache.chapters[nextIdx].error &&
+        this.chapterContentCache.chapters[nextIdx].content
+      ) {
+        return true;
+      }
+
+      // 检查 IndexedDB 本地持久化缓存
+      if (window.$cacheStorage) {
+        const cacheKey =
+          "localCache@" +
+          book.name +
+          "_" +
+          book.author +
+          "@" +
+          book.bookUrl +
+          "@chapterContent-" +
+          nextChapter.index;
+        try {
+          const cached = await window.$cacheStorage.getItem(cacheKey);
+          if (
+            cached &&
+            (cached.isSuccess ||
+              typeof cached.data === "string" ||
+              typeof cached === "string")
+          ) {
+            return true;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      return false;
+    },
+
+    async performSilentAutoSourceSwitch(currentBook, currentIdx, nextIdx) {
+      if (this.isAutoSwitchingSource) return;
+      this.isAutoSwitchingSource = true;
+
+      try {
+        // 1. 发现候选书源 (优先读取已缓存可用书源列表，降级通过 SSE 快速检索)
+        let candidates = [];
+        try {
+          const res = await Axios.post(this.api + "/getAvailableBookSource", {
+            url: currentBook.bookUrl,
+            refresh: 0
+          });
+          if (
+            res &&
+            res.data &&
+            res.data.isSuccess &&
+            Array.isArray(res.data.data)
+          ) {
+            candidates = res.data.data.filter(
+              v =>
+                v &&
+                v.origin &&
+                v.origin !== currentBook.origin &&
+                v.bookUrl !== currentBook.bookUrl
+            );
+            candidates.sort((a, b) => {
+              const timeA =
+                typeof a.time === "number" && a.time > 0 ? a.time : 999999;
+              const timeB =
+                typeof b.time === "number" && b.time > 0 ? b.time : 999999;
+              return timeA - timeB;
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        if (candidates.length === 0) {
+          const sseCandidate = await this.discoverCandidateViaSSE(currentBook);
+          if (sseCandidate) {
+            candidates.push(sseCandidate);
+          }
+        }
+
+        if (candidates.length === 0) {
+          return;
+        }
+
+        const targetNextChapter = currentBook.catalog[nextIdx];
+        const targetCurrentChapter = currentBook.catalog[currentIdx];
+        if (!targetNextChapter) return;
+
+        // 2. 依次尝试候选书源，获取目录并进行章节标题模糊对齐
+        for (const candidate of candidates.slice(0, 3)) {
+          try {
+            const catRes = await Axios.post(this.api + "/getChapterList", {
+              url: candidate.bookUrl,
+              refresh: 0,
+              bookSourceUrl: candidate.origin
+            });
+            if (
+              !catRes ||
+              !catRes.data ||
+              !catRes.data.isSuccess ||
+              !Array.isArray(catRes.data.data) ||
+              catRes.data.data.length === 0
+            ) {
+              continue;
+            }
+            const candidateCatalog = catRes.data.data;
+
+            // 章节标题模糊匹配
+            const matchedNext = this.fuzzyMatchChapter(
+              targetNextChapter.title,
+              candidateCatalog,
+              nextIdx
+            );
+            if (!matchedNext) continue;
+
+            // 静默拉取新源下一章内容
+            const contentRes = await Axios.post(
+              this.api + "/getBookContent",
+              {
+                url: candidate.bookUrl,
+                index: matchedNext.index
+              },
+              { timeout: 10000, silent: true }
+            );
+
+            if (
+              !contentRes ||
+              !contentRes.data ||
+              !contentRes.data.isSuccess ||
+              !contentRes.data.data
+            ) {
+              continue;
+            }
+            const nextContent = contentRes.data.data;
+
+            // 对齐当前阅读章节
+            const matchedCurrent = this.fuzzyMatchChapter(
+              targetCurrentChapter.title,
+              candidateCatalog,
+              currentIdx
+            );
+
+            // 3. 执行平滑换源 /setBookSource
+            const setRes = await Axios.post(this.api + "/setBookSource", {
+              bookUrl: currentBook.bookUrl,
+              newUrl: candidate.bookUrl,
+              bookSourceUrl: candidate.origin,
+              name: currentBook.name,
+              author: currentBook.author
+            });
+
+            if (setRes && setRes.data && setRes.data.isSuccess) {
+              // 记录原书源信息以供一键撤回
+              this.previousSourceRecord = {
+                bookUrl: currentBook.bookUrl,
+                origin: currentBook.origin,
+                originName: currentBook.originName || currentBook.origin,
+                name: currentBook.name,
+                author: currentBook.author,
+                index: currentIdx,
+                catalog: currentBook.catalog
+              };
+
+              // 平滑更新当前书籍信息，不重新刷新屏幕或滚回顶部，保持用户阅读连续性
+              let updatedBook = Object.assign(
+                {},
+                this.$store.getters.readingBook
+              );
+              updatedBook.bookUrl = candidate.bookUrl;
+              updatedBook.origin = candidate.origin;
+              updatedBook.originName = candidate.originName || candidate.origin;
+              updatedBook.tocUrl = candidate.tocUrl;
+              if (matchedCurrent) {
+                updatedBook.index = matchedCurrent.index;
+              }
+              updatedBook.catalog = candidateCatalog;
+              this.catalog = candidateCatalog;
+              this.$store.commit("setReadingBook", updatedBook);
+
+              // 缓存下一章内容到内存和持久化存储
+              this.addChapterContentToCache({
+                bookUrl: candidate.bookUrl,
+                index: matchedNext.index,
+                title: matchedNext.title,
+                content: nextContent,
+                error: false
+              });
+
+              if (window.$cacheStorage) {
+                const nextCacheKey =
+                  "localCache@" +
+                  currentBook.name +
+                  "_" +
+                  currentBook.author +
+                  "@" +
+                  candidate.bookUrl +
+                  "@chapterContent-" +
+                  matchedNext.index;
+                window.$cacheStorage
+                  .setItem(nextCacheKey, {
+                    isSuccess: true,
+                    data: nextContent
+                  })
+                  .catch(() => {});
+              }
+
+              // 弹出优雅顶部胶囊提示 (3-4 秒自动渐隐，附带撤回按钮)
+              this.showAutoSwitchCapsule(
+                candidate.originName || candidate.origin
+              );
+              break;
+            }
+          } catch (candErr) {
+            // 继续下一个候选源
+          }
+        }
+      } catch (err) {
+        // 静默异常兜底
+      } finally {
+        this.isAutoSwitchingSource = false;
+      }
+    },
+
+    fuzzyMatchChapter(targetTitle, catalog, fallbackIndex) {
+      if (!targetTitle || !Array.isArray(catalog) || !catalog.length)
+        return null;
+      const clean = str =>
+        (str || "")
+          .replace(/[（(【[].*?[）)】\]]/g, "")
+          .replace(/[\s\-_—·、:：，,。.!！?？]/g, "")
+          .toLowerCase();
+
+      const extractNum = str => {
+        const m = (str || "").match(
+          /(?:第\s*([0-9零一二两三四五六七八九十百千万]+)\s*[章回节集])|(?:^([0-9]+)[.\s、])/
+        );
+        return m ? m[1] || m[2] : null;
+      };
+
+      const targetClean = clean(targetTitle);
+      const targetNum = extractNum(targetTitle);
+
+      // 1. 完全一致
+      for (const ch of catalog) {
+        if (ch && ch.title && ch.title.trim() === targetTitle.trim()) {
+          return ch;
+        }
+      }
+
+      // 2. 清理空白与特殊字符后完全一致
+      for (const ch of catalog) {
+        if (ch && ch.title && clean(ch.title) === targetClean) {
+          return ch;
+        }
+      }
+
+      // 3. 提取章节号一致
+      if (targetNum) {
+        for (const ch of catalog) {
+          if (ch && ch.title) {
+            const chNum = extractNum(ch.title);
+            if (chNum && chNum === targetNum) {
+              return ch;
+            }
+          }
+        }
+      }
+
+      // 4. 局部包含匹配
+      for (const ch of catalog) {
+        if (ch && ch.title) {
+          const chClean = clean(ch.title);
+          if (
+            (chClean.length >= 3 && targetClean.includes(chClean)) ||
+            (targetClean.length >= 3 && chClean.includes(targetClean))
+          ) {
+            return ch;
+          }
+        }
+      }
+
+      // 5. 兜底回退相同索引位置
+      if (typeof fallbackIndex === "number" && catalog[fallbackIndex]) {
+        return catalog[fallbackIndex];
+      }
+
+      return null;
+    },
+
+    discoverCandidateViaSSE(currentBook) {
+      return new Promise(resolve => {
+        let eventSource = null;
+        let isDone = false;
+        let foundCandidate = null;
+
+        const cleanup = () => {
+          if (isDone) return;
+          isDone = true;
+          if (timer) clearTimeout(timer);
+          if (eventSource) {
+            try {
+              eventSource.close();
+            } catch (e) {
+              // ignore
+            }
+            eventSource = null;
+          }
+          resolve(foundCandidate);
+        };
+
+        const timer = setTimeout(() => {
+          cleanup();
+        }, 5000);
+
+        try {
+          const params = {
+            accessToken: this.$store.state.token,
+            concurrentCount: 8,
+            url: currentBook.bookUrl,
+            name: currentBook.name,
+            author: currentBook.author || "",
+            bookSourceGroup: "",
+            lastIndex: 0
+          };
+          const sseUrl = buildURL(this.api + "/searchBookSourceSSE", params);
+          eventSource = new EventSource(sseUrl, {
+            withCredentials: true
+          });
+
+          eventSource.addEventListener("message", e => {
+            try {
+              if (!e.data) return;
+              const result = JSON.parse(e.data);
+              if (result && Array.isArray(result.data)) {
+                for (const item of result.data) {
+                  if (
+                    item &&
+                    item.origin &&
+                    item.origin !== currentBook.origin &&
+                    item.bookUrl !== currentBook.bookUrl
+                  ) {
+                    foundCandidate = item;
+                    cleanup();
+                    return;
+                  }
+                }
+              }
+            } catch (err) {
+              // ignore
+            }
+          });
+          eventSource.addEventListener("end", () => cleanup());
+          eventSource.addEventListener("error", () => cleanup());
+        } catch (err) {
+          cleanup();
+        }
+      });
+    },
+
+    showAutoSwitchCapsule(originName) {
+      this.autoSwitchNewSource = originName;
+      this.autoSwitchCapsuleVisible = true;
+      if (this.autoSwitchCapsuleTimer) {
+        clearTimeout(this.autoSwitchCapsuleTimer);
+      }
+      this.autoSwitchCapsuleTimer = setTimeout(() => {
+        this.autoSwitchCapsuleVisible = false;
+        this.autoSwitchCapsuleTimer = null;
+      }, 3800);
+    },
+
+    async revertPreviousSource() {
+      if (!this.previousSourceRecord) return;
+      if (this.autoSwitchCapsuleTimer) {
+        clearTimeout(this.autoSwitchCapsuleTimer);
+        this.autoSwitchCapsuleTimer = null;
+      }
+      this.autoSwitchCapsuleVisible = false;
+      const prev = this.previousSourceRecord;
+      const currentBook = this.$store.getters.readingBook;
+
+      try {
+        const res = await Axios.post(this.api + "/setBookSource", {
+          bookUrl: currentBook.bookUrl,
+          newUrl: prev.bookUrl,
+          bookSourceUrl: prev.origin,
+          name: prev.name,
+          author: prev.author
+        });
+        if (res && res.data && res.data.isSuccess) {
+          let updated = Object.assign({}, this.$store.getters.readingBook);
+          updated.bookUrl = prev.bookUrl;
+          updated.origin = prev.origin;
+          updated.originName = prev.originName;
+          if (prev.catalog) {
+            updated.catalog = prev.catalog;
+            this.catalog = prev.catalog;
+          }
+          if (typeof prev.index === "number") {
+            updated.index = prev.index;
+          }
+          this.$store.commit("setReadingBook", updated);
+          this.$message.success(
+            "已撤回并切换回原书源【" + prev.originName + "】"
+          );
+        } else {
+          this.$message.error("撤回原书源失败");
+        }
+      } catch (err) {
+        this.$message.error("撤回操作异常");
       }
     },
     cacheChapterContent(cacheCount) {
@@ -6047,5 +6600,80 @@ export default {
       border-top-color: #2c313a;
     }
   }
+}
+
+.auto-switch-capsule {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  color: #303133;
+  padding: 7px 18px;
+  border-radius: 30px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  max-width: 90vw;
+  white-space: nowrap;
+
+  &.night {
+    background: rgba(30, 30, 30, 0.94);
+    color: #e4e7ed;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  }
+
+  .capsule-icon {
+    color: #67c23a;
+    font-size: 16px;
+    margin-right: 8px;
+  }
+
+  .capsule-text {
+    font-weight: 500;
+    margin-right: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .capsule-revert-btn {
+    color: #409eff;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(64, 158, 255, 0.12);
+    font-size: 12px;
+    margin-right: 8px;
+    font-weight: bold;
+    transition: all 0.2s;
+    &:hover {
+      background: rgba(64, 158, 255, 0.25);
+    }
+  }
+
+  .capsule-close {
+    color: #909399;
+    cursor: pointer;
+    font-size: 14px;
+    &:hover {
+      color: #f56c6c;
+    }
+  }
+}
+
+.slide-down-capsule-enter-active,
+.slide-down-capsule-leave-active {
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.slide-down-capsule-enter,
+.slide-down-capsule-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -20px);
 }
 </style>

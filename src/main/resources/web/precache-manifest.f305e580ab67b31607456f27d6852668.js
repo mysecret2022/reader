@@ -72,16 +72,20 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "browsertest.html"
   },
   {
-    "revision": "37eafbe94a4d563c8f5d",
-    "url": "css/admin.cafcc87e.css"
+    "revision": "5a7bce8b3d2c8d12f2f3",
+    "url": "css/admin.c3d3eedc.css"
   },
   {
     "revision": "dc73ded30d933078bd1f",
     "url": "css/admin~index.d55d2547.css"
   },
   {
-    "revision": "24dc8907a76f61e21c18",
+    "revision": "e39fc4546ada940db54b",
     "url": "css/app.f0ee307f.css"
+  },
+  {
+    "revision": "0006ecdd48e26d7f2f9d",
+    "url": "css/book-source-manage.b5016af7.css"
   },
   {
     "revision": "b02c98390cef4e0f9356",
@@ -92,8 +96,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "css/index.0a00bd0a.css"
   },
   {
-    "revision": "7b3137996bca5ef2d159",
-    "url": "css/reader.1826493f.css"
+    "revision": "2c1da160ff1fa3964e42",
+    "url": "css/reader.48f20af6.css"
   },
   {
     "revision": "df863889d631065094e569d3d1143504",
@@ -1364,16 +1368,20 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "img/noImage.7443b2ba.png"
   },
   {
-    "revision": "37eafbe94a4d563c8f5d",
-    "url": "js/admin.bf02630c.js"
+    "revision": "5a7bce8b3d2c8d12f2f3",
+    "url": "js/admin.c6a1e820.js"
   },
   {
     "revision": "dc73ded30d933078bd1f",
     "url": "js/admin~index.01771ff0.js"
   },
   {
-    "revision": "24dc8907a76f61e21c18",
-    "url": "js/app.787d7299.js"
+    "revision": "e39fc4546ada940db54b",
+    "url": "js/app.a88c3b3d.js"
+  },
+  {
+    "revision": "0006ecdd48e26d7f2f9d",
+    "url": "js/book-source-manage.20f06a35.js"
   },
   {
     "revision": "b02c98390cef4e0f9356",
@@ -1384,8 +1392,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "js/index.357cc6cf.js"
   },
   {
-    "revision": "7b3137996bca5ef2d159",
-    "url": "js/reader.9d7063d4.js"
+    "revision": "2c1da160ff1fa3964e42",
+    "url": "js/reader.87875336.js"
   },
   {
     "revision": "f0d07c276d4b9114ca5639c2417340b9",

@@ -477,16 +477,121 @@
                 >
                   全部禁用
                 </el-button>
+                <el-button
+                  type="primary"
+                  size="small"
+                  icon="el-icon-odometer"
+                  :loading="isTestingSpeed"
+                  @click="startSpeedTest"
+                >
+                  {{
+                    isTestingSpeed
+                      ? `测速中 (${testedCount}/${bookSourceList.length})`
+                      : "一键体检/测速"
+                  }}
+                </el-button>
+                <el-button
+                  type="success"
+                  plain
+                  size="small"
+                  icon="el-icon-top"
+                  :disabled="greenSourcesCount === 0"
+                  @click="prioritizeGreenSources"
+                >
+                  置顶优质源 ({{ greenSourcesCount }})
+                </el-button>
+                <el-button
+                  type="warning"
+                  plain
+                  size="small"
+                  icon="el-icon-circle-close"
+                  :disabled="redSourcesCount === 0"
+                  @click="disableFailedSources"
+                >
+                  一键禁用失效源 ({{ redSourcesCount }})
+                </el-button>
+                <el-button
+                  type="danger"
+                  size="small"
+                  icon="el-icon-delete"
+                  :disabled="selectedSources.length === 0"
+                  @click="batchDeleteSources"
+                >
+                  批量删除 (已选 {{ selectedSources.length }} 项)
+                </el-button>
+                <el-button
+                  size="small"
+                  icon="el-icon-full-screen"
+                  @click="$router.push('/bookSourceManage')"
+                >
+                  管理中心
+                </el-button>
+              </div>
+              <div
+                class="source-select-bar"
+                style="margin-top: 10px; display: flex; align-items: center; gap: 8px;"
+              >
+                <el-button size="mini" @click="selectAllSources"
+                  >全选</el-button
+                >
+                <el-button size="mini" @click="invertSelectSources"
+                  >反选</el-button
+                >
+                <el-button size="mini" @click="clearSelectSources"
+                  >清空选择</el-button
+                >
+                <span
+                  style="font-size: 13px; color: #606266; margin-left: 8px;"
+                >
+                  已选 <b>{{ selectedSources.length }}</b> 项
+                </span>
               </div>
             </div>
           </div>
 
           <el-table
+            ref="sourceTable"
             :data="pagedSources"
             stripe
             style="width: 100%"
             v-loading="loadingSources"
+            @selection-change="selectedSources = $event"
           >
+            <el-table-column
+              type="selection"
+              width="48"
+              align="center"
+            ></el-table-column>
+            <el-table-column label="体检状态" width="120" align="center">
+              <template slot-scope="scope">
+                <el-tag
+                  v-if="scope.row.speedStatus === 'fast'"
+                  size="mini"
+                  type="success"
+                  effect="dark"
+                >
+                  🟢 {{ scope.row.speedCost }}ms
+                </el-tag>
+                <el-tag
+                  v-else-if="scope.row.speedStatus === 'slow'"
+                  size="mini"
+                  type="warning"
+                  effect="dark"
+                >
+                  🟡 {{ scope.row.speedCost }}ms
+                </el-tag>
+                <el-tag
+                  v-else-if="scope.row.speedStatus === 'failed'"
+                  size="mini"
+                  type="danger"
+                  effect="dark"
+                  :title="scope.row.speedError || '超时或异常'"
+                >
+                  🔴 {{ scope.row.speedError || scope.row.speedCost + "ms" }}
+                </el-tag>
+                <el-tag v-else size="mini" type="info"> 未测速 </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column
               prop="bookSourceName"
               label="书源名称"
@@ -532,8 +637,16 @@
                 ></el-switch>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120" align="center">
+            <el-table-column label="操作" width="150" align="center">
               <template slot-scope="scope">
+                <el-button
+                  size="mini"
+                  type="text"
+                  icon="el-icon-video-play"
+                  :loading="scope.row.isSingleTesting"
+                  @click="testSingleSource(scope.row)"
+                  >测速</el-button
+                >
                 <el-button
                   size="mini"
                   type="text"
@@ -2630,6 +2743,9 @@ export default {
       backendLatency: 0,
       userList: [],
       bookSourceList: [],
+      selectedSources: [],
+      isTestingSpeed: false,
+      testedCount: 0,
       loadingUsers: false,
       loadingSources: false,
       sourceSearchKey: "",
@@ -2858,6 +2974,15 @@ export default {
     pagedSources() {
       const start = (this.sourcePage - 1) * this.sourcePageSize;
       return this.filteredSources.slice(start, start + this.sourcePageSize);
+    },
+    greenSourcesCount() {
+      return this.bookSourceList.filter(s => s.speedStatus === "fast").length;
+    },
+    yellowSourcesCount() {
+      return this.bookSourceList.filter(s => s.speedStatus === "slow").length;
+    },
+    redSourcesCount() {
+      return this.bookSourceList.filter(s => s.speedStatus === "failed").length;
     }
   },
   watch: {
@@ -3161,13 +3286,231 @@ export default {
       try {
         const res = await Axios.get(this.api + "/getBookSources");
         if (res.data.isSuccess) {
-          this.bookSourceList = res.data.data || [];
+          const list = res.data.data || [];
+          const oldMap = {};
+          this.bookSourceList.forEach(s => {
+            if (s.bookSourceUrl) {
+              oldMap[s.bookSourceUrl] = {
+                speedStatus: s.speedStatus,
+                speedCost: s.speedCost,
+                speedError: s.speedError
+              };
+            }
+          });
+          this.bookSourceList = list.map(item => {
+            const old = oldMap[item.bookSourceUrl] || {};
+            return {
+              ...item,
+              speedStatus: old.speedStatus || null,
+              speedCost: old.speedCost || null,
+              speedError: old.speedError || null,
+              isSingleTesting: false
+            };
+          });
         }
       } catch (err) {
         //
       } finally {
         this.loadingSources = false;
       }
+    },
+    selectAllSources() {
+      if (this.$refs.sourceTable) {
+        this.$refs.sourceTable.toggleAllSelection();
+      }
+    },
+    invertSelectSources() {
+      if (!this.$refs.sourceTable) return;
+      this.pagedSources.forEach(row => {
+        this.$refs.sourceTable.toggleRowSelection(row);
+      });
+    },
+    clearSelectSources() {
+      if (this.$refs.sourceTable) {
+        this.$refs.sourceTable.clearSelection();
+      }
+    },
+    batchDeleteSources() {
+      const count = this.selectedSources.length;
+      if (count === 0) {
+        this.$message.warning("请先勾选需要删除的书源");
+        return;
+      }
+      this.$confirm(
+        `确定要删除选中的 ${count} 个书源吗？此操作不可逆。`,
+        "批量删除确认",
+        {
+          confirmButtonText: "确定删除",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).then(async () => {
+        const loading = this.$loading({
+          lock: true,
+          text: `正在批量删除 ${count} 个书源...`,
+          spinner: "el-icon-loading",
+          background: "rgba(0, 0, 0, 0.7)"
+        });
+        try {
+          await Axios.post(
+            this.api + "/deleteBookSources",
+            this.selectedSources
+          );
+          this.$message.success(`成功删除选中的 ${count} 个书源`);
+          this.selectedSources = [];
+          await this.fetchSources();
+        } catch (err) {
+          this.$message.error("批量删除失败: " + err.toString());
+        } finally {
+          loading.close();
+        }
+      });
+    },
+    async testSingleSource(source) {
+      this.$set(source, "isSingleTesting", true);
+      const start = Date.now();
+      try {
+        const res = await Axios.post(
+          this.api + "/testBookSourceSpeed",
+          { url: source.bookSourceUrl },
+          { timeout: 5000, silent: true }
+        );
+        const cost =
+          res.data && res.data.data && typeof res.data.data.cost === "number"
+            ? res.data.data.cost
+            : Date.now() - start;
+        const isOk = res.data && res.data.data && res.data.data.status === "ok";
+
+        if (isOk) {
+          if (cost < 1500) {
+            this.$set(source, "speedStatus", "fast");
+          } else if (cost <= 4000) {
+            this.$set(source, "speedStatus", "slow");
+          } else {
+            this.$set(source, "speedStatus", "failed");
+          }
+          this.$set(source, "speedCost", cost);
+          this.$set(source, "speedError", null);
+        } else {
+          this.$set(source, "speedStatus", "failed");
+          this.$set(source, "speedCost", cost);
+          this.$set(
+            source,
+            "speedError",
+            (res.data && res.data.errorMsg) || "异常"
+          );
+        }
+      } catch (e) {
+        const cost = Date.now() - start;
+        this.$set(source, "speedStatus", "failed");
+        this.$set(source, "speedCost", cost);
+        this.$set(source, "speedError", "超时/失败");
+      } finally {
+        this.$set(source, "isSingleTesting", false);
+      }
+    },
+    async startSpeedTest() {
+      if (this.isTestingSpeed) return;
+      if (this.bookSourceList.length === 0) {
+        this.$message.info("暂无可测速书源");
+        return;
+      }
+      this.isTestingSpeed = true;
+      this.testedCount = 0;
+
+      const sourcesToTest = [...this.bookSourceList];
+      const concurrency = 8;
+      let currentIndex = 0;
+
+      const worker = async () => {
+        while (currentIndex < sourcesToTest.length) {
+          const idx = currentIndex++;
+          const source = sourcesToTest[idx];
+          if (!source || !source.bookSourceUrl) {
+            this.testedCount++;
+            continue;
+          }
+          await this.testSingleSource(source);
+          this.testedCount++;
+        }
+      };
+
+      const workers = [];
+      for (let i = 0; i < Math.min(concurrency, sourcesToTest.length); i++) {
+        workers.push(worker());
+      }
+      await Promise.all(workers);
+
+      this.isTestingSpeed = false;
+      this.$message.success(
+        `体检测速完成：优质源 ${this.greenSourcesCount} 个，缓慢源 ${this.yellowSourcesCount} 个，失效源 ${this.redSourcesCount} 个`
+      );
+    },
+    async prioritizeGreenSources() {
+      if (this.greenSourcesCount === 0) {
+        this.$message.warning(
+          "当前暂无测速通过的优质源，请先进行一键体检/测速"
+        );
+        return;
+      }
+      const green = [];
+      const yellow = [];
+      const others = [];
+
+      this.bookSourceList.forEach(s => {
+        if (s.speedStatus === "fast") green.push(s);
+        else if (s.speedStatus === "slow") yellow.push(s);
+        else others.push(s);
+      });
+
+      green.sort((a, b) => (a.speedCost || 0) - (b.speedCost || 0));
+      yellow.sort((a, b) => (a.speedCost || 0) - (b.speedCost || 0));
+
+      const reorderedList = [...green, ...yellow, ...others];
+      this.bookSourceList = reorderedList;
+
+      try {
+        await Axios.post(this.api + "/saveBookSources", reorderedList);
+        this.$message.success(
+          `已成功置顶 ${green.length} 个优质书源并保存顺序`
+        );
+      } catch (err) {
+        this.$message.error("保存书源排序失败: " + err.toString());
+      }
+    },
+    async disableFailedSources() {
+      if (this.redSourcesCount === 0) {
+        this.$message.info("当前没有检测到失效书源");
+        return;
+      }
+      this.$confirm(
+        `检测到 ${this.redSourcesCount} 个失效或超时书源，确定要将它们全部一键禁用吗？`,
+        "一键禁用失效源",
+        {
+          confirmButtonText: "确定禁用",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).then(async () => {
+        const failedSources = this.bookSourceList.filter(
+          s => s.speedStatus === "failed" && s.enabled !== false
+        );
+        if (failedSources.length === 0) {
+          this.$message.info("所有失效书源此前已被禁用");
+          return;
+        }
+        failedSources.forEach(s => {
+          s.enabled = false;
+        });
+        try {
+          await Axios.post(this.api + "/saveBookSources", failedSources);
+          this.$message.success(
+            `已成功禁用 ${failedSources.length} 个失效书源`
+          );
+        } catch (err) {
+          this.$message.error("批量禁用失效源失败: " + err.toString());
+        }
+      });
     },
     isJsSource(source) {
       const raw = typeof source === "string" ? source : JSON.stringify(source);

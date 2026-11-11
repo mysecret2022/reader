@@ -68,6 +68,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
+import java.util.concurrent.TimeUnit
+import io.legado.app.help.http.okHttpClient
+import okhttp3.Request
 
 private val logger = KotlinLogging.logger {}
 
@@ -445,5 +448,91 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
             userBookSourceFile.deleteRecursively()
         }
         return returnData.setData("")
+    }
+
+    suspend fun testBookSourceSpeed(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val url = if (context.request().method() == HttpMethod.POST) {
+            context.bodyAsJson?.getString("url") ?: context.bodyAsJson?.getString("bookSourceUrl") ?: ""
+        } else {
+            context.queryParam("url").firstOrNull() ?: context.queryParam("bookSourceUrl").firstOrNull() ?: ""
+        }
+        if (url.isNullOrEmpty()) {
+            return returnData.setErrorMsg("书源链接不能为空")
+        }
+
+        val start = System.currentTimeMillis()
+        return try {
+            withContext(Dispatchers.IO) {
+                val client = okHttpClient.newBuilder()
+                    .connectTimeout(4500, TimeUnit.MILLISECONDS)
+                    .readTimeout(4500, TimeUnit.MILLISECONDS)
+                    .build()
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val cost = System.currentTimeMillis() - start
+                    val code = response.code
+                    if (code in 200..399) {
+                        returnData.setData(mapOf("cost" to cost, "status" to "ok", "code" to code))
+                    } else {
+                        returnData.setErrorMsg("HTTP $code")
+                            .setData(mapOf("cost" to cost, "status" to "error", "code" to code))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            val cost = System.currentTimeMillis() - start
+            returnData.setErrorMsg(e.message ?: "连接失败")
+                .setData(mapOf("cost" to cost, "status" to "error"))
+        }
+    }
+
+    suspend fun testBookSourcesSpeed(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val array = context.bodyAsJsonArray ?: JsonArray()
+        val results = mutableListOf<Map<String, Any>>()
+        val testClient = okHttpClient.newBuilder()
+            .connectTimeout(4500, TimeUnit.MILLISECONDS)
+            .readTimeout(4500, TimeUnit.MILLISECONDS)
+            .build()
+        withContext(Dispatchers.IO) {
+            val jobs = (0 until array.size()).map { i ->
+                async {
+                    val item = array.getJsonObject(i)
+                    val url = item.getString("bookSourceUrl") ?: item.getString("url") ?: ""
+                    if (url.isEmpty()) {
+                        mapOf("url" to url, "cost" to 9999L, "status" to "error", "code" to 400)
+                    } else {
+                        val start = System.currentTimeMillis()
+                        try {
+                            val request = Request.Builder()
+                                .url(url)
+                                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                                .build()
+                            testClient.newCall(request).execute().use { response ->
+                                val cost = System.currentTimeMillis() - start
+                                val code = response.code
+                                val status = if (code in 200..399) "ok" else "error"
+                                mapOf("url" to url, "cost" to cost, "status" to status, "code" to code)
+                            }
+                        } catch (e: Exception) {
+                            val cost = System.currentTimeMillis() - start
+                            mapOf("url" to url, "cost" to cost, "status" to "error", "errorMsg" to (e.message ?: "连接失败"))
+                        }
+                    }
+                }
+            }
+            results.addAll(jobs.map { it.await() })
+        }
+        return returnData.setData(results)
     }
 }

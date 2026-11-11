@@ -167,6 +167,16 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/deleteAllBookSources").coroutineHandler { bookSourceController.deleteAllBookSources(it) }
         router.post("/reader3/deleteBookSource").coroutineHandler { bookSourceController.deleteBookSource(it) }
         router.post("/reader3/deleteBookSources").coroutineHandler { bookSourceController.deleteBookSources(it) }
+        router.post("/deleteBookSource").coroutineHandler { bookSourceController.deleteBookSource(it) }
+        router.post("/deleteBookSources").coroutineHandler { bookSourceController.deleteBookSources(it) }
+
+        // 书源测速体检
+        router.post("/reader3/testBookSourceSpeed").coroutineHandler { bookSourceController.testBookSourceSpeed(it) }
+        router.get("/reader3/testBookSourceSpeed").coroutineHandler { bookSourceController.testBookSourceSpeed(it) }
+        router.post("/testBookSourceSpeed").coroutineHandler { bookSourceController.testBookSourceSpeed(it) }
+        router.get("/testBookSourceSpeed").coroutineHandler { bookSourceController.testBookSourceSpeed(it) }
+        router.post("/reader3/testBookSourcesSpeed").coroutineHandler { bookSourceController.testBookSourcesSpeed(it) }
+        router.post("/testBookSourcesSpeed").coroutineHandler { bookSourceController.testBookSourcesSpeed(it) }
 
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { bookSourceController.readSourceFile(it) }
