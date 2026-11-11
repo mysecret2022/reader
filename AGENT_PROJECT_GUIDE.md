@@ -80,6 +80,19 @@
    - **原因**：胶囊型输入外层为普通 `<div>`，左侧存在 43px 的内边距与图标区域。图标未设置穿透，点击打在图标或空白区时事件不转发给内部 `<input>`，导致首次点击无效，用户需二次点击靠右文本区；同时 placeholder 在获得焦点时瞬间设置 `visibility: hidden` 引发 Shadow DOM 重新排版导致光标微抖动。
    - **解决方案**：将输入外层替换为原生语义化 `<label class="input-wrapper">` 并设置 `cursor: text`；图标增加 `pointer-events: none; user-select: none;`；移除 placeholder 的 `visibility: hidden` 仅保留 `opacity: 0` 平滑过渡；并在页面挂载时自动聚焦到用户名输入框。
 
+8. **PC 网页端正文选中文本快捷菜单（复制/书签/规则）一闪而过与误翻页修复**：
+   - **原因**：
+     - 在 PC 端鼠标拖拽划选正文时，若划选时长超过 80ms，`selectionchange` 的 80ms 防抖定时器会在鼠标按键尚未松开时提前触发并渲染出操作弹窗（`textActionMenuVisible = true`）；当用户松开鼠标左键时，浏览器立即派发合成 `click` 点击事件打在正文容器 `handlerClick` 上，`handlerClick` 判定 `textActionMenuVisible === true` 立即调用 `closeTextActionMenu(true)` 将其秒关。
+     - 若划选时长短于 80ms，合成 `click` 先于防抖定时器触发并下穿到 `eventHandler(e)`，导致意外触发上下翻页或唤起阅读菜单；
+     - 原有逻辑在弹出与关闭时无条件执行 `removeAllRanges()`，虽抑制了移动端原生弹窗，但导致 PC 端原生文字蓝色高亮丢失并破坏了键盘 `Ctrl+C` 原生快捷复制体验。
+   - **解决方案**：
+     - 严格隔离移动端触屏与 PC 鼠标交互链路：保持移动端触控路径（`handleTouchStart`/`handleTouchMove`/`handleTouchEnd`）100% 不变；
+     - 在 `.content` 正文容器监听 `@mousedown="handleContentMouseDown"`，鼠标左键按下时置位 `isMouseDown = true` 并重置 `justSelectedOnPC = false`；在 `mounted` 及 `activated` 注册全局 `window.addEventListener("mouseup", this.handleGlobalMouseUp)` 确保在视口任何位置抬手均能可靠重置 `isMouseDown = false`，并在 `beforeDestroy`/`deactivated` 妥善清理；
+     - 在 `handleSelectionChange` 中增加 `if (this.isTouchActive || this.isMouseDown) return;` 门禁，彻底杜绝鼠标拖拽划选中途提前触发防抖弹窗；
+     - 在 `handleGlobalMouseUp` 中检测非移动端/触屏下的有效正文选区，置位 `justSelectedOnPC = true` 并触发弹窗显示；
+     - 在 `handlerClick` 头部优先拦截 `if (this.justSelectedOnPC)`，安全吸收划选释放后的合成 `click` 事件并重置状态，既杜绝弹窗秒关，又彻底避免误翻页与误唤菜单；
+     - 仅在移动端 (`this.isMobile || this.isTouchActive`) 提取选区后执行 `removeAllRanges()` 压制系统菜单，PC 端保留原生蓝色选区高亮并完美支持 `Ctrl+C`。
+
 ---
 
 ## 5. 路线图与待改进项 (Roadmap & Next Steps)
