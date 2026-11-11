@@ -7,14 +7,32 @@
           size="small"
           circle
           @click="goBack"
-          title="返回"
+          title="返回书架"
         ></el-button>
         <span class="page-title">书源管理与体检中心</span>
+        <el-tag
+          size="small"
+          :type="currentUser ? 'success' : 'info'"
+          class="user-tag"
+          v-if="currentUser"
+        >
+          <i class="el-icon-user"></i>
+          {{ currentUser }} 专属空间
+        </el-tag>
         <el-tag size="small" type="info" class="source-count-tag">
           共 {{ bookSourceList.length }} 个书源
         </el-tag>
       </div>
       <div class="header-right">
+        <el-button
+          type="info"
+          plain
+          icon="el-icon-upload2"
+          size="small"
+          @click="openImportSourceDialog"
+        >
+          导入书源
+        </el-button>
         <el-button
           type="primary"
           icon="el-icon-odometer"
@@ -235,6 +253,90 @@
         :total="filteredSources.length"
       ></el-pagination>
     </div>
+
+    <!-- 导入书源弹窗 -->
+    <el-dialog
+      title="导入书源 (个人专属书源库)"
+      :visible.sync="showImportDialog"
+      width="540px"
+      append-to-body
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        style="margin-bottom: 15px;"
+        show-icon
+      >
+        导入的书源仅保存在您当前的专属账号空间中，不会影响系统默认书源或其他用户。
+      </el-alert>
+      <el-tabs v-model="importTab">
+        <el-tab-pane label="网络远程链接" name="url">
+          <el-input
+            v-model="importUrl"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入书源 JSON 文件的 HTTP/HTTPS 网络地址"
+          ></el-input>
+          <div style="margin-top: 15px; text-align: right;">
+            <el-button size="small" @click="showImportDialog = false"
+              >取消</el-button
+            >
+            <el-button
+              type="primary"
+              size="small"
+              :loading="importing"
+              @click="submitImportUrl"
+            >
+              立即拉取并导入
+            </el-button>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="文本 / JSON 内容" name="text">
+          <el-input
+            v-model="importContent"
+            type="textarea"
+            :rows="6"
+            placeholder="请在此粘贴书源 JSON 数据 (单个书源对象或书源数组)"
+          ></el-input>
+          <div style="margin-top: 15px; text-align: right;">
+            <el-button size="small" @click="showImportDialog = false"
+              >取消</el-button
+            >
+            <el-button
+              type="primary"
+              size="small"
+              :loading="importing"
+              @click="submitImportText"
+            >
+              解析并导入
+            </el-button>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="同步系统默认源" name="sync">
+          <div
+            style="padding: 10px 0; color: #606266; font-size: 14px; line-height: 1.6;"
+          >
+            <p>从服务器同步预设的默认书源到您的个人书源库。</p>
+            <p style="color: #e6a23c; font-size: 13px;">
+              * 提示：同步将载入全量优质官方书源至您的个人专属空间。
+            </p>
+          </div>
+          <div style="margin-top: 15px; text-align: right;">
+            <el-button size="small" @click="showImportDialog = false"
+              >取消</el-button
+            >
+            <el-button
+              type="success"
+              size="small"
+              :loading="syncingDefault"
+              @click="submitSyncDefault"
+            >
+              从系统默认同步
+            </el-button>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </el-dialog>
   </div>
 </template>
 
@@ -253,10 +355,23 @@ export default {
       pageSize: 50,
       selectedSources: [],
       isTestingSpeed: false,
-      testedCount: 0
+      testedCount: 0,
+      showImportDialog: false,
+      importTab: "url",
+      importUrl: "",
+      importContent: "",
+      importing: false,
+      syncingDefault: false
     };
   },
   computed: {
+    currentUser() {
+      return (
+        (this.$store.state.userInfo && this.$store.state.userInfo.username) ||
+        this.$store.state.username ||
+        ""
+      );
+    },
     api() {
       return this.$store.state.api;
     },
@@ -313,7 +428,106 @@ export default {
       if (window.history.length > 1) {
         this.$router.go(-1);
       } else {
-        this.$router.push("/admin");
+        this.$router.push("/");
+      }
+    },
+    openImportSourceDialog() {
+      this.importUrl = "";
+      this.importContent = "";
+      this.importTab = "url";
+      this.showImportDialog = true;
+    },
+    async submitImportUrl() {
+      const url = (this.importUrl || "").trim();
+      if (!url) {
+        this.$message.error("请输入远程书源 URL 地址");
+        return;
+      }
+      this.importing = true;
+      try {
+        let sourceList = null;
+        try {
+          const fetchRes = await Axios.post(
+            this.api + "/readRemoteSourceFile",
+            { url },
+            { silent: true }
+          );
+          if (
+            fetchRes &&
+            fetchRes.data &&
+            fetchRes.data.isSuccess &&
+            Array.isArray(fetchRes.data.data)
+          ) {
+            const raw = fetchRes.data.data[0];
+            sourceList = typeof raw === "string" ? JSON.parse(raw) : raw;
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        if (!sourceList) {
+          const directRes = await Axios.get(url);
+          sourceList = directRes.data;
+        }
+
+        await this.saveImportedSources(sourceList);
+        this.showImportDialog = false;
+      } catch (err) {
+        this.$message.error("拉取远程书源失败: " + err.toString());
+      } finally {
+        this.importing = false;
+      }
+    },
+    async submitImportText() {
+      const content = (this.importContent || "").trim();
+      if (!content) {
+        this.$message.error("请粘贴书源 JSON 数据");
+        return;
+      }
+      this.importing = true;
+      try {
+        const data = JSON.parse(content);
+        await this.saveImportedSources(data);
+        this.showImportDialog = false;
+      } catch (err) {
+        this.$message.error("解析书源 JSON 失败: " + err.toString());
+      } finally {
+        this.importing = false;
+      }
+    },
+    async saveImportedSources(data) {
+      let list = Array.isArray(data) ? data : data ? [data] : [];
+      if (list.length === 0) {
+        this.$message.warning("未检测到有效书源数据");
+        return;
+      }
+      const res = await Axios.post(this.api + "/saveBookSources", list);
+      if (res && res.data && res.data.isSuccess) {
+        this.$message.success(`成功导入 ${list.length} 个书源至您的专属空间！`);
+        await this.fetchSources();
+      } else {
+        this.$message.error(
+          (res && res.data && res.data.errorMsg) || "保存书源失败"
+        );
+      }
+    },
+    async submitSyncDefault() {
+      this.syncingDefault = true;
+      try {
+        const res = await Axios.post(this.api + "/syncAdminBookSources");
+        if (res && res.data && res.data.isSuccess) {
+          this.$message.success("成功从系统默认书源同步！");
+          this.showImportDialog = false;
+          await this.fetchSources();
+        } else {
+          this.$message.error(
+            (res && res.data && res.data.errorMsg) || "同步系统默认书源失败"
+          );
+        }
+      } catch (err) {
+        this.$message.error("同步系统默认书源失败: " + err.toString());
+      } finally {
+        this.syncingDefault = false;
       }
     },
     async fetchSources() {

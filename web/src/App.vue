@@ -478,6 +478,19 @@ export default {
     },
     onLoginSuccess(payload) {
       localStorage.removeItem("reader_guest_mode");
+      try {
+        const userToken = payload && payload.data && payload.data.accessToken;
+        if (userToken) {
+          localStorage.removeItem(`pwa_banner_dismissed_${userToken}`);
+        }
+        Object.keys(localStorage).forEach(k => {
+          if (k.startsWith("pwa_banner_dismissed_")) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch (e) {
+        // ignore
+      }
       this.$store.commit("setShowLogin", false);
       this.$nextTick(() => {
         this.$store.commit("setLoginAuth", true);

@@ -243,6 +243,25 @@ export default {
           { alert: false }
         );
         if (res && res.data && res.data.isSuccess) {
+          try {
+            const userToken =
+              (res.data.data && res.data.data.accessToken) || "";
+            const username = this.loginForm.username;
+            if (userToken) {
+              localStorage.removeItem(`pwa_banner_dismissed_${userToken}`);
+            }
+            if (username) {
+              localStorage.removeItem(`pwa_banner_dismissed_${username}`);
+            }
+            localStorage.removeItem("pwa_banner_dismissed_anonymous");
+            Object.keys(localStorage).forEach(k => {
+              if (k.startsWith("pwa_banner_dismissed_")) {
+                localStorage.removeItem(k);
+              }
+            });
+          } catch (e) {
+            // ignore
+          }
           this.$message.success(this.isLogin ? "登录成功" : "注册成功");
           this.$emit("success", {
             data: res.data.data,

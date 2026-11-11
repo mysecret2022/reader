@@ -162,4 +162,67 @@ class BookSourceTest {
         assertEquals("https://sourceA.com", finalBookSourceList.getJsonObject(1).getString("bookSourceUrl"))
         assertEquals("https://sourceB.com", finalBookSourceList.getJsonObject(2).getString("bookSourceUrl"))
     }
+
+    @Test
+    fun testUserDataIsolationOnEmptySources() {
+        val mockStorage = mutableMapOf<String, String>()
+        mockStorage["admin/bookSource"] = JsonArray().add(JsonObject().put("bookSourceUrl", "https://default.com")).encode()
+
+        fun resolveUserSources(userNameSpace: String): JsonArray {
+            val rawStorage = mockStorage["$userNameSpace/bookSource"]
+            var list: JsonArray? = if (rawStorage != null) JsonArray(rawStorage) else null
+            if (rawStorage == null && userNameSpace != "admin") {
+                val adminRaw = mockStorage["admin/bookSource"]
+                if (adminRaw != null) {
+                    val adminList = JsonArray(adminRaw)
+                    mockStorage["$userNameSpace/bookSource"] = adminList.encode()
+                    list = adminList
+                }
+            }
+            return list ?: JsonArray()
+        }
+
+        // 1. Initial access: user1 has no file yet, should initialize from admin
+        val user1Initial = resolveUserSources("user1")
+        assertEquals(1, user1Initial.size())
+        assertEquals("https://default.com", user1Initial.getJsonObject(0).getString("bookSourceUrl"))
+
+        // 2. User1 deletes all sources (saves empty array)
+        mockStorage["user1/bookSource"] = JsonArray().encode()
+
+        // 3. Subsequent access: should return empty list, NOT re-populate from admin!
+        val user1AfterDelete = resolveUserSources("user1")
+        assertEquals(0, user1AfterDelete.size())
+
+        // 4. Admin sources remain untouched
+        val adminSources = resolveUserSources("admin")
+        assertEquals(1, adminSources.size())
+    }
+
+    @Test
+    fun testUserSaveIsolation() {
+        val mockStorage = mutableMapOf<String, JsonArray>()
+        mockStorage["default"] = JsonArray().add(JsonObject().put("name", "defaultSource"))
+
+        fun saveSources(userNameSpace: String, sources: JsonArray) {
+            mockStorage[userNameSpace] = sources
+            if (userNameSpace == "admin" || userNameSpace == "default") {
+                mockStorage["default"] = sources
+            }
+        }
+
+        // Normal user "bob" saves their sources
+        val bobSources = JsonArray().add(JsonObject().put("name", "bobCustomSource"))
+        saveSources("bob", bobSources)
+
+        assertEquals("bobCustomSource", mockStorage["bob"]!!.getJsonObject(0).getString("name"))
+        // default remains unchanged!
+        assertEquals("defaultSource", mockStorage["default"]!!.getJsonObject(0).getString("name"))
+
+        // Admin saves sources
+        val adminSources = JsonArray().add(JsonObject().put("name", "adminSource"))
+        saveSources("admin", adminSources)
+        assertEquals("adminSource", mockStorage["admin"]!!.getJsonObject(0).getString("name"))
+        assertEquals("adminSource", mockStorage["default"]!!.getJsonObject(0).getString("name"))
+    }
 }

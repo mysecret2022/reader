@@ -133,7 +133,7 @@ try {
             if (promptEvent.userChoice) {
               const choiceResult = await promptEvent.userChoice;
               if (choiceResult && choiceResult.outcome === "accepted") {
-                this.$message.success("正在添加到手机桌面...");
+                this.$message.success("正在添加到桌面...");
               } else {
                 this.$message.info("已取消安装");
               }

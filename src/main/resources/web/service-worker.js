@@ -16,7 +16,7 @@ workbox.setConfig({modulePathPrefix: "workbox-v4.3.1"});
 
 importScripts(
   "sw.js",
-  "precache-manifest.10bbc553b6cdfdfa85388c9811cab3e8.js"
+  "precache-manifest.d6d4c4bdf6563bf78b6a148fbbfdb573.js"
 );
 
 workbox.core.setCacheNameDetails({prefix: "reader"});

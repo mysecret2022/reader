@@ -82,14 +82,23 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
     }
 
     suspend fun getUserBookSourceJson(userNameSpace: String): JsonArray? {
-        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
-        if ((bookSourceList == null || bookSourceList.isEmpty()) && !userNameSpace.equals("admin")) {
-            // 用户书源文件不存在或为空，优先拷贝默认管理员(admin)的书源，其次default
-            var adminBookSourceList: JsonArray? = asJsonArray(getUserStorage("admin", "bookSource"))
-                ?: asJsonArray(getUserStorage("default", "bookSource"))
-            if (adminBookSourceList != null && !adminBookSourceList.isEmpty()) {
-                saveUserStorage(userNameSpace, "bookSource", adminBookSourceList.getList())
-                bookSourceList = adminBookSourceList
+        val rawStorage = getUserStorage(userNameSpace, "bookSource")
+        var bookSourceList: JsonArray? = asJsonArray(rawStorage)
+        if (rawStorage == null) {
+            if (!userNameSpace.equals("admin") && !userNameSpace.equals("default")) {
+                // 用户书源文件不存在，优先拷贝默认管理员(admin)的书源，其次default
+                var adminBookSourceList: JsonArray? = asJsonArray(getUserStorage("admin", "bookSource"))
+                    ?: asJsonArray(getUserStorage("default", "bookSource"))
+                if (adminBookSourceList != null && !adminBookSourceList.isEmpty()) {
+                    saveUserStorage(userNameSpace, "bookSource", adminBookSourceList.getList())
+                    bookSourceList = adminBookSourceList
+                }
+            } else if (userNameSpace.equals("admin")) {
+                var defaultSources: JsonArray? = asJsonArray(getUserStorage("default", "bookSource"))
+                if (defaultSources != null && !defaultSources.isEmpty()) {
+                    saveUserStorage("admin", "bookSource", defaultSources.getList())
+                    bookSourceList = defaultSources
+                }
             }
         }
         return bookSourceList
@@ -377,6 +386,9 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         }
         var userNameSpace = getUserNameSpace(context)
         saveUserStorage(userNameSpace, "bookSource", JsonArray())
+        if (userNameSpace.equals("admin") || userNameSpace.equals("default")) {
+            saveUserStorage("default", "bookSource", JsonArray())
+        }
         return returnData.setData("")
     }
 

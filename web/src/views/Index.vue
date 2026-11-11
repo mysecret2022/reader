@@ -164,6 +164,25 @@
           </div>
         </div>
 
+        <!-- 3. 书源管理 (体检/测速/批量删除/置顶/导入) -->
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            书源管理
+          </div>
+          <div class="setting-item">
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              icon="el-icon-odometer"
+              style="width: 100%; border-radius: 8px; font-weight: 500;"
+              @click="toBookSourceManage"
+            >
+              书源管理与体检中心
+            </el-button>
+          </div>
+        </div>
+
         <!-- 4. 管理 (从顶部右侧迁移至左侧) -->
         <div class="setting-wrapper" style="margin-top: 28px;">
           <div class="setting-title">
@@ -186,6 +205,12 @@
                 <i class="el-icon-arrow-down"></i>
               </el-button>
               <el-dropdown-menu slot="dropdown" style="min-width: 160px;">
+                <el-dropdown-item
+                  command="bookSourceManage"
+                  icon="el-icon-odometer"
+                >
+                  书源管理与体检
+                </el-dropdown-item>
                 <el-dropdown-item command="admin" icon="el-icon-s-tools">
                   {{
                     $store.state.userInfo.isAdmin ||
@@ -220,7 +245,7 @@
           </div>
         </div>
 
-        <!-- 5. 安装至手机桌面 (PWA) -->
+        <!-- 5. 安装至桌面 (PWA) -->
         <div
           class="setting-wrapper"
           v-if="canInstallPwa"
@@ -237,7 +262,7 @@
               style="width: 100%; border-radius: 8px; font-weight: bold;"
               @click="installPwa"
             >
-              📲 安装到手机桌面
+              📲 安装到桌面
             </el-button>
           </div>
         </div>
@@ -260,13 +285,6 @@
           ({{ bookList.length }})
         </div>
         <div class="shelf-title-actions">
-          <div
-            class="title-btn pwa-install-title-btn"
-            v-if="canInstallPwa && !isSearchResult"
-            @click="installPwa"
-          >
-            📲 安装到手机桌面
-          </div>
           <div
             class="title-btn"
             v-if="$store.getters.isNormalPage && isSearchResult"
@@ -312,7 +330,7 @@
           <div class="pwa-banner-left">
             <i class="el-icon-mobile-phone pwa-banner-icon"></i>
             <span class="pwa-banner-text"
-              >可将阅读安装至手机桌面，享受离线阅读与全屏沉浸体验</span
+              >可将阅读安装至桌面，享受离线阅读与全屏沉浸体验</span
             >
           </div>
           <div class="pwa-banner-right">
@@ -323,12 +341,12 @@
               class="pwa-install-btn"
               @click="installPwa"
             >
-              📲 安装到手机桌面
+              📲 安装到桌面
             </el-button>
             <i
               class="el-icon-close pwa-banner-close"
               title="稍后再说"
-              @click="showPwaBanner = false"
+              @click="dismissPwaBanner"
             ></i>
           </div>
         </div>
@@ -935,7 +953,7 @@ export default {
       searchLastIndex: -1,
 
       showBookEditButton: false,
-      showPwaBanner: true,
+      showPwaBanner: false,
 
       popExploreVisible: false,
       loadingMore: false,
@@ -1108,6 +1126,7 @@ export default {
         window.__deferredPrompt || window.deferredPrompt
       );
     }
+    this.initPwaBannerState();
   },
   beforeDestroy() {
     this.stopCoverSSE();
@@ -1120,17 +1139,53 @@ export default {
   activated() {
     document.title = "阅读";
     this.scanCacheStorage();
+    this.initPwaBannerState();
     if (this.$root && this.$root.loadBookGroup) {
       this.$root.loadBookGroup(true);
     }
   },
   methods: {
+    getPwaDismissKey() {
+      const user =
+        this.$store.state.token ||
+        (this.$store.state.userInfo && this.$store.state.userInfo.username) ||
+        "anonymous";
+      return `pwa_banner_dismissed_${user}`;
+    },
+    isPwaBannerDismissed() {
+      try {
+        const key = this.getPwaDismissKey();
+        return localStorage.getItem(key) === "1";
+      } catch (e) {
+        return false;
+      }
+    },
+    dismissPwaBanner() {
+      this.showPwaBanner = false;
+      try {
+        const key = this.getPwaDismissKey();
+        localStorage.setItem(key, "1");
+      } catch (e) {
+        // ignore
+      }
+    },
+    initPwaBannerState() {
+      if (this.isPwaBannerDismissed()) {
+        this.showPwaBanner = false;
+      } else {
+        this.showPwaBanner = true;
+      }
+    },
     handleBeforeInstallPrompt(e) {
       e.preventDefault();
       window.deferredPrompt = e;
       window.__deferredPrompt = e;
       this.$store.commit("setPwaInstallPrompt", e);
-      this.showPwaBanner = true;
+      if (!this.isPwaBannerDismissed()) {
+        this.showPwaBanner = true;
+      } else {
+        this.showPwaBanner = false;
+      }
     },
     handleAppInstalled() {
       window.deferredPrompt = null;
@@ -2996,8 +3051,14 @@ export default {
     getBookCoverUrl(book) {
       return book.customCoverUrl || book.coverUrl;
     },
+    toBookSourceManage() {
+      this.showNavigation = false;
+      this.$router.push("/bookSourceManage");
+    },
     handleAdminMenuCommand(command) {
-      if (command === "admin") {
+      if (command === "bookSourceManage") {
+        this.toBookSourceManage();
+      } else if (command === "admin") {
         this.$router.push("/admin");
       } else if (command === "changePassword") {
         this.promptChangePassword();
@@ -3006,7 +3067,9 @@ export default {
       }
     },
     handleUserMenuCommand(command) {
-      if (command === "userSpace" || command === "admin") {
+      if (command === "bookSourceManage") {
+        this.toBookSourceManage();
+      } else if (command === "userSpace" || command === "admin") {
         const username =
           this.$store.state.userInfo && this.$store.state.userInfo.username;
         this.$router.push(username ? "/" + username : "/admin");
