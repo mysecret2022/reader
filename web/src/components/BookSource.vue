@@ -157,11 +157,35 @@ export default {
       });
     }
   },
-  mounted() {},
+  mounted() {
+    if (this.visible) {
+      this.getBookSource();
+    }
+  },
+  beforeDestroy() {
+    if (this.searchEventSource) {
+      try {
+        this.searchEventSource.close();
+      } catch (e) {
+        //
+      }
+      this.searchEventSource = null;
+    }
+  },
   watch: {
     visible(isVisible) {
       if (isVisible) {
         this.getBookSource();
+      } else {
+        if (this.searchEventSource) {
+          try {
+            this.searchEventSource.close();
+          } catch (e) {
+            //
+          }
+          this.searchEventSource = null;
+          this.loadingMore = false;
+        }
       }
     },
     readingBook(val, oldVal) {
@@ -191,6 +215,7 @@ export default {
       return book.historicalSources.includes(searchBook.origin);
     },
     getBookSource(refresh) {
+      this.loading = true;
       Axios.post(this.api + `/getAvailableBookSource`, {
         url: this.$store.getters.readingBook.bookUrl,
         refresh: refresh ? 1 : 0
@@ -206,7 +231,7 @@ export default {
               );
               this.jumpToActive();
             } else {
-              // this.loadMoreSource();
+              this.searchBookSourceByEventStream();
             }
           }
         },
@@ -351,6 +376,12 @@ export default {
       if (this.loadingMore) {
         tryClose();
         this.loadingMore = false;
+        return;
+      }
+      if (
+        !this.$store.getters.readingBook ||
+        !this.$store.getters.readingBook.name
+      ) {
         return;
       }
       const params = {

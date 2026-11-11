@@ -20,7 +20,9 @@ export default {
     "showContent",
     "isScrollRead",
     "showChapterList",
-    "currentShowChapter"
+    "currentShowChapter",
+    "autoChangingSource",
+    "refreshingContent"
   ],
   render() {
     if (this.showContent) {
@@ -71,6 +73,7 @@ export default {
                   type="primary"
                   size="small"
                   icon="el-icon-refresh"
+                  loading={this.refreshingContent}
                   onClick={() => this.$emit("refreshContent")}
                 >
                   重试获取本章
@@ -78,10 +81,19 @@ export default {
                 <el-button
                   type="warning"
                   size="small"
-                  icon="el-icon-menu"
-                  onClick={() => this.$emit("changeBookSource")}
+                  icon="el-icon-refresh-right"
+                  loading={this.autoChangingSource}
+                  onClick={() => this.$emit("autoQuickChangeSource")}
                 >
                   一键换源
+                </el-button>
+                <el-button
+                  type="info"
+                  size="small"
+                  icon="el-icon-menu"
+                  onClick={() => this.$emit("openSourceDialog")}
+                >
+                  手动选源
                 </el-button>
               </div>
             </div>
@@ -282,6 +294,7 @@ export default {
                         type="primary"
                         size="small"
                         icon="el-icon-refresh"
+                        loading={this.refreshingContent}
                         onClick={() => this.$emit("refreshContent")}
                       >
                         重试获取本章
@@ -289,10 +302,19 @@ export default {
                       <el-button
                         type="warning"
                         size="small"
-                        icon="el-icon-menu"
-                        onClick={() => this.$emit("changeBookSource")}
+                        icon="el-icon-refresh-right"
+                        loading={this.autoChangingSource}
+                        onClick={() => this.$emit("autoQuickChangeSource")}
                       >
                         一键换源
+                      </el-button>
+                      <el-button
+                        type="info"
+                        size="small"
+                        icon="el-icon-menu"
+                        onClick={() => this.$emit("openSourceDialog")}
+                      >
+                        手动选源
                       </el-button>
                     </div>
                   </div>

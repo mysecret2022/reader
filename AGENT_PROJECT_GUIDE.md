@@ -96,6 +96,18 @@
      - 气泡菜单容器增加 `@mousedown.stop` 阻断内部按钮点击穿透至正文；并对全局 `pointerdown` 监听与定时器引入集中句柄管理，在关闭、失活与销毁时百分之百释放；
      - 仅在移动端 (`this.isMobile || this.isTouchActive`) 提取选区后执行 `removeAllRanges()` 压制系统菜单，PC 端保留原生蓝色选区高亮并完美支持 `Ctrl+C`。
 
+9. **阅读器章节加载失败卡片「一键换源」无响应与移动端选源不可见修复**：
+   - **原因**：
+     - `Content.vue` 章节加载失败卡片上的「一键换源」按钮之前仅派发 `changeBookSource` 事件，`Reader.vue` 监听到后仅执行 `popBookSourceVisible = true`；
+     - 负责展示书源选择的 `el-popover` 挂载在左侧工具栏 `.tool-bar` 上，而在移动端/窄屏（`miniInterface: true`）下，`.tool-bar` 设置了 `display: none`，导致弹出层完全不可见，用户点击无任何反应；
+     - 缺乏真正的自动化 1-click 换源逻辑，无法自动从可用书源中择优切换并恢复阅读；
+     - 且在本地无缓存书源时打开书源列表，因无自动扫描保底，会一直卡在“来源(0)”状态。
+   - **解决方案**：
+     - **错误卡片三段式操作交互**：在 `Content.vue` 中重构卡片操作组，提供【重试获取本章】（带 loading 态）、【一键换源】（带 loading 态与自动择优切源）以及【手动选源】（唤起全局居中弹窗）三个清晰操作入口；
+     - **真正的一键自动切源流水线**：在 `Reader.vue` 中实现 `autoQuickChangeSource()`，优先从已缓存的可用书源中过滤当前源并按测速耗时优选候选；若无缓存书源，则通过 `/searchBookSourceSSE` 实时并发探测前 2-3 个有效新书源后立即截断连接（避免耗费数十秒长等待），择优后自动调用 `/setBookSource` 换源、更新 Vuex 书籍状态与书架缓存、重新拉取目录及当前章节内容并提示用户，实现零操作全自动换源自愈；若未检索到源则友好提示并自动打开手动选源弹窗；
+     - **跨端适配居中弹窗**：在 `Reader.vue` 中新增挂载在 body 级别的 `<el-dialog title="选择书源">`，移动端窄屏自适应 95% 宽度，支持日间/夜间主题无缝适配，使得无论是 PC 还是手机端在任何场景下均能稳定呼出书源列表；
+     - **冷启动零书源自动探测**：在 `BookSource.vue` 中对 `getBookSource()` 增加冷启动保底，当获取缓存书源列表返回 0 条时，自动触发 `searchBookSourceByEventStream()` 开启全网实时流式检索，杜绝“来源(0)”死等假死问题。
+
 ---
 
 ## 5. 路线图与待改进项 (Roadmap & Next Steps)

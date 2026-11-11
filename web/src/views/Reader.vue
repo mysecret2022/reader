@@ -405,6 +405,8 @@
             :style="contentStyle"
             :showChapterList="showChapterList"
             :isScrollRead="isScrollRead"
+            :autoChangingSource="autoChangingSource"
+            :refreshingContent="refreshingContent"
             ref="bookContentRef"
             @prevChapter="toLastChapter"
             @nextChapter="toNextChapter"
@@ -416,7 +418,9 @@
             @epubClickHash="epubClickHash"
             @epubKeydown="keydownHandler($event, true)"
             @refreshContent="refreshContent"
-            @changeBookSource="popBookSourceVisible = true"
+            @autoQuickChangeSource="autoQuickChangeSource"
+            @openSourceDialog="openManualSourceDialog"
+            @changeBookSource="openManualSourceDialog"
           />
         </div>
         <!-- 仿真翻页 3D 纸张拟真翻页图层 -->
@@ -676,6 +680,23 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 手动选择书源弹窗（居中弹窗，适配桌面端与移动窄屏） -->
+    <el-dialog
+      title="选择书源"
+      :visible.sync="showManualSourceDialog"
+      :width="$store.state.miniInterface ? '95%' : '600px'"
+      custom-class="manual-source-dialog"
+      append-to-body
+    >
+      <BookSource
+        ref="manualBookSource"
+        class="popup"
+        :visible="showManualSourceDialog"
+        @changeBookSource="changeBookSource()"
+        @close="showManualSourceDialog = false"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -694,7 +715,8 @@ import {
   LimitResquest,
   networkFirstRequest,
   editDistance,
-  formatSize
+  formatSize,
+  buildURL
 } from "../plugins/helper";
 import { defaultReplaceRule, defaultBookmark } from "../plugins/config.js";
 import eventBus from "../plugins/eventBus";
@@ -1074,6 +1096,9 @@ export default {
       isCachingContent: false,
       cachingContentTip: "",
       showOfflineCacheDialog: false,
+      showManualSourceDialog: false,
+      autoChangingSource: false,
+      refreshingContent: false,
       cachedStats: {
         cachedCount: 0,
         totalBytes: 0,
@@ -1560,6 +1585,7 @@ export default {
     },
     changeBookSource() {
       this.popBookSourceVisible = false;
+      this.showManualSourceDialog = false;
       this.show = false;
       this.tryRefresh = false;
       if (this.$route.query && this.$route.query.search) {
@@ -1568,6 +1594,239 @@ export default {
       // 换源后直接加载新源目录并直接阅读
       this.loadCatalog(false, true);
     },
+    openManualSourceDialog() {
+      this.showManualSourceDialog = true;
+    },
+    async autoQuickChangeSource() {
+      if (this.autoChangingSource) {
+        return;
+      }
+      const currentBook = this.$store.getters.readingBook;
+      if (!currentBook || !currentBook.name) {
+        this.$message.error("书籍信息不存在");
+        return;
+      }
+      const isInShelf = await this.$root.$children[0].isInShelf(
+        currentBook,
+        "加入书架之后才能切换书源, 是否加入书架?"
+      );
+      if (!isInShelf) {
+        return;
+      }
+
+      this.autoChangingSource = true;
+      try {
+        let candidate = null;
+
+        // 1. 先尝试从缓存的书源列表获取候选书源
+        try {
+          const res = await Axios.post(this.api + "/getAvailableBookSource", {
+            url: currentBook.bookUrl,
+            refresh: 0
+          });
+          if (
+            res &&
+            res.data &&
+            res.data.isSuccess &&
+            Array.isArray(res.data.data)
+          ) {
+            const cachedCandidates = res.data.data.filter(
+              v =>
+                v &&
+                v.origin &&
+                v.origin !== currentBook.origin &&
+                v.bookUrl !== currentBook.bookUrl
+            );
+            if (cachedCandidates.length > 0) {
+              cachedCandidates.sort((a, b) => {
+                const timeA =
+                  typeof a.time === "number" && a.time > 0 ? a.time : 999999;
+                const timeB =
+                  typeof b.time === "number" && b.time > 0 ? b.time : 999999;
+                return timeA - timeB;
+              });
+              candidate = cachedCandidates[0];
+            }
+          }
+        } catch (err) {
+          // ignore and fallback to SSE search
+        }
+
+        // 2. 若无缓存候选书源，则通过 SSE 检索网络书源
+        if (!candidate) {
+          candidate = await new Promise(resolve => {
+            let eventSource = null;
+            const candidates = [];
+            let isDone = false;
+
+            const cleanup = () => {
+              if (isDone) return;
+              isDone = true;
+              if (timer) {
+                clearTimeout(timer);
+              }
+              if (eventSource) {
+                try {
+                  eventSource.close();
+                } catch (e) {
+                  //
+                }
+                eventSource = null;
+              }
+              if (candidates.length > 0) {
+                candidates.sort((a, b) => {
+                  const timeA =
+                    typeof a.time === "number" && a.time > 0 ? a.time : 999999;
+                  const timeB =
+                    typeof b.time === "number" && b.time > 0 ? b.time : 999999;
+                  return timeA - timeB;
+                });
+                resolve(candidates[0]);
+              } else {
+                resolve(null);
+              }
+            };
+
+            const timer = setTimeout(() => {
+              cleanup();
+            }, 8000);
+
+            try {
+              const params = {
+                accessToken: this.$store.state.token,
+                concurrentCount:
+                  (this.$store.state.searchConfig &&
+                    this.$store.state.searchConfig.concurrentCount) ||
+                  16,
+                url: currentBook.bookUrl,
+                name: currentBook.name,
+                author: currentBook.author || "",
+                bookSourceGroup: "",
+                lastIndex: 0
+              };
+              const sseUrl = buildURL(
+                this.api + "/searchBookSourceSSE",
+                params
+              );
+              eventSource = new EventSource(sseUrl, {
+                withCredentials: true
+              });
+
+              eventSource.addEventListener("message", e => {
+                try {
+                  if (!e.data) return;
+                  const result = JSON.parse(e.data);
+                  if (result && Array.isArray(result.data)) {
+                    for (const item of result.data) {
+                      if (
+                        item &&
+                        item.origin &&
+                        item.origin !== currentBook.origin &&
+                        item.bookUrl !== currentBook.bookUrl
+                      ) {
+                        if (
+                          !candidates.some(
+                            c =>
+                              c.origin === item.origin ||
+                              c.bookUrl === item.bookUrl
+                          )
+                        ) {
+                          candidates.push(item);
+                        }
+                      }
+                    }
+                    if (candidates.length >= 2) {
+                      cleanup();
+                    }
+                  }
+                } catch (err) {
+                  // ignore
+                }
+              });
+
+              eventSource.addEventListener("end", () => {
+                cleanup();
+              });
+
+              eventSource.addEventListener("error", () => {
+                cleanup();
+              });
+            } catch (err) {
+              cleanup();
+            }
+          });
+        }
+
+        // 3. 校验是否获取到有效候选书源
+        if (!candidate) {
+          this.$message.warning("未检索到其他可用书源，请尝试手动选源");
+          this.openManualSourceDialog();
+          return;
+        }
+
+        // 4. 调用 /setBookSource 接口进行换源
+        const res = await Axios.post(this.api + "/setBookSource", {
+          bookUrl: currentBook.bookUrl,
+          newUrl: candidate.bookUrl,
+          bookSourceUrl: candidate.origin,
+          name: currentBook.name,
+          author: currentBook.author
+        });
+
+        if (res && res.data && res.data.isSuccess) {
+          let updatedBook = Object.assign({}, this.$store.getters.readingBook);
+          updatedBook.bookUrl = candidate.bookUrl;
+          updatedBook.origin = candidate.origin;
+          updatedBook.originName = candidate.originName;
+          updatedBook.tocUrl = candidate.tocUrl;
+          if (typeof candidate.type !== "undefined") {
+            updatedBook.type = candidate.type;
+          }
+          if (typeof candidate.coverUrl !== "undefined") {
+            updatedBook.coverUrl = candidate.coverUrl;
+          }
+          if (res.data.data) {
+            updatedBook = Object.assign(updatedBook, res.data.data);
+          }
+          this.$store.commit("setReadingBook", updatedBook);
+
+          // 重新拉取书架
+          Axios.get(this.api + "/getBookshelf", {})
+            .then(shelfRes => {
+              if (shelfRes && shelfRes.data && shelfRes.data.isSuccess) {
+                this.$store.commit("setShelfBooks", shelfRes.data.data);
+              }
+            })
+            .catch(() => {});
+
+          if (this.$route.query && this.$route.query.search) {
+            this.$router.replace({ path: "/reader" }).catch(() => {});
+          }
+
+          // 5. 重新加载目录与章节内容并恢复阅读
+          this.tryRefresh = false;
+          this.show = false;
+          await this.loadCatalog(true, true);
+
+          this.$message.success(
+            "已自动换源至【" +
+              (candidate.originName || candidate.origin) +
+              "】并恢复阅读"
+          );
+        } else {
+          const errMsg = (res && res.data && res.data.errorMsg) || "换源失败";
+          this.$message.error(errMsg);
+          this.openManualSourceDialog();
+        }
+      } catch (err) {
+        this.$message.error(
+          "自动换源异常：" + (err && err.message ? err.message : err.toString())
+        );
+        this.openManualSourceDialog();
+      } finally {
+        this.autoChangingSource = false;
+      }
+    },
     loadCatalog(refresh, init) {
       if (!this.api) {
         setTimeout(() => {
@@ -1575,9 +1834,9 @@ export default {
             this.loadCatalog(refresh);
           }
         }, 1000);
-        return;
+        return Promise.resolve();
       }
-      this.getCatalog(refresh).then(
+      return this.getCatalog(refresh).then(
         res => {
           if (res && res.data && res.data.isSuccess) {
             var book = Object.assign({}, this.$store.getters.readingBook);
@@ -1650,6 +1909,7 @@ export default {
       );
     },
     refreshContent() {
+      this.refreshingContent = true;
       this.getContent(this.$store.getters.readingBook.index, true);
     },
     getContent(index, refresh) {
@@ -1669,6 +1929,7 @@ export default {
         this.loadingSafetyTimer = null;
       }
       this.loadingSafetyTimer = setTimeout(() => {
+        this.refreshingContent = false;
         if (this.loading && typeof this.loading.close === "function") {
           this.loading.close();
         }
@@ -1713,9 +1974,11 @@ export default {
           if (this.loading && typeof this.loading.close === "function") {
             this.loading.close();
           }
+          this.refreshingContent = false;
         } else {
           this.tryRefresh = true;
           this.refreshCatalog();
+          this.refreshingContent = false;
         }
         return;
       }
@@ -1811,6 +2074,7 @@ export default {
           }
         )
         .finally(() => {
+          this.refreshingContent = false;
           if (this.loadingSafetyTimer) {
             clearTimeout(this.loadingSafetyTimer);
             this.loadingSafetyTimer = null;
@@ -5659,7 +5923,64 @@ export default {
   }
 }
 
+.manual-source-dialog {
+  border-radius: 12px !important;
+  overflow: hidden;
+  max-width: 95vw;
+
+  .el-dialog__header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f0f2f5;
+
+    .el-dialog__title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+  }
+
+  .el-dialog__body {
+    padding: 16px 20px 20px;
+  }
+
+  .popup-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+
+    .data-wrapper {
+      height: 380px;
+      max-height: 60vh;
+    }
+  }
+}
+
 .night-theme, .night {
+  .manual-source-dialog {
+    background: #21252b !important;
+
+    .el-dialog__header {
+      border-bottom-color: #2c313a;
+
+      .el-dialog__title {
+        color: #d7dae0;
+      }
+
+      .el-dialog__close {
+        color: #abb2bf;
+      }
+    }
+
+    .source-name {
+      color: #d7dae0;
+    }
+    .source-time {
+      color: #888;
+    }
+    .source-latest-chapter {
+      color: #7f848e;
+    }
+  }
+
   .offline-cache-dialog {
     background: #21252b !important;
 
