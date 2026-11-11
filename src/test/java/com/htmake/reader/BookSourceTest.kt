@@ -363,7 +363,7 @@ class BookSourceTest {
             var speedCost: Long? = null,
             var speedError: String? = null,
             var isTesting: Boolean = false,
-            var sandboxChecked: Boolean = true
+            var sandboxChecked: Boolean = false // 待测状态默认不勾选，体检通过后自动勾选优质源
         )
 
         val sandboxList = mutableListOf(
@@ -371,11 +371,20 @@ class BookSourceTest {
             SandboxSource("极速源 2", "https://fast2.com"),
             SandboxSource("较慢源 1", "https://slow1.com"),
             SandboxSource("超时死源", "https://timeout-dead.com"),
-            SandboxSource("HTTP500死源", "https://error500.com")
+            SandboxSource("HTTP500死源", "https://error500.com"),
+            SandboxSource("缺失地址畸形源", ""),
+            SandboxSource("尚未体检待测源", "https://pending.com")
         )
 
         // Simulate concurrent speed test in sandbox
         fun applyTestResult(source: SandboxSource, cost: Long, isOk: Boolean, errorMsg: String? = null) {
+            if (source.bookSourceUrl.isBlank()) {
+                source.speedStatus = "failed"
+                source.speedCost = 0
+                source.speedError = "缺少有效书源地址"
+                source.sandboxChecked = false
+                return
+            }
             source.speedCost = cost
             if (isOk) {
                 if (cost < 1500) {
@@ -401,6 +410,8 @@ class BookSourceTest {
         applyTestResult(sandboxList[2], 2300, true)
         applyTestResult(sandboxList[3], 4500, true)
         applyTestResult(sandboxList[4], 300, false, "HTTP 500")
+        applyTestResult(sandboxList[5], 0, false)
+        // sandboxList[6] remains pending/untested
 
         // 1. Verify health status buckets
         assertEquals("fast", sandboxList[0].speedStatus)
@@ -408,20 +419,24 @@ class BookSourceTest {
         assertEquals("slow", sandboxList[2].speedStatus)
         assertEquals("failed", sandboxList[3].speedStatus)
         assertEquals("failed", sandboxList[4].speedStatus)
+        assertEquals("failed", sandboxList[5].speedStatus)
+        assertEquals(null, sandboxList[6].speedStatus)
 
-        // 2. Verify auto-selection: quality/usable sources checked, dead sources unchecked
+        // 2. Verify auto-selection: quality/usable sources checked, dead & invalid & untested sources unchecked
         assertTrue(sandboxList[0].sandboxChecked)
         assertTrue(sandboxList[1].sandboxChecked)
         assertTrue(sandboxList[2].sandboxChecked)
         assertFalse(sandboxList[3].sandboxChecked)
         assertFalse(sandboxList[4].sandboxChecked)
+        assertFalse(sandboxList[5].sandboxChecked)
+        assertFalse(sandboxList[6].sandboxChecked)
 
-        // 3. Confirm import: only checked sources are persisted, dead sources discarded in memory (zero pollution)
+        // 3. Confirm import: only checked sources are persisted, dead/untested sources discarded in memory (zero pollution)
         val selectedToPersist = sandboxList.filter { it.sandboxChecked }
         val discardedCount = sandboxList.size - selectedToPersist.size
 
         assertEquals(3, selectedToPersist.size)
-        assertEquals(2, discardedCount)
+        assertEquals(4, discardedCount)
         assertEquals("极速源 1", selectedToPersist[0].bookSourceName)
         assertEquals("极速源 2", selectedToPersist[1].bookSourceName)
         assertEquals("较慢源 1", selectedToPersist[2].bookSourceName)

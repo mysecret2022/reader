@@ -2361,6 +2361,24 @@
       :visible.sync="showImportSourceDialog"
       width="540px"
     >
+      <el-alert
+        type="info"
+        :closable="false"
+        style="margin-bottom: 12px;"
+        show-icon
+      >
+        <span>
+          💡 如需对海量书源进行并发测速体检并自动剔除死源，推荐前往
+          <el-link
+            type="primary"
+            :underline="false"
+            @click="$router.push('/bookSourceManage')"
+          >
+            <b>「书源管理与体检中心」</b>
+          </el-link>
+          体验预检沙箱。
+        </span>
+      </el-alert>
       <el-tabs v-model="importSourceTab">
         <el-tab-pane label="从本地导入" name="file">
           <input

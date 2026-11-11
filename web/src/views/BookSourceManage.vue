@@ -278,8 +278,9 @@
       title="导入书源 (个人专属书源库)"
       :visible.sync="showImportDialog"
       width="600px"
-      append-to-body
-      custom-class="source-import-dialog"
+      :custom-class="
+        isNight ? 'source-import-dialog theme-dark' : 'source-import-dialog'
+      "
     >
       <el-alert
         type="info"
@@ -490,9 +491,11 @@
       :visible.sync="showSandboxDialog"
       width="1000px"
       top="4vh"
+      :close-on-click-modal="false"
       :before-close="handleCloseSandbox"
-      append-to-body
-      custom-class="source-sandbox-dialog"
+      :custom-class="
+        isNight ? 'source-sandbox-dialog theme-dark' : 'source-sandbox-dialog'
+      "
     >
       <!-- 沙箱顶部健康概览横幅 -->
       <div class="sandbox-summary-banner">
@@ -651,7 +654,6 @@
               <el-checkbox
                 :indeterminate="isSandboxIndeterminate"
                 v-model="isAllSandboxChecked"
-                @change="toggleAllSandboxCheck"
               ></el-checkbox>
             </template>
             <template slot-scope="scope">
@@ -700,7 +702,9 @@
           >
             <template slot-scope="scope">
               <span class="sandbox-source-name">{{
-                scope.row.bookSourceName
+                scope.row.bookSourceName ||
+                  scope.row.bookSourceUrl ||
+                  "未命名书源"
               }}</span>
             </template>
           </el-table-column>
@@ -933,20 +937,18 @@ export default {
     },
     isAllSandboxChecked: {
       get() {
-        return (
-          this.sandboxSources.length > 0 &&
-          this.sandboxSources.every(s => s._sandboxChecked)
-        );
+        const list = this.filteredSandboxSources;
+        return list.length > 0 && list.every(s => s._sandboxChecked);
       },
       set(val) {
         this.toggleAllSandboxCheck(val);
       }
     },
     isSandboxIndeterminate() {
-      return (
-        this.sandboxSelectedCount > 0 &&
-        this.sandboxSelectedCount < this.sandboxSources.length
-      );
+      const list = this.filteredSandboxSources;
+      if (list.length === 0) return false;
+      const count = list.filter(s => s._sandboxChecked).length;
+      return count > 0 && count < list.length;
     },
     filteredSandboxSources() {
       const keyword = (this.sandboxSearchKeyword || "").trim().toLowerCase();
@@ -1087,7 +1089,7 @@ export default {
         speedCost: null,
         speedError: null,
         isTesting: false,
-        _sandboxChecked: true,
+        _sandboxChecked: false,
         _sandboxUid: `sb_${Date.now()}_${idx}_${Math.random()
           .toString(36)
           .substr(2, 6)}`
@@ -1321,7 +1323,7 @@ export default {
           s.speedStatus = null;
           s.speedCost = null;
           s.speedError = null;
-          s._sandboxChecked = true;
+          s._sandboxChecked = false;
         });
       }
 
@@ -1334,7 +1336,7 @@ export default {
           if (this.sandboxShouldStopTest) break;
           const idx = currentIndex++;
           const source = sourcesToTest[idx];
-          if (!source || !source.bookSourceUrl) {
+          if (!source) {
             this.sandboxTestedCount++;
             continue;
           }
@@ -1363,13 +1365,20 @@ export default {
       }
     },
     async testSingleSandboxSource(source) {
+      if (!source || !source.bookSourceUrl || !source.bookSourceUrl.trim()) {
+        this.$set(source, "speedStatus", "failed");
+        this.$set(source, "speedCost", 0);
+        this.$set(source, "speedError", "缺少有效书源地址");
+        this.$set(source, "_sandboxChecked", false);
+        return;
+      }
       this.$set(source, "isTesting", true);
       const start = Date.now();
       try {
         const res = await Axios.post(
           this.api + "/testBookSourceSpeed",
           { url: source.bookSourceUrl },
-          { timeout: 5000, silent: true }
+          { timeout: 6000, silent: true }
         );
         const cost =
           res.data && res.data.data && typeof res.data.data.cost === "number"
@@ -1419,7 +1428,11 @@ export default {
       this.$message.info("已停止沙箱体检测速");
     },
     toggleAllSandboxCheck(val) {
-      this.sandboxSources.forEach(s => {
+      const targetList =
+        this.filteredSandboxSources && this.filteredSandboxSources.length > 0
+          ? this.filteredSandboxSources
+          : this.sandboxSources;
+      targetList.forEach(s => {
         this.$set(s, "_sandboxChecked", !!val);
       });
     },
@@ -1458,6 +1471,9 @@ export default {
       }
     },
     async confirmImportSelected() {
+      if (this.isSandboxTesting) {
+        this.stopSandboxSpeedTest();
+      }
       const selected = this.sandboxSources.filter(s => s._sandboxChecked);
       if (selected.length === 0) {
         this.$message.warning("请至少勾选一个要导入的书源");
@@ -1499,6 +1515,9 @@ export default {
           type: "warning"
         }
       ).then(async () => {
+        if (this.isSandboxTesting) {
+          this.stopSandboxSpeedTest();
+        }
         this.sandboxImporting = true;
         const cleanList = this.sandboxSources.map(s =>
           this.cleanSourceForSave(s)
@@ -2019,11 +2038,10 @@ export default {
   gap 8px
   flex-wrap wrap
 
-.source-sandbox-dialog
-  >>> .el-dialog
-    border-radius 12px
-    overflow hidden
-  >>> .el-dialog__body
+>>> .source-sandbox-dialog
+  border-radius 12px
+  overflow hidden
+  .el-dialog__body
     padding 14px 20px
 
 .sandbox-summary-banner
@@ -2185,15 +2203,27 @@ export default {
     color #94a3b8
     i
       color #38bdf8
-  >>> .el-dialog
+  >>> .el-dialog, >>> .source-sandbox-dialog, >>> .source-import-dialog
     background #1e293b
     color #f1f5f9
     .el-dialog__title
       color #f1f5f9
     .el-dialog__header
       border-bottom 1px solid rgba(255, 255, 255, 0.08)
+    .el-dialog__body
+      color #e2e8f0
     .el-dialog__footer
       border-top 1px solid rgba(255, 255, 255, 0.08)
+    .el-tabs__item
+      color #94a3b8
+      &.is-active
+        color #60a5fa
+    .el-tabs__nav-wrap::after
+      background-color rgba(255, 255, 255, 0.08)
+    .el-textarea__inner
+      background #0f172a
+      border-color rgba(255, 255, 255, 0.15)
+      color #f1f5f9
   >>> .el-table
     background #1e293b
     color #e2e8f0
