@@ -80,12 +80,12 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "css/admin~index.d55d2547.css"
   },
   {
-    "revision": "c5d515956465b0eb7abf",
+    "revision": "97c0ba40a4b733114f07",
     "url": "css/app.3161792e.css"
   },
   {
-    "revision": "77e55baf487c700e2a4f",
-    "url": "css/book-source-manage.0bded60a.css"
+    "revision": "39f622031ed8fabe190c",
+    "url": "css/book-source-manage.57e148f4.css"
   },
   {
     "revision": "b02c98390cef4e0f9356",
@@ -1376,12 +1376,12 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "js/admin~index.3b56327a.js"
   },
   {
-    "revision": "c5d515956465b0eb7abf",
-    "url": "js/app.579b0bcd.js"
+    "revision": "97c0ba40a4b733114f07",
+    "url": "js/app.c436fcd3.js"
   },
   {
-    "revision": "77e55baf487c700e2a4f",
-    "url": "js/book-source-manage.59c7a967.js"
+    "revision": "39f622031ed8fabe190c",
+    "url": "js/book-source-manage.153e8171.js"
   },
   {
     "revision": "b02c98390cef4e0f9356",

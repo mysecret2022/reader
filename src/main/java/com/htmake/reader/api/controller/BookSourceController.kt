@@ -115,7 +115,11 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         if (adminSources == null || adminSources.isEmpty()) {
             return returnData.setErrorMsg("默认管理员尚未配置书源")
         }
-        saveUserStorage(userNameSpace, "bookSource", adminSources.getList())
+        val isPreview = context.queryParam("preview").firstOrNull() == "1" ||
+                context.queryParam("dryRun").firstOrNull() == "1"
+        if (!isPreview) {
+            saveUserStorage(userNameSpace, "bookSource", adminSources.getList())
+        }
         return returnData.setData(adminSources.getList())
     }
 

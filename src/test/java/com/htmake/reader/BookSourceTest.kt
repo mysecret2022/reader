@@ -353,4 +353,151 @@ class BookSourceTest {
         assertEquals(1, unpackedNested.size)
         assertEquals("Legado Nested Source", unpackedNested[0].getString("bookSourceName"))
     }
+
+    @Test
+    fun testSandboxFilteringAndAutoExclusion() {
+        data class SandboxSource(
+            val bookSourceName: String,
+            val bookSourceUrl: String,
+            var speedStatus: String? = null,
+            var speedCost: Long? = null,
+            var speedError: String? = null,
+            var isTesting: Boolean = false,
+            var sandboxChecked: Boolean = true
+        )
+
+        val sandboxList = mutableListOf(
+            SandboxSource("极速源 1", "https://fast1.com"),
+            SandboxSource("极速源 2", "https://fast2.com"),
+            SandboxSource("较慢源 1", "https://slow1.com"),
+            SandboxSource("超时死源", "https://timeout-dead.com"),
+            SandboxSource("HTTP500死源", "https://error500.com")
+        )
+
+        // Simulate concurrent speed test in sandbox
+        fun applyTestResult(source: SandboxSource, cost: Long, isOk: Boolean, errorMsg: String? = null) {
+            source.speedCost = cost
+            if (isOk) {
+                if (cost < 1500) {
+                    source.speedStatus = "fast"
+                    source.sandboxChecked = true // 自动勾选优质极速源
+                } else if (cost <= 4000) {
+                    source.speedStatus = "slow"
+                    source.sandboxChecked = true // 自动勾选较慢可用源
+                } else {
+                    source.speedStatus = "failed"
+                    source.sandboxChecked = false // 自动剔除超时死源
+                    source.speedError = "响应超时 (>4s)"
+                }
+            } else {
+                source.speedStatus = "failed"
+                source.sandboxChecked = false // 自动剔除错误死源
+                source.speedError = errorMsg ?: "连接失败"
+            }
+        }
+
+        applyTestResult(sandboxList[0], 280, true)
+        applyTestResult(sandboxList[1], 850, true)
+        applyTestResult(sandboxList[2], 2300, true)
+        applyTestResult(sandboxList[3], 4500, true)
+        applyTestResult(sandboxList[4], 300, false, "HTTP 500")
+
+        // 1. Verify health status buckets
+        assertEquals("fast", sandboxList[0].speedStatus)
+        assertEquals("fast", sandboxList[1].speedStatus)
+        assertEquals("slow", sandboxList[2].speedStatus)
+        assertEquals("failed", sandboxList[3].speedStatus)
+        assertEquals("failed", sandboxList[4].speedStatus)
+
+        // 2. Verify auto-selection: quality/usable sources checked, dead sources unchecked
+        assertTrue(sandboxList[0].sandboxChecked)
+        assertTrue(sandboxList[1].sandboxChecked)
+        assertTrue(sandboxList[2].sandboxChecked)
+        assertFalse(sandboxList[3].sandboxChecked)
+        assertFalse(sandboxList[4].sandboxChecked)
+
+        // 3. Confirm import: only checked sources are persisted, dead sources discarded in memory (zero pollution)
+        val selectedToPersist = sandboxList.filter { it.sandboxChecked }
+        val discardedCount = sandboxList.size - selectedToPersist.size
+
+        assertEquals(3, selectedToPersist.size)
+        assertEquals(2, discardedCount)
+        assertEquals("极速源 1", selectedToPersist[0].bookSourceName)
+        assertEquals("极速源 2", selectedToPersist[1].bookSourceName)
+        assertEquals("较慢源 1", selectedToPersist[2].bookSourceName)
+    }
+
+    @Test
+    fun testSyncAdminSourcesPreviewMode() {
+        val mockStorage = mutableMapOf<String, JsonArray>()
+        val defaultSources = JsonArray()
+            .add(JsonObject().put("bookSourceName", "Default Source 1"))
+            .add(JsonObject().put("bookSourceName", "Default Source 2"))
+        mockStorage["default/bookSource"] = defaultSources
+
+        // Existing user has their own custom sources
+        val userInitialSources = JsonArray().add(JsonObject().put("bookSourceName", "User Custom Source"))
+        mockStorage["testUser/bookSource"] = userInitialSources
+
+        fun syncAdminSources(userNameSpace: String, isPreview: Boolean): JsonArray {
+            val adminSources = mockStorage["admin/bookSource"] ?: mockStorage["default/bookSource"] ?: JsonArray()
+            if (!isPreview) {
+                mockStorage["$userNameSpace/bookSource"] = adminSources.copy()
+            }
+            return adminSources
+        }
+
+        // 1. When preview=true (for loading into sandbox), user storage MUST NOT be overwritten
+        val previewResult = syncAdminSources("testUser", isPreview = true)
+        assertEquals(2, previewResult.size())
+        assertEquals(1, mockStorage["testUser/bookSource"]!!.size())
+        assertEquals("User Custom Source", mockStorage["testUser/bookSource"]!!.getJsonObject(0).getString("bookSourceName"))
+
+        // 2. When preview=false (direct sync), user storage is overwritten
+        val directResult = syncAdminSources("testUser", isPreview = false)
+        assertEquals(2, directResult.size())
+        assertEquals(2, mockStorage["testUser/bookSource"]!!.size())
+        assertEquals("Default Source 1", mockStorage["testUser/bookSource"]!!.getJsonObject(0).getString("bookSourceName"))
+    }
+
+    @Test
+    fun testCleanSourceForSave() {
+        val frontendSandboxObject = JsonObject()
+            .put("bookSourceName", "优质源")
+            .put("bookSourceUrl", "https://good-source.com")
+            .put("ruleSearch", "$.data[*]")
+            .put("_sandboxChecked", true)
+            .put("_sandboxUid", "sb_1234567")
+            .put("speedStatus", "fast")
+            .put("speedCost", 320)
+            .putNull("speedError")
+            .put("isTesting", false)
+            .put("isSingleTesting", false)
+
+        fun cleanForSave(source: JsonObject): JsonObject {
+            val cleaned = source.copy()
+            cleaned.remove("_sandboxChecked")
+            cleaned.remove("_sandboxUid")
+            cleaned.remove("speedStatus")
+            cleaned.remove("speedCost")
+            cleaned.remove("speedError")
+            cleaned.remove("isTesting")
+            cleaned.remove("isSingleTesting")
+            return cleaned
+        }
+
+        val cleaned = cleanForSave(frontendSandboxObject)
+        assertFalse(cleaned.containsKey("_sandboxChecked"))
+        assertFalse(cleaned.containsKey("_sandboxUid"))
+        assertFalse(cleaned.containsKey("speedStatus"))
+        assertFalse(cleaned.containsKey("speedCost"))
+        assertFalse(cleaned.containsKey("speedError"))
+        assertFalse(cleaned.containsKey("isTesting"))
+        assertFalse(cleaned.containsKey("isSingleTesting"))
+
+        // Pure book source attributes preserved intact
+        assertEquals("优质源", cleaned.getString("bookSourceName"))
+        assertEquals("https://good-source.com", cleaned.getString("bookSourceUrl"))
+        assertEquals("$.data[*]", cleaned.getString("ruleSearch"))
+    }
 }
