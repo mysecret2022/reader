@@ -1588,6 +1588,7 @@ export default {
       this.showManualSourceDialog = false;
       this.show = false;
       this.tryRefresh = false;
+      this.chapterContentCache = null;
       if (this.$route.query && this.$route.query.search) {
         this.$router.replace({ path: "/reader" }).catch(() => {});
       }
@@ -1806,13 +1807,23 @@ export default {
           // 5. 重新加载目录与章节内容并恢复阅读
           this.tryRefresh = false;
           this.show = false;
-          await this.loadCatalog(true, true);
+          this.chapterContentCache = null;
+          const catalogResult = await this.loadCatalog(true, true);
 
-          this.$message.success(
-            "已自动换源至【" +
-              (candidate.originName || candidate.origin) +
-              "】并恢复阅读"
-          );
+          if (catalogResult !== false) {
+            this.$message.success(
+              "已自动换源至【" +
+                (candidate.originName || candidate.origin) +
+                "】并恢复阅读"
+            );
+          } else {
+            this.$message.warning(
+              "已自动换源至【" +
+                (candidate.originName || candidate.origin) +
+                "】，但目录拉取失败，请尝试其他书源"
+            );
+            this.openManualSourceDialog();
+          }
         } else {
           const errMsg = (res && res.data && res.data.errorMsg) || "换源失败";
           this.$message.error(errMsg);
@@ -1834,7 +1845,7 @@ export default {
             this.loadCatalog(refresh);
           }
         }, 1000);
-        return Promise.resolve();
+        return Promise.resolve(false);
       }
       return this.getCatalog(refresh).then(
         res => {
@@ -1845,6 +1856,7 @@ export default {
             this.$emit("loadCatalog");
             var index = book.index || 0;
             this.getContent(index);
+            return true;
           } else {
             if (init) {
               this.title = "";
@@ -1858,6 +1870,7 @@ export default {
             if (this.loading) {
               this.loading.close();
             }
+            return false;
           }
         },
         error => {
@@ -1867,6 +1880,7 @@ export default {
           this.$message.error(
             "获取书籍目录列表 " + (error && error.toString())
           );
+          return false;
         }
       );
     },
@@ -1908,9 +1922,13 @@ export default {
         cache
       );
     },
-    refreshContent() {
+    refreshContent(targetIndex) {
       this.refreshingContent = true;
-      this.getContent(this.$store.getters.readingBook.index, true);
+      const idx =
+        typeof targetIndex === "number"
+          ? targetIndex
+          : this.$store.getters.readingBook.index;
+      this.getContent(idx, true);
     },
     getContent(index, refresh) {
       //展示进度条
@@ -2131,6 +2149,7 @@ export default {
       if (
         !refresh &&
         this.chapterContentCache &&
+        this.chapterContentCache.bookUrl === this.readingBook.bookUrl &&
         this.chapterContentCache.chapters[index] &&
         !this.chapterContentCache.chapters[index].error
       ) {

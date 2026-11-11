@@ -53,6 +53,7 @@ export default {
         return this.renderScrollChapterList();
       }
       if (this.error) {
+        const errorContent = ((this.content || "") + "").split(/\n+/);
         return (
           <div
             class="content-body chapter-content reading-chapter chapter-error-container"
@@ -64,7 +65,7 @@ export default {
                 <i class="el-icon-warning-outline"></i>
               </div>
               <div class="error-msg-box">
-                {this.content.split(/\n+/).map(line => (
+                {errorContent.map(line => (
                   <p class="error-line">{line}</p>
                 ))}
               </div>
@@ -267,6 +268,9 @@ export default {
               );
             }
             if (chapter.error) {
+              const chapterErrorContent = (
+                ((chapter && chapter.content) || "") + ""
+              ).split(/\n+/);
               return (
                 <div
                   class={[
@@ -285,7 +289,7 @@ export default {
                       <i class="el-icon-warning-outline"></i>
                     </div>
                     <div class="error-msg-box">
-                      {chapter.content.split(/\n+/).map(line => (
+                      {chapterErrorContent.map(line => (
                         <p class="error-line">{line}</p>
                       ))}
                     </div>
@@ -295,7 +299,9 @@ export default {
                         size="small"
                         icon="el-icon-refresh"
                         loading={this.refreshingContent}
-                        onClick={() => this.$emit("refreshContent")}
+                        onClick={() =>
+                          this.$emit("refreshContent", chapter.index)
+                        }
                       >
                         重试获取本章
                       </el-button>

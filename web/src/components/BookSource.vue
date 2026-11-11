@@ -386,7 +386,10 @@ export default {
       }
       const params = {
         accessToken: this.$store.state.token,
-        concurrentCount: this.$store.state.searchConfig.concurrentCount,
+        concurrentCount:
+          (this.$store.state.searchConfig &&
+            this.$store.state.searchConfig.concurrentCount) ||
+          16,
         url: this.$store.getters.readingBook.bookUrl,
         name: this.$store.getters.readingBook.name,
         author: this.$store.getters.readingBook.author,
@@ -450,13 +453,13 @@ export default {
               this.bookSourceGroupIndexMap[this.bookSourceGroup] =
                 result.lastIndex;
             }
-            if (result.data) {
-              this.bookSource = [].concat(
-                this.bookSource,
-                result.data.filter(v => {
-                  return !this.bookSourceMap[v.bookUrl];
-                })
+            if (result && Array.isArray(result.data)) {
+              const newItems = result.data.filter(
+                v => v && v.bookUrl && !this.bookSourceMap[v.bookUrl]
               );
+              if (newItems.length > 0) {
+                this.bookSource = this.bookSource.concat(newItems);
+              }
             }
           }
         } catch (error) {
