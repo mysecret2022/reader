@@ -287,4 +287,70 @@ class BookSourceTest {
         val singleObject = mapOf("bookSourceName" to "Source 5")
         assertEquals(1, unpack(singleObject).size)
     }
+
+    @Test
+    fun testAdvancedImportSourceUnpackingWithStringsAndBOM() {
+        fun unpackAdvanced(input: Any): List<JsonObject> {
+            val list = mutableListOf<JsonObject>()
+            when (input) {
+                is String -> {
+                    val clean = input.removePrefix("\uFEFF").trim()
+                    if (clean.startsWith("[")) {
+                        val arr = JsonArray(clean)
+                        for (i in 0 until arr.size()) {
+                            list.addAll(unpackAdvanced(arr.getValue(i)))
+                        }
+                    } else if (clean.startsWith("{")) {
+                        list.addAll(unpackAdvanced(JsonObject(clean)))
+                    }
+                }
+                is List<*> -> {
+                    for (item in input) {
+                        if (item != null) list.addAll(unpackAdvanced(item))
+                    }
+                }
+                is JsonArray -> {
+                    for (i in 0 until input.size()) {
+                        val v = input.getValue(i)
+                        if (v != null) list.addAll(unpackAdvanced(v))
+                    }
+                }
+                is JsonObject -> {
+                    when {
+                        input.containsKey("data") && input.getValue("data") is JsonArray ->
+                            list.addAll(unpackAdvanced(input.getJsonArray("data")))
+                        input.containsKey("sources") && input.getValue("sources") is JsonArray ->
+                            list.addAll(unpackAdvanced(input.getJsonArray("sources")))
+                        input.containsKey("list") && input.getValue("list") is JsonArray ->
+                            list.addAll(unpackAdvanced(input.getJsonArray("list")))
+                        input.containsKey("bookSourceName") || input.containsKey("bookSourceUrl") ->
+                            list.add(input)
+                    }
+                }
+                is Map<*, *> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    list.addAll(unpackAdvanced(JsonObject(input as Map<String, Any>)))
+                }
+            }
+            return list
+        }
+
+        // Test 1: Array of raw JSON strings from remote proxy (readRemoteSourceFile)
+        val remoteProxyStrings = listOf("[{\"bookSourceName\":\"Source From Remote 1\"},{\"bookSourceName\":\"Source From Remote 2\"}]")
+        val unpackedRemote = unpackAdvanced(remoteProxyStrings)
+        assertEquals(2, unpackedRemote.size)
+        assertEquals("Source From Remote 1", unpackedRemote[0].getString("bookSourceName"))
+
+        // Test 2: JSON String with UTF-8 BOM
+        val bomString = "\uFEFF[{\"bookSourceName\":\"BOM Source\"}]"
+        val unpackedBom = unpackAdvanced(bomString)
+        assertEquals(1, unpackedBom.size)
+        assertEquals("BOM Source", unpackedBom[0].getString("bookSourceName"))
+
+        // Test 3: Nested Legado 3.0 wrapper in string
+        val nestedString = "{\"data\":[{\"bookSourceName\":\"Legado Nested Source\"}]}"
+        val unpackedNested = unpackAdvanced(nestedString)
+        assertEquals(1, unpackedNested.size)
+        assertEquals("Legado Nested Source", unpackedNested[0].getString("bookSourceName"))
+    }
 }

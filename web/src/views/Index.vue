@@ -311,14 +311,6 @@
           >
             {{ showBookEditButton ? "取消" : "编辑" }}
           </div>
-          <div
-            class="title-btn"
-            v-else-if="$store.getters.isNormalPage"
-            @click="$store.commit('setShowLogin', true)"
-            style="color: #409EFF; font-weight: bold;"
-          >
-            <i class="el-icon-user-solid"></i> 登录
-          </div>
         </div>
       </div>
       <!-- PWA 桌面安装横幅提醒 -->

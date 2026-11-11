@@ -35,11 +35,20 @@
       </div>
       <div class="header-right">
         <el-button
+          type="primary"
+          plain
+          icon="el-icon-folder-opened"
+          size="small"
+          @click="openImportSourceDialog('file')"
+        >
+          从本地导入
+        </el-button>
+        <el-button
           type="info"
           plain
           icon="el-icon-upload2"
           size="small"
-          @click="openImportSourceDialog"
+          @click="openImportSourceDialog('file')"
         >
           导入书源
         </el-button>
@@ -280,6 +289,78 @@
         导入的书源仅保存在您当前的专属账号空间中，不会影响系统默认书源或其他用户。
       </el-alert>
       <el-tabs v-model="importTab">
+        <el-tab-pane label="从本地导入" name="file">
+          <input
+            type="file"
+            ref="localFileInput"
+            style="display: none;"
+            accept=".json,.txt"
+            @change="handleLocalFileChange"
+            @click.stop
+          />
+          <div
+            class="local-import-dropzone"
+            @click="triggerSelectLocalFile"
+            @dragover.prevent
+            @drop.prevent="handleLocalFileDrop"
+          >
+            <i
+              class="el-icon-folder-opened"
+              style="font-size: 42px; color: #409EFF; margin-bottom: 12px; display: block;"
+            ></i>
+            <div
+              style="font-size: 14px; font-weight: bold; color: #303133; margin-bottom: 6px;"
+            >
+              点击选择本地书源文件，或将文件拖拽至此
+            </div>
+            <div style="font-size: 12px; color: #909399;">
+              支持 UTF-8 编码的 .json 或 .txt 格式书源文件 (单书源或书源数组)
+            </div>
+          </div>
+          <div
+            v-if="localFileName"
+            style="margin-top: 14px; padding: 10px 14px; background: #f0f9eb; border: 1px solid #e1f3d8; border-radius: 6px; font-size: 13px; color: #67c23a; display: flex; align-items: center; justify-content: space-between;"
+          >
+            <div>
+              <i class="el-icon-document-checked"></i>
+              <span>
+                已就绪: <strong>{{ localFileName }}</strong> (检测到
+                <strong>{{ localFileSources.length }}</strong> 个书源)</span
+              >
+            </div>
+            <el-button
+              type="text"
+              size="small"
+              style="color: #f56c6c; padding: 0;"
+              @click.stop="clearLocalFile"
+            >
+              移除
+            </el-button>
+          </div>
+          <div style="margin-top: 18px; text-align: right;">
+            <el-button size="small" @click="showImportDialog = false"
+              >取消</el-button
+            >
+            <el-button
+              type="primary"
+              size="small"
+              icon="el-icon-folder-opened"
+              @click="triggerSelectLocalFile"
+            >
+              {{ localFileName ? "重新选择" : "选择本地文件" }}
+            </el-button>
+            <el-button
+              type="success"
+              size="small"
+              icon="el-icon-check"
+              :loading="importing"
+              :disabled="!localFileSources || localFileSources.length === 0"
+              @click="submitImportLocalFile"
+            >
+              立即导入书源
+            </el-button>
+          </div>
+        </el-tab-pane>
         <el-tab-pane label="网络远程链接" name="url">
           <el-input
             v-model="importUrl"
@@ -367,9 +448,11 @@ export default {
       isTestingSpeed: false,
       testedCount: 0,
       showImportDialog: false,
-      importTab: "url",
+      importTab: "file",
       importUrl: "",
       importContent: "",
+      localFileName: "",
+      localFileSources: [],
       importing: false,
       syncingDefault: false
     };
@@ -440,11 +523,166 @@ export default {
     goBack() {
       this.$router.push("/");
     },
-    openImportSourceDialog() {
+    openImportSourceDialog(tab = "file") {
       this.importUrl = "";
       this.importContent = "";
-      this.importTab = "url";
+      this.localFileName = "";
+      this.localFileSources = [];
+      this.importTab = typeof tab === "string" ? tab : "file";
       this.showImportDialog = true;
+    },
+    triggerSelectLocalFile() {
+      if (this.$refs.localFileInput) {
+        this.$refs.localFileInput.click();
+      }
+    },
+    handleLocalFileChange(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      this.processLocalFile(file);
+    },
+    handleLocalFileDrop(event) {
+      const file =
+        event.dataTransfer &&
+        event.dataTransfer.files &&
+        event.dataTransfer.files[0];
+      if (!file) return;
+      this.processLocalFile(file);
+    },
+    processLocalFile(file) {
+      if (!file.name.match(/\.(json|txt)$/i)) {
+        this.$message.warning("请上传 .json 或 .txt 格式的书源文件");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          let text = e.target.result;
+          if (typeof text === "string") {
+            text = text.replace(/^\uFEFF/, "").trim();
+          }
+          const parsed = JSON.parse(text);
+          const list = this.extractSourceList(parsed);
+          if (!list || list.length === 0) {
+            this.$message.warning(
+              "文件中未解析到有效的书源数据，请确认是否为有效书源"
+            );
+            return;
+          }
+          this.localFileSources = list;
+          this.localFileName = file.name;
+          this.$message.success(
+            `成功解析「${file.name}」，包含 ${list.length} 个书源`
+          );
+        } catch (err) {
+          this.$message.error(
+            "文件解析失败，无法解析为 JSON: " + (err && err.message)
+          );
+        } finally {
+          if (this.$refs.localFileInput) {
+            this.$refs.localFileInput.value = "";
+          }
+        }
+      };
+      reader.onerror = () => {
+        this.$message.error("读取本地文件失败");
+        if (this.$refs.localFileInput) {
+          this.$refs.localFileInput.value = "";
+        }
+      };
+      reader.readAsText(file, "utf-8");
+    },
+    clearLocalFile() {
+      this.localFileName = "";
+      this.localFileSources = [];
+      if (this.$refs.localFileInput) {
+        this.$refs.localFileInput.value = "";
+      }
+    },
+    async submitImportLocalFile() {
+      if (!this.localFileSources || this.localFileSources.length === 0) {
+        this.$message.warning("请先选择本地书源文件");
+        return;
+      }
+      this.importing = true;
+      try {
+        const success = await this.saveImportedSources(this.localFileSources);
+        if (success) {
+          this.showImportDialog = false;
+          this.clearLocalFile();
+        }
+      } catch (err) {
+        this.$message.error("导入书源失败: " + err.toString());
+      } finally {
+        this.importing = false;
+      }
+    },
+    extractSourceList(data) {
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data.replace(/^\uFEFF/, "").trim());
+        } catch (e) {
+          return [];
+        }
+      }
+      let list = [];
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (typeof item === "string") {
+            try {
+              const parsed = JSON.parse(item.replace(/^\uFEFF/, "").trim());
+              list = list.concat(this.extractSourceList(parsed));
+            } catch (e) {
+              // 忽略非 JSON 数据行
+            }
+          } else if (item && typeof item === "object") {
+            if (
+              item.bookSourceName ||
+              item.bookSourceUrl ||
+              item.ruleSearch ||
+              item.ruleBookInfo ||
+              item.ruleToc
+            ) {
+              list.push(item);
+            } else if (
+              Array.isArray(item.data) ||
+              Array.isArray(item.sources) ||
+              Array.isArray(item.list)
+            ) {
+              list = list.concat(this.extractSourceList(item));
+            }
+          }
+        }
+      } else if (data && typeof data === "object") {
+        if (Array.isArray(data.data)) {
+          list = this.extractSourceList(data.data);
+        } else if (Array.isArray(data.sources)) {
+          list = this.extractSourceList(data.sources);
+        } else if (Array.isArray(data.list)) {
+          list = this.extractSourceList(data.list);
+        } else if (
+          data.bookSourceName ||
+          data.bookSourceUrl ||
+          data.ruleSearch ||
+          data.ruleBookInfo ||
+          data.ruleToc
+        ) {
+          list = [data];
+        }
+      }
+      return list.map(v => {
+        const item = Object.assign({}, v);
+        if (item.headerMap) {
+          if (!item.header) {
+            item.header =
+              typeof item.headerMap === "string"
+                ? item.headerMap
+                : JSON.stringify(item.headerMap);
+          }
+          delete item.headerMap;
+        }
+        return item;
+      });
     },
     async submitImportUrl() {
       const url = (this.importUrl || "").trim();
@@ -467,8 +705,7 @@ export default {
             fetchRes.data.isSuccess &&
             Array.isArray(fetchRes.data.data)
           ) {
-            const raw = fetchRes.data.data[0];
-            sourceList = typeof raw === "string" ? JSON.parse(raw) : raw;
+            sourceList = fetchRes.data.data;
           }
         } catch (e) {
           // ignore
@@ -479,8 +716,11 @@ export default {
           sourceList = directRes.data;
         }
 
-        await this.saveImportedSources(sourceList);
-        this.showImportDialog = false;
+        const success = await this.saveImportedSources(sourceList);
+        if (success) {
+          this.showImportDialog = false;
+          this.importUrl = "";
+        }
       } catch (err) {
         this.$message.error("拉取远程书源失败: " + err.toString());
       } finally {
@@ -496,8 +736,11 @@ export default {
       this.importing = true;
       try {
         const data = JSON.parse(content);
-        await this.saveImportedSources(data);
-        this.showImportDialog = false;
+        const success = await this.saveImportedSources(data);
+        if (success) {
+          this.showImportDialog = false;
+          this.importContent = "";
+        }
       } catch (err) {
         this.$message.error("解析书源 JSON 失败: " + err.toString());
       } finally {
@@ -505,29 +748,28 @@ export default {
       }
     },
     async saveImportedSources(data) {
-      let list = Array.isArray(data)
-        ? data
-        : data && Array.isArray(data.data)
-        ? data.data
-        : data && Array.isArray(data.sources)
-        ? data.sources
-        : data && Array.isArray(data.list)
-        ? data.list
-        : data
-        ? [data]
-        : [];
+      let list = this.extractSourceList(data);
       if (list.length === 0) {
         this.$message.warning("未检测到有效书源数据");
-        return;
+        return false;
       }
-      const res = await Axios.post(this.api + "/saveBookSources", list);
-      if (res && res.data && res.data.isSuccess) {
-        this.$message.success(`成功导入 ${list.length} 个书源至您的专属空间！`);
-        await this.fetchSources();
-      } else {
-        this.$message.error(
-          (res && res.data && res.data.errorMsg) || "保存书源失败"
-        );
+      try {
+        const res = await Axios.post(this.api + "/saveBookSources", list);
+        if (res && res.data && res.data.isSuccess) {
+          this.$message.success(
+            `成功导入 ${list.length} 个书源至您的专属空间！`
+          );
+          await this.fetchSources();
+          return true;
+        } else {
+          this.$message.error(
+            (res && res.data && res.data.errorMsg) || "保存书源失败"
+          );
+          return false;
+        }
+      } catch (err) {
+        this.$message.error("保存书源请求失败: " + err.toString());
+        return false;
       }
     },
     async submitSyncDefault() {
@@ -924,6 +1166,20 @@ export default {
   border-radius 8px
   box-shadow 0 1px 3px rgba(0, 0, 0, 0.05)
 
+.local-import-dropzone
+  border 2px dashed #dcdfe6
+  border-radius 8px
+  padding 28px 16px
+  text-align center
+  cursor pointer
+  background #fafafa
+  transition all .2s
+  *
+    pointer-events none
+  &:hover
+    border-color #409EFF
+    background #f4f8ff
+
 /* 暗色主题适配 */
 .theme-dark
   background #0f172a
@@ -938,6 +1194,14 @@ export default {
     color #f1f5f9
   .selected-summary
     color #94a3b8
+  .local-import-dropzone
+    background #1e293b
+    border-color rgba(255, 255, 255, 0.15)
+    &:hover
+      border-color #3b82f6
+      background #253349
+    div
+      color #e2e8f0 !important
   >>> .el-table
     background #1e293b
     color #e2e8f0

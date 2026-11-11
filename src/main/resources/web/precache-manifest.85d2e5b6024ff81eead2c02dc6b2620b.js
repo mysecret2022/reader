@@ -72,28 +72,28 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "browsertest.html"
   },
   {
-    "revision": "c99959d3c6f7322e19ca",
-    "url": "css/admin.cc439c53.css"
+    "revision": "1cbe0b4677901855d461",
+    "url": "css/admin.ab626d9b.css"
   },
   {
     "revision": "dc73ded30d933078bd1f",
     "url": "css/admin~index.d55d2547.css"
   },
   {
-    "revision": "f92dcf69d293a99391da",
+    "revision": "6f9199b423a6319a912c",
     "url": "css/app.3161792e.css"
   },
   {
-    "revision": "76f35097daea918cfd37",
-    "url": "css/book-source-manage.e9fe7aac.css"
+    "revision": "77e55baf487c700e2a4f",
+    "url": "css/book-source-manage.0bded60a.css"
   },
   {
     "revision": "b02c98390cef4e0f9356",
     "url": "css/chunk-vendors.7c015469.css"
   },
   {
-    "revision": "26fa38d0099d22cb3de5",
-    "url": "css/index.3ee4a379.css"
+    "revision": "e7741cf8a23a1034917d",
+    "url": "css/index.18d8779b.css"
   },
   {
     "revision": "5a8f70d10ec5e041c538",
@@ -1368,28 +1368,28 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "img/noImage.7443b2ba.png"
   },
   {
-    "revision": "c99959d3c6f7322e19ca",
-    "url": "js/admin.9e563d36.js"
+    "revision": "1cbe0b4677901855d461",
+    "url": "js/admin.3fc86285.js"
   },
   {
     "revision": "dc73ded30d933078bd1f",
     "url": "js/admin~index.01771ff0.js"
   },
   {
-    "revision": "f92dcf69d293a99391da",
-    "url": "js/app.8fcaa754.js"
+    "revision": "6f9199b423a6319a912c",
+    "url": "js/app.6fd3b589.js"
   },
   {
-    "revision": "76f35097daea918cfd37",
-    "url": "js/book-source-manage.c7f90143.js"
+    "revision": "77e55baf487c700e2a4f",
+    "url": "js/book-source-manage.59c7a967.js"
   },
   {
     "revision": "b02c98390cef4e0f9356",
     "url": "js/chunk-vendors.3b18be7a.js"
   },
   {
-    "revision": "26fa38d0099d22cb3de5",
-    "url": "js/index.9ee1a79b.js"
+    "revision": "e7741cf8a23a1034917d",
+    "url": "js/index.31f229d5.js"
   },
   {
     "revision": "5a8f70d10ec5e041c538",
