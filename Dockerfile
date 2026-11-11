@@ -1,4 +1,4 @@
-FROM eclipse-temurin:11-jre
+FROM eclipse-temurin:11-jre-jammy
 
 # 安装 tini 进程守护、时区与 CA 证书
 RUN apt-get update \
