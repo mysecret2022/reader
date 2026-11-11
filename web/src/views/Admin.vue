@@ -384,11 +384,36 @@
           </el-table>
         </section>
 
-        <!-- 3. 书源设置（书源管理、探索书源、导入书源、远程书源、失效书源、调试书源） -->
+        <!-- 3. 书源设置（全站新用户初始默认书源底包管理） -->
         <section v-if="activeTab === 'sources'" class="tab-pane">
+          <!-- 全站新用户默认书源底包提示卡片 & 直达管理与体检中心 -->
+          <div class="source-base-package-banner">
+            <div class="banner-content">
+              <div class="banner-badge">
+                <i class="el-icon-info"></i> 全站新用户初始默认书源底包
+              </div>
+              <div class="banner-title">
+                系统初始内置书源管理
+              </div>
+              <div class="banner-desc">
+                此处配置与维护的书源将作为<b>全站新注册用户的初始默认书源底包</b>。日常的书源批量测速、健康体检、质量筛查与个人书源治理，推荐前往专用的<b>书源管理与体检中心</b>。
+              </div>
+            </div>
+            <div class="banner-action">
+              <el-button
+                type="primary"
+                size="small"
+                icon="el-icon-odometer"
+                @click="$router.push('/bookSourceManage')"
+              >
+                前往书源管理与体检中心 <i class="el-icon-arrow-right"></i>
+              </el-button>
+            </div>
+          </div>
+
           <div class="pane-header">
             <h2 class="pane-title">
-              <i class="el-icon-collection"></i> 书源设置 (共
+              <i class="el-icon-collection"></i> 默认书源底包 (共
               {{ filteredSources.length }} 条)
             </h2>
             <div class="filter-actions">
@@ -416,20 +441,11 @@
               <div class="source-action-grid">
                 <el-button
                   type="primary"
-                  plain
-                  size="small"
-                  icon="el-icon-folder-opened"
-                  @click="openImportSourceDialog('file')"
-                >
-                  从本地导入
-                </el-button>
-                <el-button
-                  type="primary"
                   size="small"
                   icon="el-icon-upload2"
                   @click="openImportSourceDialog('file')"
                 >
-                  导入书源
+                  导入底包书源
                 </el-button>
                 <el-button
                   type="success"
@@ -438,6 +454,15 @@
                   @click="loadRemoteBookSource"
                 >
                   远程书源
+                </el-button>
+                <el-button
+                  type="info"
+                  plain
+                  size="small"
+                  icon="el-icon-download"
+                  @click="exportBookSources"
+                >
+                  导出底包
                 </el-button>
                 <el-button
                   type="info"
@@ -487,39 +512,6 @@
                   全部禁用
                 </el-button>
                 <el-button
-                  type="primary"
-                  size="small"
-                  icon="el-icon-odometer"
-                  :loading="isTestingSpeed"
-                  @click="startSpeedTest"
-                >
-                  {{
-                    isTestingSpeed
-                      ? `测速中 (${testedCount}/${bookSourceList.length})`
-                      : "一键体检/测速"
-                  }}
-                </el-button>
-                <el-button
-                  type="success"
-                  plain
-                  size="small"
-                  icon="el-icon-top"
-                  :disabled="greenSourcesCount === 0"
-                  @click="prioritizeGreenSources"
-                >
-                  置顶优质源 ({{ greenSourcesCount }})
-                </el-button>
-                <el-button
-                  type="warning"
-                  plain
-                  size="small"
-                  icon="el-icon-circle-close"
-                  :disabled="redSourcesCount === 0"
-                  @click="disableFailedSources"
-                >
-                  一键禁用失效源 ({{ redSourcesCount }})
-                </el-button>
-                <el-button
                   type="danger"
                   size="small"
                   icon="el-icon-delete"
@@ -527,13 +519,6 @@
                   @click="batchDeleteSources"
                 >
                   批量删除 (已选 {{ selectedSources.length }} 项)
-                </el-button>
-                <el-button
-                  size="small"
-                  icon="el-icon-full-screen"
-                  @click="$router.push('/bookSourceManage')"
-                >
-                  管理中心
                 </el-button>
               </div>
               <div
@@ -3453,6 +3438,31 @@ export default {
         }
       });
     },
+    exportBookSources() {
+      if (this.bookSourceList.length === 0) {
+        this.$message.info("暂无可导出的书源");
+        return;
+      }
+      try {
+        const jsonStr = JSON.stringify(this.bookSourceList, null, 2);
+        const blob = new Blob([jsonStr], {
+          type: "application/json;charset=utf-8"
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `bookSource_default_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        this.$message.success(
+          `已成功导出 ${this.bookSourceList.length} 个书源底包`
+        );
+      } catch (e) {
+        this.$message.error("导出书源失败: " + e.toString());
+      }
+    },
     async testSingleSource(source) {
       this.$set(source, "isSingleTesting", true);
       const start = Date.now();
@@ -5655,6 +5665,95 @@ export default {
   font-size: 13px;
   color: #0284c7;
   word-break: break-all;
+}
+
+/* 全站新用户默认书源底包卡片 */
+.source-base-package-banner {
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.theme-dark .source-base-package-banner {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.source-base-package-banner .banner-content {
+  flex: 1;
+}
+
+.source-base-package-banner .banner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.theme-dark .source-base-package-banner .banner-badge {
+  color: #60a5fa;
+  background: rgba(37, 99, 235, 0.25);
+}
+
+.source-base-package-banner .banner-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.theme-dark .source-base-package-banner .banner-title {
+  color: #f1f5f9;
+}
+
+.source-base-package-banner .banner-desc {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.theme-dark .source-base-package-banner .banner-desc {
+  color: #94a3b8;
+}
+
+.source-base-package-banner .banner-desc b {
+  color: #0f172a;
+}
+
+.theme-dark .source-base-package-banner .banner-desc b {
+  color: #e2e8f0;
+}
+
+.source-base-package-banner .banner-action {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .source-base-package-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .source-base-package-banner .banner-action {
+    width: 100%;
+    margin-top: 8px;
+  }
+  .source-base-package-banner .banner-action .el-button {
+    width: 100%;
+  }
 }
 
 .source-filter-row {
