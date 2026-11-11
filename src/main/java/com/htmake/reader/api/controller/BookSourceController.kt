@@ -161,36 +161,60 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
             return returnData.setErrorMsg("参数错误")
         }
         var userNameSpace = getUserNameSpace(context)
-        var bookSourceList = getUserBookSourceJson(userNameSpace)
-        if (bookSourceList == null) {
-            bookSourceList = JsonArray()
-        }
-        for (k in 0 until bookSourceJsonArray.size()) {
-            val bookSource = BookSource.fromJson(bookSourceJsonArray.getJsonObject(k).toString()).getOrNull()
-            if (bookSource == null) {
-                continue
-            }
-            // var bookSource = bookSourceJsonArray.getJsonObject(k).mapTo(BookSource::class.java)
-            // 遍历判断书本是否存在
-            var existIndex: Int = -1
-            for (i in 0 until bookSourceList!!.size()) {
-                var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
-                if (_bookSource.bookSourceUrl.equals(bookSource.bookSourceUrl)) {
-                    existIndex = i
-                    break;
+        var bookSourceList = getUserBookSourceJson(userNameSpace) ?: JsonArray()
+
+        val isSortOrReorder = context.queryParam("sort").firstOrNull() == "1" ||
+                context.queryParam("reorder").firstOrNull() == "1" ||
+                context.queryParam("sort").firstOrNull() == "true" ||
+                context.queryParam("reorder").firstOrNull() == "true"
+
+        if (isSortOrReorder) {
+            val finalBookSourceList = JsonArray()
+            val seenUrls = HashSet<String>()
+            for (k in 0 until bookSourceJsonArray.size()) {
+                val item = bookSourceJsonArray.getJsonObject(k) ?: continue
+                val bookSource = BookSource.fromJson(item.toString()).getOrNull() ?: continue
+                if (seenUrls.add(bookSource.bookSourceUrl)) {
+                    finalBookSourceList.add(JsonObject.mapFrom(bookSource))
                 }
             }
-            if (existIndex >= 0) {
-                var sourceList = bookSourceList.getList()
-                sourceList.set(existIndex, JsonObject.mapFrom(bookSource))
-                bookSourceList = JsonArray(sourceList)
-            } else {
-                bookSourceList.add(JsonObject.mapFrom(bookSource))
+            // 补全不在排序清单中的其余书源
+            for (i in 0 until bookSourceList.size()) {
+                val item = bookSourceList.getJsonObject(i)
+                val url = item?.getString("bookSourceUrl") ?: ""
+                if (url.isNotEmpty() && !seenUrls.contains(url)) {
+                    finalBookSourceList.add(item)
+                }
+            }
+            bookSourceList = finalBookSourceList
+        } else {
+            for (k in 0 until bookSourceJsonArray.size()) {
+                val bookSource = BookSource.fromJson(bookSourceJsonArray.getJsonObject(k).toString()).getOrNull()
+                if (bookSource == null) {
+                    continue
+                }
+                var existIndex: Int = -1
+                for (i in 0 until bookSourceList.size()) {
+                    var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
+                    if (_bookSource.bookSourceUrl.equals(bookSource.bookSourceUrl)) {
+                        existIndex = i
+                        break
+                    }
+                }
+                if (existIndex >= 0) {
+                    var sourceList = bookSourceList.getList()
+                    sourceList.set(existIndex, JsonObject.mapFrom(bookSource))
+                    bookSourceList = JsonArray(sourceList)
+                } else {
+                    bookSourceList.add(JsonObject.mapFrom(bookSource))
+                }
             }
         }
 
-        // logger.info("bookSourceList: {}", bookSourceList)
-        saveUserStorage(userNameSpace, "bookSource", bookSourceList!!)
+        saveUserStorage(userNameSpace, "bookSource", bookSourceList)
+        if (userNameSpace.equals("admin") || userNameSpace.equals("default")) {
+            saveUserStorage("default", "bookSource", bookSourceList)
+        }
         return returnData.setData("")
     }
 
@@ -301,6 +325,9 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
         val bookSourceJsonArray = context.bodyAsJsonArray
+            ?: (try { context.bodyAsJson?.getJsonArray("sources") } catch (e: Exception) { null })
+            ?: (try { context.bodyAsJson?.let { JsonArray().add(it) } } catch (e: Exception) { null })
+            ?: JsonArray()
 
         var userNameSpace = getUserNameSpace(context)
         var bookSourceList = getUserBookSourceJson(userNameSpace) ?: JsonArray()
@@ -309,7 +336,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         for (k in 0 until bookSourceJsonArray.size()) {
             val item = bookSourceJsonArray.getValue(k)
             if (item is JsonObject) {
-                val url = item.getString("bookSourceUrl") ?: item.getString("sourceUrl")
+                val url = item.getString("bookSourceUrl") ?: item.getString("sourceUrl") ?: item.getString("url")
                 if (!url.isNullOrEmpty()) urlsToDelete.add(url)
             } else if (item is String && item.isNotEmpty()) {
                 urlsToDelete.add(item)

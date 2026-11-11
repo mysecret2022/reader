@@ -72,20 +72,20 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "browsertest.html"
   },
   {
-    "revision": "5a7bce8b3d2c8d12f2f3",
-    "url": "css/admin.c3d3eedc.css"
+    "revision": "c99959d3c6f7322e19ca",
+    "url": "css/admin.cc439c53.css"
   },
   {
     "revision": "dc73ded30d933078bd1f",
     "url": "css/admin~index.d55d2547.css"
   },
   {
-    "revision": "e39fc4546ada940db54b",
+    "revision": "68160314dfe1a0c431fc",
     "url": "css/app.f0ee307f.css"
   },
   {
-    "revision": "0006ecdd48e26d7f2f9d",
-    "url": "css/book-source-manage.b5016af7.css"
+    "revision": "26008f0733a1fab4eaf5",
+    "url": "css/book-source-manage.f9bc023a.css"
   },
   {
     "revision": "b02c98390cef4e0f9356",
@@ -96,8 +96,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "css/index.0a00bd0a.css"
   },
   {
-    "revision": "2c1da160ff1fa3964e42",
-    "url": "css/reader.48f20af6.css"
+    "revision": "5a8f70d10ec5e041c538",
+    "url": "css/reader.5576278f.css"
   },
   {
     "revision": "df863889d631065094e569d3d1143504",
@@ -1368,20 +1368,20 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "img/noImage.7443b2ba.png"
   },
   {
-    "revision": "5a7bce8b3d2c8d12f2f3",
-    "url": "js/admin.c6a1e820.js"
+    "revision": "c99959d3c6f7322e19ca",
+    "url": "js/admin.9e563d36.js"
   },
   {
     "revision": "dc73ded30d933078bd1f",
     "url": "js/admin~index.01771ff0.js"
   },
   {
-    "revision": "e39fc4546ada940db54b",
-    "url": "js/app.a88c3b3d.js"
+    "revision": "68160314dfe1a0c431fc",
+    "url": "js/app.9fb84e73.js"
   },
   {
-    "revision": "0006ecdd48e26d7f2f9d",
-    "url": "js/book-source-manage.20f06a35.js"
+    "revision": "26008f0733a1fab4eaf5",
+    "url": "js/book-source-manage.4d10dea5.js"
   },
   {
     "revision": "b02c98390cef4e0f9356",
@@ -1392,8 +1392,8 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "js/index.357cc6cf.js"
   },
   {
-    "revision": "2c1da160ff1fa3964e42",
-    "url": "js/reader.87875336.js"
+    "revision": "5a8f70d10ec5e041c538",
+    "url": "js/reader.8985f473.js"
   },
   {
     "revision": "f0d07c276d4b9114ca5639c2417340b9",

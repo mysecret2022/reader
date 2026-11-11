@@ -4446,7 +4446,7 @@ export default {
         }
       } else {
         if (this.totalPages > 1) {
-          if (this.currentPage / this.totalPages >= 0.5) {
+          if (this.currentPage > Math.floor(this.totalPages / 2.0)) {
             reachedHalf = true;
           }
         } else {
@@ -4489,9 +4489,12 @@ export default {
       if (
         this.chapterContentCache &&
         this.chapterContentCache.bookUrl === book.bookUrl &&
-        this.chapterContentCache.chapters[nextIdx] &&
-        !this.chapterContentCache.chapters[nextIdx].error &&
-        this.chapterContentCache.chapters[nextIdx].content
+        ((this.chapterContentCache.chapters[nextIdx] &&
+          !this.chapterContentCache.chapters[nextIdx].error &&
+          this.chapterContentCache.chapters[nextIdx].content) ||
+          (this.chapterContentCache.chapters[nextChapter.index] &&
+            !this.chapterContentCache.chapters[nextChapter.index].error &&
+            this.chapterContentCache.chapters[nextChapter.index].content))
       ) {
         return true;
       }
@@ -4625,7 +4628,7 @@ export default {
 
             // 对齐当前阅读章节
             const matchedCurrent = this.fuzzyMatchChapter(
-              targetCurrentChapter.title,
+              targetCurrentChapter ? targetCurrentChapter.title : "",
               candidateCatalog,
               currentIdx
             );
@@ -4664,8 +4667,35 @@ export default {
                 updatedBook.index = matchedCurrent.index;
               }
               updatedBook.catalog = candidateCatalog;
-              this.catalog = candidateCatalog;
               this.$store.commit("setReadingBook", updatedBook);
+
+              // 将当前正在阅读章节与下一章内容同时写入新源的缓存，保证平滑翻页与滚动无缝
+              if (matchedCurrent && this.content) {
+                this.addChapterContentToCache({
+                  bookUrl: candidate.bookUrl,
+                  index: matchedCurrent.index,
+                  title: matchedCurrent.title,
+                  content: this.content,
+                  error: false
+                });
+                if (window.$cacheStorage) {
+                  const currentCacheKey =
+                    "localCache@" +
+                    currentBook.name +
+                    "_" +
+                    currentBook.author +
+                    "@" +
+                    candidate.bookUrl +
+                    "@chapterContent-" +
+                    matchedCurrent.index;
+                  window.$cacheStorage
+                    .setItem(currentCacheKey, {
+                      isSuccess: true,
+                      data: this.content
+                    })
+                    .catch(() => {});
+                }
+              }
 
               // 缓存下一章内容到内存和持久化存储
               this.addChapterContentToCache({
@@ -4712,23 +4742,75 @@ export default {
     },
 
     fuzzyMatchChapter(targetTitle, catalog, fallbackIndex) {
-      if (!targetTitle || !Array.isArray(catalog) || !catalog.length)
+      if (!targetTitle || !Array.isArray(catalog) || !catalog.length) {
+        if (
+          typeof fallbackIndex === "number" &&
+          Array.isArray(catalog) &&
+          catalog[fallbackIndex]
+        ) {
+          return catalog[fallbackIndex];
+        }
         return null;
+      }
       const clean = str =>
         (str || "")
           .replace(/[（(【[].*?[）)】\]]/g, "")
           .replace(/[\s\-_—·、:：，,。.!！?？]/g, "")
           .toLowerCase();
 
-      const extractNum = str => {
-        const m = (str || "").match(
+      const parseChapterNum = str => {
+        if (!str) return null;
+        const match = str.match(
           /(?:第\s*([0-9零一二两三四五六七八九十百千万]+)\s*[章回节集])|(?:^([0-9]+)[.\s、])/
         );
-        return m ? m[1] || m[2] : null;
+        if (!match) return null;
+        const raw = match[1] || match[2];
+        if (!raw) return null;
+        if (/^[0-9]+$/.test(raw)) return parseInt(raw, 10);
+
+        const digits = {
+          零: 0,
+          〇: 0,
+          一: 1,
+          二: 2,
+          两: 2,
+          三: 3,
+          四: 4,
+          五: 5,
+          六: 6,
+          七: 7,
+          八: 8,
+          九: 9
+        };
+        let total = 0;
+        let section = 0;
+        let num = 0;
+        for (let i = 0; i < raw.length; i++) {
+          const char = raw[i];
+          if (digits[char] !== undefined) {
+            num = digits[char];
+          } else if (char === "十") {
+            if (num === 0) num = 1;
+            section += num * 10;
+            num = 0;
+          } else if (char === "百") {
+            section += (num || 1) * 100;
+            num = 0;
+          } else if (char === "千") {
+            section += (num || 1) * 1000;
+            num = 0;
+          } else if (char === "万") {
+            section += num;
+            total += (section || 1) * 10000;
+            section = 0;
+            num = 0;
+          }
+        }
+        return total + section + num;
       };
 
       const targetClean = clean(targetTitle);
-      const targetNum = extractNum(targetTitle);
+      const targetNum = parseChapterNum(targetTitle);
 
       // 1. 完全一致
       for (const ch of catalog) {
@@ -4744,15 +4826,28 @@ export default {
         }
       }
 
-      // 3. 提取章节号一致
-      if (targetNum) {
-        for (const ch of catalog) {
+      // 3. 提取章节号一致（支持阿拉伯数字与中文数字对齐，优先取距离 fallbackIndex 最近的项）
+      if (typeof targetNum === "number" && targetNum > 0) {
+        let bestCandidate = null;
+        let minDistance = 999999;
+        for (let i = 0; i < catalog.length; i++) {
+          const ch = catalog[i];
           if (ch && ch.title) {
-            const chNum = extractNum(ch.title);
-            if (chNum && chNum === targetNum) {
-              return ch;
+            const chNum = parseChapterNum(ch.title);
+            if (chNum === targetNum) {
+              const dist =
+                typeof fallbackIndex === "number"
+                  ? Math.abs(i - fallbackIndex)
+                  : 0;
+              if (dist < minDistance) {
+                minDistance = dist;
+                bestCandidate = ch;
+              }
             }
           }
+        }
+        if (bestCandidate) {
+          return bestCandidate;
         }
       }
 
@@ -4884,12 +4979,12 @@ export default {
           updated.originName = prev.originName;
           if (prev.catalog) {
             updated.catalog = prev.catalog;
-            this.catalog = prev.catalog;
           }
           if (typeof prev.index === "number") {
             updated.index = prev.index;
           }
           this.$store.commit("setReadingBook", updated);
+          this.previousSourceRecord = null;
           this.$message.success(
             "已撤回并切换回原书源【" + prev.originName + "】"
           );

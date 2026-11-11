@@ -553,12 +553,14 @@
             ref="sourceTable"
             :data="pagedSources"
             stripe
+            row-key="bookSourceUrl"
             style="width: 100%"
             v-loading="loadingSources"
             @selection-change="selectedSources = $event"
           >
             <el-table-column
               type="selection"
+              :reserve-selection="true"
               width="48"
               align="center"
             ></el-table-column>
@@ -3315,9 +3317,10 @@ export default {
       }
     },
     selectAllSources() {
-      if (this.$refs.sourceTable) {
-        this.$refs.sourceTable.toggleAllSelection();
-      }
+      if (!this.$refs.sourceTable) return;
+      this.pagedSources.forEach(row => {
+        this.$refs.sourceTable.toggleRowSelection(row, true);
+      });
     },
     invertSelectSources() {
       if (!this.$refs.sourceTable) return;
@@ -3470,7 +3473,7 @@ export default {
       this.bookSourceList = reorderedList;
 
       try {
-        await Axios.post(this.api + "/saveBookSources", reorderedList);
+        await Axios.post(this.api + "/saveBookSources?sort=1", reorderedList);
         this.$message.success(
           `已成功置顶 ${green.length} 个优质书源并保存顺序`
         );
