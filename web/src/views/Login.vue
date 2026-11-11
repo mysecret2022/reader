@@ -252,13 +252,14 @@ export default {
             }
             if (username) {
               localStorage.removeItem(`pwa_banner_dismissed_${username}`);
+              const userPrefix = `pwa_banner_dismissed_${username}:`;
+              Object.keys(localStorage).forEach(k => {
+                if (k.startsWith(userPrefix)) {
+                  localStorage.removeItem(k);
+                }
+              });
             }
             localStorage.removeItem("pwa_banner_dismissed_anonymous");
-            Object.keys(localStorage).forEach(k => {
-              if (k.startsWith("pwa_banner_dismissed_")) {
-                localStorage.removeItem(k);
-              }
-            });
           } catch (e) {
             // ignore
           }

@@ -480,14 +480,22 @@ export default {
       localStorage.removeItem("reader_guest_mode");
       try {
         const userToken = payload && payload.data && payload.data.accessToken;
+        const username =
+          (payload && payload.data && payload.data.username) ||
+          (this.$store.state.userInfo && this.$store.state.userInfo.username);
         if (userToken) {
           localStorage.removeItem(`pwa_banner_dismissed_${userToken}`);
         }
-        Object.keys(localStorage).forEach(k => {
-          if (k.startsWith("pwa_banner_dismissed_")) {
-            localStorage.removeItem(k);
-          }
-        });
+        if (username) {
+          localStorage.removeItem(`pwa_banner_dismissed_${username}`);
+          const userPrefix = `pwa_banner_dismissed_${username}:`;
+          Object.keys(localStorage).forEach(k => {
+            if (k.startsWith(userPrefix)) {
+              localStorage.removeItem(k);
+            }
+          });
+        }
+        localStorage.removeItem("pwa_banner_dismissed_anonymous");
       } catch (e) {
         // ignore
       }
@@ -514,6 +522,25 @@ export default {
         isLogin: this.isLogin
       });
       if (res.data.isSuccess) {
+        try {
+          const userToken = res.data.data && res.data.data.accessToken;
+          const username = this.loginForm.username;
+          if (userToken) {
+            localStorage.removeItem(`pwa_banner_dismissed_${userToken}`);
+          }
+          if (username) {
+            localStorage.removeItem(`pwa_banner_dismissed_${username}`);
+            const userPrefix = `pwa_banner_dismissed_${username}:`;
+            Object.keys(localStorage).forEach(k => {
+              if (k.startsWith(userPrefix)) {
+                localStorage.removeItem(k);
+              }
+            });
+          }
+          localStorage.removeItem("pwa_banner_dismissed_anonymous");
+        } catch (e) {
+          // ignore
+        }
         this.$store.commit("setShowLogin", false);
         this.$nextTick(() => {
           this.$store.commit("setLoginAuth", true);

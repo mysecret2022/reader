@@ -180,16 +180,21 @@ class YueduApi : RestVerticle() {
 
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { bookSourceController.readSourceFile(it) }
+        router.post("/readSourceFile").coroutineHandler { bookSourceController.readSourceFile(it) }
 
         // 读取远程书源文件
         router.post("/reader3/readRemoteSourceFile").coroutineHandlerWithoutRes { bookSourceController.readRemoteSourceFile(it) }
+        router.post("/readRemoteSourceFile").coroutineHandlerWithoutRes { bookSourceController.readRemoteSourceFile(it) }
 
         // 设置默认书源与同步管理员书源
         router.post("/reader3/setAsDefaultBookSources").coroutineHandler { bookSourceController.setAsDefaultBookSources(it) }
         router.post("/reader3/syncAdminBookSources").coroutineHandler { bookSourceController.syncAdminBookSources(it) }
         router.get("/reader3/syncAdminBookSources").coroutineHandler { bookSourceController.syncAdminBookSources(it) }
+        router.post("/syncAdminBookSources").coroutineHandler { bookSourceController.syncAdminBookSources(it) }
+        router.get("/syncAdminBookSources").coroutineHandler { bookSourceController.syncAdminBookSources(it) }
         router.post("/reader3/deleteUserBookSource").coroutineHandler { bookSourceController.deleteUserBookSource(it) }
         router.post("/reader3/deleteBookSourcesFile").coroutineHandler { bookSourceController.deleteBookSourcesFile(it) }
+        router.post("/deleteBookSourcesFile").coroutineHandler { bookSourceController.deleteBookSourcesFile(it) }
 
         /** 书籍模块 */
         // 书架

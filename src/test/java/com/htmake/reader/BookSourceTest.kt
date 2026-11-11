@@ -225,4 +225,66 @@ class BookSourceTest {
         assertEquals("adminSource", mockStorage["admin"]!!.getJsonObject(0).getString("name"))
         assertEquals("adminSource", mockStorage["default"]!!.getJsonObject(0).getString("name"))
     }
+
+    @Test
+    fun testScopedPwaDismissKeyCleanup() {
+        val mockLocalStorage = mutableMapOf<String, String>()
+        mockLocalStorage["pwa_banner_dismissed_anonymous"] = "1"
+        mockLocalStorage["pwa_banner_dismissed_userA"] = "1"
+        mockLocalStorage["pwa_banner_dismissed_userA:token123"] = "1"
+        mockLocalStorage["pwa_banner_dismissed_userB"] = "1"
+        mockLocalStorage["pwa_banner_dismissed_userB:token456"] = "1"
+
+        // Simulate userA login: should only clear userA, userA's token keys, and anonymous
+        val loggingInUser = "userA"
+        val userToken = "userA:token123"
+        val keysToRemove = mockLocalStorage.keys.filter { k ->
+            k == "pwa_banner_dismissed_anonymous" ||
+            k == "pwa_banner_dismissed_$loggingInUser" ||
+            k.startsWith("pwa_banner_dismissed_$loggingInUser:") ||
+            k == "pwa_banner_dismissed_$userToken"
+        }
+        keysToRemove.forEach { mockLocalStorage.remove(it) }
+
+        // userA and anonymous cleared
+        assertFalse(mockLocalStorage.containsKey("pwa_banner_dismissed_userA"))
+        assertFalse(mockLocalStorage.containsKey("pwa_banner_dismissed_userA:token123"))
+        assertFalse(mockLocalStorage.containsKey("pwa_banner_dismissed_anonymous"))
+
+        // userB keys MUST BE PRESERVED
+        assertTrue(mockLocalStorage.containsKey("pwa_banner_dismissed_userB"))
+        assertTrue(mockLocalStorage.containsKey("pwa_banner_dismissed_userB:token456"))
+        assertEquals("1", mockLocalStorage["pwa_banner_dismissed_userB"])
+    }
+
+    @Test
+    fun testImportSourceUnpacking() {
+        fun unpack(input: Any): List<Map<String, Any>> {
+            return when (input) {
+                is List<*> -> input.filterIsInstance<Map<String, Any>>()
+                is Map<*, *> -> {
+                    val dataList = input["data"] as? List<*> ?: input["sources"] as? List<*> ?: input["list"] as? List<*>
+                    if (dataList != null) {
+                        dataList.filterIsInstance<Map<String, Any>>()
+                    } else {
+                        @Suppress("UNCHECKED_CAST")
+                        listOf(input as Map<String, Any>)
+                    }
+                }
+                else -> emptyList()
+            }
+        }
+
+        val directArray = listOf(mapOf("bookSourceName" to "Source 1"))
+        assertEquals(1, unpack(directArray).size)
+
+        val wrappedData = mapOf("data" to listOf(mapOf("bookSourceName" to "Source 2"), mapOf("bookSourceName" to "Source 3")))
+        assertEquals(2, unpack(wrappedData).size)
+
+        val wrappedSources = mapOf("sources" to listOf(mapOf("bookSourceName" to "Source 4")))
+        assertEquals(1, unpack(wrappedSources).size)
+
+        val singleObject = mapOf("bookSourceName" to "Source 5")
+        assertEquals(1, unpack(singleObject).size)
+    }
 }

@@ -258,7 +258,7 @@
             <el-button
               type="success"
               size="small"
-              icon="el-icon-mobile-phone"
+              icon="el-icon-monitor"
               style="width: 100%; border-radius: 8px; font-weight: bold;"
               @click="installPwa"
             >
@@ -328,7 +328,7 @@
           v-if="canInstallPwa && showPwaBanner && !isSearchResult"
         >
           <div class="pwa-banner-left">
-            <i class="el-icon-mobile-phone pwa-banner-icon"></i>
+            <i class="el-icon-monitor pwa-banner-icon"></i>
             <span class="pwa-banner-text"
               >可将阅读安装至桌面，享受离线阅读与全屏沉浸体验</span
             >
@@ -1069,6 +1069,10 @@ export default {
     },
     loginAuth() {
       this.init(true);
+      this.initPwaBannerState();
+    },
+    "$store.state.token"() {
+      this.initPwaBannerState();
     },
     userNS() {
       this.init(true);
@@ -1146,16 +1150,42 @@ export default {
   },
   methods: {
     getPwaDismissKey() {
-      const user =
-        this.$store.state.token ||
+      const token = this.$store.state.token;
+      const username =
         (this.$store.state.userInfo && this.$store.state.userInfo.username) ||
-        "anonymous";
-      return `pwa_banner_dismissed_${user}`;
+        this.$store.state.username ||
+        "";
+      if (token) return `pwa_banner_dismissed_${token}`;
+      if (username) return `pwa_banner_dismissed_${username}`;
+      return "pwa_banner_dismissed_anonymous";
     },
     isPwaBannerDismissed() {
       try {
-        const key = this.getPwaDismissKey();
-        return localStorage.getItem(key) === "1";
+        const token = this.$store.state.token;
+        const username =
+          (this.$store.state.userInfo && this.$store.state.userInfo.username) ||
+          this.$store.state.username ||
+          "";
+        if (
+          token &&
+          localStorage.getItem(`pwa_banner_dismissed_${token}`) === "1"
+        ) {
+          return true;
+        }
+        if (
+          username &&
+          localStorage.getItem(`pwa_banner_dismissed_${username}`) === "1"
+        ) {
+          return true;
+        }
+        if (
+          !token &&
+          !username &&
+          localStorage.getItem("pwa_banner_dismissed_anonymous") === "1"
+        ) {
+          return true;
+        }
+        return false;
       } catch (e) {
         return false;
       }
@@ -1163,8 +1193,20 @@ export default {
     dismissPwaBanner() {
       this.showPwaBanner = false;
       try {
-        const key = this.getPwaDismissKey();
-        localStorage.setItem(key, "1");
+        const token = this.$store.state.token;
+        const username =
+          (this.$store.state.userInfo && this.$store.state.userInfo.username) ||
+          this.$store.state.username ||
+          "";
+        if (token) {
+          localStorage.setItem(`pwa_banner_dismissed_${token}`, "1");
+        }
+        if (username) {
+          localStorage.setItem(`pwa_banner_dismissed_${username}`, "1");
+        }
+        if (!token && !username) {
+          localStorage.setItem("pwa_banner_dismissed_anonymous", "1");
+        }
       } catch (e) {
         // ignore
       }

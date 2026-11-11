@@ -1,5 +1,5 @@
 <template>
-  <div class="book-source-manage-page">
+  <div class="book-source-manage-page" :class="{ 'theme-dark': isNight }">
     <div class="page-header">
       <div class="header-left">
         <el-button
@@ -18,6 +18,16 @@
         >
           <i class="el-icon-user"></i>
           {{ currentUser }} 专属空间
+        </el-tag>
+        <el-tag
+          size="small"
+          type="warning"
+          class="user-tag clickable-tag"
+          v-else
+          @click="$store.commit('setShowLogin', true)"
+          style="cursor: pointer;"
+        >
+          <i class="el-icon-user"></i> 未登录 (点击登录)
         </el-tag>
         <el-tag size="small" type="info" class="source-count-tag">
           共 {{ bookSourceList.length }} 个书源
@@ -365,6 +375,9 @@ export default {
     };
   },
   computed: {
+    isNight() {
+      return this.$store.getters.isNight;
+    },
     currentUser() {
       return (
         (this.$store.state.userInfo && this.$store.state.userInfo.username) ||
@@ -425,11 +438,7 @@ export default {
   },
   methods: {
     goBack() {
-      if (window.history.length > 1) {
-        this.$router.go(-1);
-      } else {
-        this.$router.push("/");
-      }
+      this.$router.push("/");
     },
     openImportSourceDialog() {
       this.importUrl = "";
@@ -496,7 +505,17 @@ export default {
       }
     },
     async saveImportedSources(data) {
-      let list = Array.isArray(data) ? data : data ? [data] : [];
+      let list = Array.isArray(data)
+        ? data
+        : data && Array.isArray(data.data)
+        ? data.data
+        : data && Array.isArray(data.sources)
+        ? data.sources
+        : data && Array.isArray(data.list)
+        ? data.list
+        : data
+        ? [data]
+        : [];
       if (list.length === 0) {
         this.$message.warning("未检测到有效书源数据");
         return;
@@ -617,7 +636,7 @@ export default {
         try {
           await Axios.post(this.api + "/deleteBookSources", [source]);
           this.$message.success("删除书源成功");
-          this.fetchSources();
+          await this.fetchSources();
         } catch (err) {
           this.$message.error("删除书源失败: " + err.toString());
         }
@@ -904,4 +923,37 @@ export default {
   background #fff
   border-radius 8px
   box-shadow 0 1px 3px rgba(0, 0, 0, 0.05)
+
+/* 暗色主题适配 */
+.theme-dark
+  background #0f172a
+  color #f1f5f9
+  .page-header, .toolbar-section, .table-container, .pagination-section
+    background #1e293b
+    box-shadow 0 1px 3px rgba(0, 0, 0, 0.3)
+    border 1px solid rgba(255, 255, 255, 0.05)
+  .page-title
+    color #f1f5f9
+  .source-name
+    color #f1f5f9
+  .selected-summary
+    color #94a3b8
+  >>> .el-table
+    background #1e293b
+    color #e2e8f0
+    th.el-table__cell, tr.el-table__row
+      background #1e293b
+      border-bottom-color rgba(255, 255, 255, 0.08)
+    .el-table__row--striped td.el-table__cell
+      background #162032
+    td.el-table__cell
+      border-bottom-color rgba(255, 255, 255, 0.08)
+  >>> .el-pagination
+    .el-pagination__total, .btn-prev, .btn-next, .el-pager li
+      background #1e293b !important
+      color #94a3b8 !important
+      border 1px solid rgba(255, 255, 255, 0.08)
+    .el-pager li.active
+      color #fff !important
+      background #3b82f6 !important
 </style>
