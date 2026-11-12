@@ -164,26 +164,7 @@
           </div>
         </div>
 
-        <!-- 3. 书源管理 (体检/测速/批量删除/置顶/导入) -->
-        <div class="setting-wrapper">
-          <div class="setting-title">
-            书源管理
-          </div>
-          <div class="setting-item">
-            <el-button
-              type="primary"
-              plain
-              size="small"
-              icon="el-icon-odometer"
-              style="width: 100%; border-radius: 8px; font-weight: 500;"
-              @click="toBookSourceManage"
-            >
-              书源管理与体检中心
-            </el-button>
-          </div>
-        </div>
-
-        <!-- 4. 管理 (从顶部右侧迁移至左侧) -->
+        <!-- 3. 管理 (从顶部右侧迁移至左侧) -->
         <div class="setting-wrapper" style="margin-top: 28px;">
           <div class="setting-title">
             管理与账户

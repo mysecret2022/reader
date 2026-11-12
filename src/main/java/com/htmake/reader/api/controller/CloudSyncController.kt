@@ -67,7 +67,7 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
             "webdavUrl" to (configJson.getString("webdavUrl") ?: ""),
             "webdavUsername" to (configJson.getString("webdavUsername") ?: ""),
             "webdavPassword" to (configJson.getString("webdavPassword") ?: ""),
-            "webdavRemotePath" to (configJson.getString("webdavRemotePath") ?: "/reader-backup"),
+            "webdavRemotePath" to (configJson.getString("webdavRemotePath") ?: "/web"),
             "lastIncrementalSyncTime" to (configJson.getString("lastIncrementalSyncTime") ?: ""),
             "lastIncrementalStatus" to (configJson.getString("lastIncrementalStatus") ?: "暂无记录"),
             "lastFullBackupTime" to (configJson.getString("lastFullBackupTime") ?: ""),
@@ -107,7 +107,7 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
             "webdavUrl" to (body.getString("webdavUrl") ?: "").trim().trimEnd('/'),
             "webdavUsername" to (body.getString("webdavUsername") ?: "").trim(),
             "webdavPassword" to (body.getString("webdavPassword") ?: "").trim(),
-            "webdavRemotePath" to (body.getString("webdavRemotePath") ?: "/reader-backup").trim(),
+            "webdavRemotePath" to (body.getString("webdavRemotePath") ?: "/web").trim(),
             "lastIncrementalSyncTime" to (oldConfigJson.getString("lastIncrementalSyncTime") ?: ""),
             "lastIncrementalStatus" to (oldConfigJson.getString("lastIncrementalStatus") ?: "暂无记录"),
             "lastFullBackupTime" to (oldConfigJson.getString("lastFullBackupTime") ?: ""),
@@ -242,7 +242,7 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
                 val url = (configJson.getString("webdavUrl") ?: "").trimEnd('/')
                 val user = configJson.getString("webdavUsername") ?: ""
                 val pass = configJson.getString("webdavPassword") ?: ""
-                val remoteDir = configJson.getString("webdavRemotePath") ?: "/reader-backup"
+                val remoteDir = configJson.getString("webdavRemotePath") ?: "/web"
 
                 if (url.isNotEmpty() && user.isNotEmpty()) {
                     var wdSuccess = 0
@@ -334,7 +334,7 @@ class CloudSyncController(override val coroutineContext: CoroutineContext) : Bas
                 val url = (configJson.getString("webdavUrl") ?: "").trimEnd('/')
                 val user = configJson.getString("webdavUsername") ?: ""
                 val pass = configJson.getString("webdavPassword") ?: ""
-                val remoteDir = configJson.getString("webdavRemotePath") ?: "/reader-backup"
+                val remoteDir = configJson.getString("webdavRemotePath") ?: "/web"
 
                 if (url.isNotEmpty() && user.isNotEmpty()) {
                     val fullRemoteUrl = "$url$remoteDir/backups/$backupFileName"

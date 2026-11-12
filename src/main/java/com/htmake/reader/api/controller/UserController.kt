@@ -638,7 +638,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         val adminSyncCfg = asJsonObject(getStorage("data", "cloudSyncConfig")) ?: JsonObject()
         val defaultUrl = adminSyncCfg.getString("webdavUrl") ?: ""
         val defaultUsername = adminSyncCfg.getString("webdavUsername") ?: ""
-        val defaultPath = adminSyncCfg.getString("webdavRemotePath") ?: "/reader-backup"
+        val defaultPath = adminSyncCfg.getString("webdavRemotePath") ?: "/web"
 
         val useDefault = userCfg.getBoolean("useDefault") ?: (userCfg.getString("webdavUrl").isNullOrEmpty())
         val result = mutableMapOf<String, Any>(
@@ -646,7 +646,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             "webdavUrl" to (userCfg.getString("webdavUrl") ?: ""),
             "webdavUsername" to (userCfg.getString("webdavUsername") ?: ""),
             "webdavPassword" to (userCfg.getString("webdavPassword") ?: ""),
-            "webdavRemotePath" to (userCfg.getString("webdavRemotePath") ?: "/reader-backup"),
+            "webdavRemotePath" to (userCfg.getString("webdavRemotePath") ?: "/web"),
             "defaultUrl" to defaultUrl,
             "defaultUsername" to defaultUsername,
             "defaultRemotePath" to defaultPath
@@ -670,7 +670,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             .put("webdavUrl", body.getString("webdavUrl", "")?.trim() ?: "")
             .put("webdavUsername", body.getString("webdavUsername", "")?.trim() ?: "")
             .put("webdavPassword", body.getString("webdavPassword", "")?.trim() ?: "")
-            .put("webdavRemotePath", body.getString("webdavRemotePath", "/reader-backup")?.trim() ?: "/reader-backup")
+            .put("webdavRemotePath", body.getString("webdavRemotePath", "/web")?.trim() ?: "/web")
 
         saveUserStorage(userNameSpace, "userWebdavConfig", saveObj)
         return returnData.setData("保存成功")

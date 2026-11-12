@@ -817,12 +817,12 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
                 targetUrl = adminSyncCfg.getString("webdavUrl") ?: ""
                 targetUser = adminSyncCfg.getString("webdavUsername") ?: ""
                 targetPass = adminSyncCfg.getString("webdavPassword") ?: ""
-                targetDir = adminSyncCfg.getString("webdavRemotePath") ?: "/reader-backup"
+                targetDir = adminSyncCfg.getString("webdavRemotePath") ?: "/web"
             } else {
                 targetUrl = userCfg.getString("webdavUrl") ?: ""
                 targetUser = userCfg.getString("webdavUsername") ?: ""
                 targetPass = userCfg.getString("webdavPassword") ?: ""
-                targetDir = userCfg.getString("webdavRemotePath") ?: "/reader-backup"
+                targetDir = userCfg.getString("webdavRemotePath") ?: "/web"
             }
 
             if (targetUrl.isNotEmpty() && targetUser.isNotEmpty()) {

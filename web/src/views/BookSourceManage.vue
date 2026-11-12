@@ -7,7 +7,7 @@
           size="small"
           circle
           @click="goBack"
-          title="返回书架"
+          title="返回控制台"
         ></el-button>
         <span class="page-title">书源管理与体检中心</span>
         <el-tag
@@ -867,7 +867,7 @@ export default {
       );
     },
     api() {
-      return this.$store.state.api;
+      return this.$store.getters.api;
     },
     filteredSources() {
       const keyword = (this.searchKeyword || "").trim().toLowerCase();
@@ -989,7 +989,7 @@ export default {
   },
   methods: {
     goBack() {
-      this.$router.push("/");
+      this.$router.push("/admin");
     },
     openImportSourceDialog(tab = "file") {
       this.importUrl = "";

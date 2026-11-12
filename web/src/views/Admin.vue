@@ -448,14 +448,6 @@
                   导入底包书源
                 </el-button>
                 <el-button
-                  type="success"
-                  size="small"
-                  icon="el-icon-link"
-                  @click="loadRemoteBookSource"
-                >
-                  远程书源
-                </el-button>
-                <el-button
                   type="info"
                   plain
                   size="small"
@@ -474,15 +466,7 @@
                   失效书源
                 </el-button>
                 <el-button
-                  v-if="isAdmin"
-                  size="small"
-                  icon="el-icon-video-play"
-                  @click="debugBookSource"
-                >
-                  调试书源
-                </el-button>
-                <el-button
-                  v-else
+                  v-if="!isAdmin"
                   type="primary"
                   plain
                   size="small"
@@ -494,24 +478,6 @@
                   拉取管理书源
                 </el-button>
                 <el-button
-                  type="success"
-                  plain
-                  size="small"
-                  icon="el-icon-check"
-                  @click="batchToggleSources(true)"
-                >
-                  全部启用
-                </el-button>
-                <el-button
-                  type="danger"
-                  plain
-                  size="small"
-                  icon="el-icon-close"
-                  @click="batchToggleSources(false)"
-                >
-                  全部禁用
-                </el-button>
-                <el-button
                   type="danger"
                   size="small"
                   icon="el-icon-delete"
@@ -520,25 +486,6 @@
                 >
                   批量删除 (已选 {{ selectedSources.length }} 项)
                 </el-button>
-              </div>
-              <div
-                class="source-select-bar"
-                style="margin-top: 10px; display: flex; align-items: center; gap: 8px;"
-              >
-                <el-button size="mini" @click="selectAllSources"
-                  >全选</el-button
-                >
-                <el-button size="mini" @click="invertSelectSources"
-                  >反选</el-button
-                >
-                <el-button size="mini" @click="clearSelectSources"
-                  >清空选择</el-button
-                >
-                <span
-                  style="font-size: 13px; color: #606266; margin-left: 8px;"
-                >
-                  已选 <b>{{ selectedSources.length }}</b> 项
-                </span>
               </div>
             </div>
           </div>
@@ -1346,7 +1293,7 @@
                 <el-form-item label="远端存放目录">
                   <el-input
                     v-model="userWebdavConfig.webdavRemotePath"
-                    placeholder="默认: /reader-backup"
+                    placeholder="默认: /web"
                     clearable
                   ></el-input>
                 </el-form-item>
@@ -1841,7 +1788,7 @@
                   <el-form-item label="远端备份根路径">
                     <el-input
                       v-model="cloudSyncConfig.webdavRemotePath"
-                      placeholder="例如: /reader-backup"
+                      placeholder="例如: /web"
                     ></el-input>
                   </el-form-item>
                 </el-col>
@@ -2898,7 +2845,7 @@ export default {
         webdavUrl: "",
         webdavUsername: "",
         webdavPassword: "",
-        webdavRemotePath: "/reader-backup",
+        webdavRemotePath: "/web",
         lastIncrementalSyncTime: "",
         lastIncrementalStatus: "",
         lastFullBackupTime: "",
@@ -2941,7 +2888,7 @@ export default {
         webdavUrl: "",
         webdavUsername: "",
         webdavPassword: "",
-        webdavRemotePath: "/reader-backup",
+        webdavRemotePath: "/web",
         defaultUrl: "",
         defaultUsername: "",
         defaultRemotePath: ""
@@ -5001,12 +4948,10 @@ export default {
             webdavUrl: res.data.data.webdavUrl || "",
             webdavUsername: res.data.data.webdavUsername || "",
             webdavPassword: res.data.data.webdavPassword || "",
-            webdavRemotePath:
-              res.data.data.webdavRemotePath || "/reader-backup",
+            webdavRemotePath: res.data.data.webdavRemotePath || "/web",
             defaultUrl: res.data.data.defaultUrl || "",
             defaultUsername: res.data.data.defaultUsername || "",
-            defaultRemotePath:
-              res.data.data.defaultRemotePath || "/reader-backup"
+            defaultRemotePath: res.data.data.defaultRemotePath || "/web"
           };
         }
       } catch (err) {

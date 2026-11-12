@@ -2359,10 +2359,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         descDirFile.mkdirs()
         try {
             val userHome = getUserWebdavHome(userNameSpace)
-            var legadoHome = userHome
-            if (latestZipFilePath != null && latestZipFilePath.indexOf("legado") > 0) {
-                legadoHome = userHome + File.separator + "legado"
-            }
+            var targetHome = userHome + File.separator + "web"
             if (latestZipFilePath != null && File(latestZipFilePath).exists()) {
                 File(latestZipFilePath).unzip(descDir)
             }
@@ -2410,7 +2407,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             }
             // 压缩打包
             val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
-            val targetZip = File(legadoHome + File.separator + "backup" + today + ".zip")
+            val targetZip = File(targetHome + File.separator + "backup" + today + ".zip")
             if (!targetZip.parentFile.exists()) {
                 targetZip.parentFile.mkdirs()
             }
@@ -2425,26 +2422,24 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
     suspend fun getLastBackFileFromWebdav(userNameSpace: String): String? {
         val userHome = getUserWebdavHome(userNameSpace)
-        var legadoHome = File(userHome + File.separator + "legado")
-        if (!legadoHome.exists()) {
-            legadoHome = File(userHome)
-        }
-        if (!legadoHome.exists()) {
-            return null
-        }
-        var latestZipFile: String? = null
+        val candidateDirs = listOf(
+            File(userHome + File.separator + "web"),
+            File(userHome + File.separator + "legado"),
+            File(userHome)
+        )
         val zipFileReg = Regex("^backup[0-9-]+.zip$", RegexOption.IGNORE_CASE)    //忽略大小写
-        legadoHome.listFiles().also{
-            it.sortByDescending {
-                it.lastModified()
-            }
-        }.forEach {
-            if (zipFileReg.matches(it.name)) {
-                latestZipFile = it.toString()
-                return@forEach
+        for (dir in candidateDirs) {
+            if (dir.exists()) {
+                val files = dir.listFiles() ?: continue
+                files.sortByDescending { it.lastModified() }
+                for (it in files) {
+                    if (zipFileReg.matches(it.name)) {
+                        return it.toString()
+                    }
+                }
             }
         }
-        return latestZipFile
+        return null
     }
 
     // 从本地导入文件预览
