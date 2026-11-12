@@ -1295,8 +1295,8 @@ export default {
 
       if (!this.showCoverPicker) return;
 
-      // 如果已有至少3张候选封面，不再耗时全网扫描
-      if (this.candidateCovers.length >= 3) {
+      // 如果已有至少10张候选封面，不再耗时全网扫描
+      if (this.candidateCovers.length >= 10) {
         this.loadingCovers = false;
         return;
       }
@@ -1306,7 +1306,7 @@ export default {
         name: book.name,
         author: book.author || "",
         url: book.bookUrl || "",
-        searchSize: 10
+        searchSize: 20
       };
       if (this.$store.state.token) {
         params.accessToken = this.$store.state.token;
@@ -1337,7 +1337,7 @@ export default {
                     sourceName: name,
                     originName: name
                   });
-                  if (this.candidateCovers.length >= 6) {
+                  if (this.candidateCovers.length >= 10) {
                     this.stopCoverSSE();
                     break;
                   }
@@ -1351,7 +1351,7 @@ export default {
         const onEnd = () => this.stopCoverSSE();
         es.addEventListener("end", onEnd);
         es.addEventListener("error", onEnd);
-        this.coverTimeoutTimer = setTimeout(onEnd, 6000);
+        this.coverTimeoutTimer = setTimeout(onEnd, 10000);
       } catch (err) {
         this.stopCoverSSE();
       }

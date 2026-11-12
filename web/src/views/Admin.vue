@@ -4537,7 +4537,7 @@ export default {
         });
         seen.add(book.coverUrl);
       }
-      if (this.candidateCovers.length >= 5) {
+      if (this.candidateCovers.length >= 10) {
         this.loadingCovers = false;
         return;
       }
@@ -4546,7 +4546,7 @@ export default {
         name: book.name,
         author: book.author || "",
         url: book.bookUrl || "",
-        searchSize: 15
+        searchSize: 20
       };
       if (this.$store.state.token) {
         params.accessToken = this.$store.state.token;
@@ -4573,7 +4573,7 @@ export default {
                     sourceName: name,
                     originName: name
                   });
-                  if (this.candidateCovers.length >= 5) {
+                  if (this.candidateCovers.length >= 10) {
                     stopSSE();
                     break;
                   }
