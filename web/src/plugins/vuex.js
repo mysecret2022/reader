@@ -287,15 +287,14 @@ export default new Vuex.Store({
       setCache("filterRules", JSON.stringify(filterRules));
     },
     addFilterRule(state, rule) {
-      let filterRules = [].concat(state.filterRules);
+      let filterRules = [].concat(state.filterRules || []).filter(Boolean);
       if (typeof rule.index !== "undefined" && rule.index >= 0) {
         filterRules[rule.index] = rule;
-        state.filterRules = filterRules;
       } else {
         filterRules = filterRules.concat([rule]);
-        state.filterRules = filterRules;
       }
-      // setCache("filterRules", JSON.stringify(filterRules));
+      state.filterRules = filterRules;
+      setCache("filterRules", JSON.stringify(filterRules));
     },
     setNightTheme(state, isNight) {
       let config = { ...state.config };

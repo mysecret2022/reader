@@ -599,4 +599,83 @@ class BookSourceTest {
         assertEquals("http://localhost:8080/reader3", resolveApi("http://localhost:8080/reader3"))
         assertEquals("https://reader.example.com", resolveApi("https://reader.example.com"))
     }
+
+    @Test
+    fun testAdFilteringPatternsAndScoping() {
+        val escapeRegex: (String) -> String = { str ->
+            java.util.regex.Pattern.quote(str)
+        }
+
+        // 1. Exact text filtering (multiple occurrences)
+        val text = "第一章\n求书请关注微信公众号：【大千书屋】\n萧炎一言不发。\n求书请关注微信公众号：【大千书屋】"
+        val exactTarget = "求书请关注微信公众号：【大千书屋】"
+        val filteredExact = text.split(exactTarget).joinToString("")
+        assertFalse(filteredExact.contains(exactTarget))
+        assertEquals("第一章\n\n萧炎一言不发。\n", filteredExact)
+
+        // 2. Full line ad filtering (CRLF and LF compatibility with [^\r\n])
+        val rawChapterLF = "第一章 初始\n【最新章节请访问 顶点小说网：www.dingdian.com，无弹窗】\n主角深吸一口气。\n"
+        val linePattern = "[^\\r\\n]*" + escapeRegex("www.dingdian.com") + "[^\\r\\n]*(?:\\r?\\n|$)"
+        val filteredLineLF = Regex(linePattern).replace(rawChapterLF, "")
+        assertEquals("第一章 初始\n主角深吸一口气。\n", filteredLineLF)
+        assertFalse(filteredLineLF.contains("顶点小说网"))
+        assertFalse(filteredLineLF.contains("www.dingdian.com"))
+
+        val rawChapterCRLF = "第一章 初始\r\n【最新章节请访问 顶点小说网：www.dingdian.com，无弹窗】\r\n主角深吸一口气。\r\n"
+        val filteredLineCRLF = Regex(linePattern).replace(rawChapterCRLF, "")
+        assertEquals("第一章 初始\r\n主角深吸一口气。\r\n", filteredLineCRLF)
+        assertFalse(filteredLineCRLF.contains("顶点小说网"))
+
+        // Multi-line ad pattern test
+        val multilineText = "关注公众号：书友俱乐部\n获取完整无弹窗"
+        val safeMultiPattern = multilineText.split(Regex("\\r?\\n")).map { escapeRegex(it) }.joinToString("(?:\\r?\\n)")
+        val multiLineRegex = Regex("[^\\r\\n]*$safeMultiPattern[^\\r\\n]*(?:\\r?\\n|$)")
+        val chapterWithMultiAd = "正文开头\r\n请关注公众号：书友俱乐部\r\n获取完整无弹窗小说。\r\n正文结尾"
+        val filteredMulti = multiLineRegex.replace(chapterWithMultiAd, "")
+        assertEquals("正文开头\r\n正文结尾", filteredMulti)
+
+        // 3. Smart domain URL filtering (matches all links under domain, including subdomains and compound TLDs)
+        val domain = "biquge.tv"
+        val domainPattern = "(?:https?:\\/\\/)?(?:[a-zA-Z0-9-]+\\.)*" + escapeRegex(domain) + "(?::\\d+)?(?:\\/[^\\s\\u4e00-\\u9fa5<>\"']*)?"
+        val domainRegex = Regex(domainPattern, RegexOption.IGNORE_CASE)
+
+        val chapterWithUrls = """
+            正文开始。
+            访问链接一：https://www.biquge.tv/read/123.html
+            访问链接二：http://m.biquge.tv:8080/chapter/456?ad=1
+            访问链接三：wap.biquge.tv/book/789
+            请大家记住域名：biquge.tv
+            正文结束。
+        """.trimIndent()
+
+        val filteredUrls = domainRegex.replace(chapterWithUrls, "")
+        assertFalse(filteredUrls.contains("biquge.tv"))
+        assertTrue(filteredUrls.contains("正文开始。"))
+        assertTrue(filteredUrls.contains("正文结束。"))
+
+        // Compound TLD: .com.cn
+        val cnDomain = "biquge.com.cn"
+        val cnPattern = "(?:https?:\\/\\/)?(?:[a-zA-Z0-9-]+\\.)*" + escapeRegex(cnDomain) + "(?::\\d+)?(?:\\/[^\\s\\u4e00-\\u9fa5<>\"']*)?"
+        val cnRegex = Regex(cnPattern, RegexOption.IGNORE_CASE)
+        val cnContent = "请访问 https://wap.biquge.com.cn/123 获取更新"
+        val filteredCn = cnRegex.replace(cnContent, "")
+        assertFalse(filteredCn.contains("biquge.com.cn"))
+        assertFalse(filteredCn.contains("wap"))
+
+        // 4. Scope matching verification
+        fun matchScope(ruleScope: String?, currentBookName: String, currentBookUrl: String): Boolean {
+            val scopeStr = ruleScope?.trim() ?: ""
+            if (scopeStr.isEmpty() || scopeStr == "*") return true
+            val parts = scopeStr.split(";")
+            if (parts[0] != "*" && parts[0] != currentBookName) return false
+            if (parts.size > 1 && parts[1].isNotEmpty() && parts[1] != currentBookUrl) return false
+            return true
+        }
+
+        assertTrue(matchScope("*", "斗破苍穹", "https://source1.com/book/1"))
+        assertTrue(matchScope("斗破苍穹", "斗破苍穹", "https://source1.com/book/1"))
+        assertTrue(matchScope("斗破苍穹;https://source1.com/book/1", "斗破苍穹", "https://source1.com/book/1"))
+        assertFalse(matchScope("完美世界", "斗破苍穹", "https://source1.com/book/1"))
+        assertFalse(matchScope("斗破苍穹;https://source2.com/book/2", "斗破苍穹", "https://source1.com/book/1"))
+    }
 }

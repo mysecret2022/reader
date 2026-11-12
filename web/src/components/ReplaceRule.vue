@@ -41,6 +41,21 @@
           label="规则名称"
           :fixed="$store.state.miniInterface"
         >
+          <template slot-scope="scope">
+            <el-tag
+              size="mini"
+              type="danger"
+              effect="plain"
+              v-if="
+                scope.row.group === '广告过滤' ||
+                  (scope.row.name && scope.row.name.startsWith('[广告过滤]'))
+              "
+              style="margin-right: 5px;"
+            >
+              广告过滤
+            </el-tag>
+            <span>{{ scope.row.name }}</span>
+          </template>
         </el-table-column>
         <el-table-column property="scope" label="替换范围" min-width="150px">
         </el-table-column>

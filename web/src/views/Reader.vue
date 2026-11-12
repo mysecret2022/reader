@@ -572,6 +572,15 @@
           </div>
           <div class="text-action-divider"></div>
           <div
+            class="text-action-btn text-action-btn-ad"
+            @click.stop.prevent="handleActionFilterAd"
+            @touchend.stop.prevent="handleActionFilterAd"
+          >
+            <i class="el-icon-circle-close"></i>
+            <span>过滤广告</span>
+          </div>
+          <div class="text-action-divider"></div>
+          <div
             class="text-action-btn"
             @click.stop.prevent="handleActionAddBookmark"
             @touchend.stop.prevent="handleActionAddBookmark"
@@ -586,7 +595,7 @@
             @touchend.stop.prevent="handleActionAddFilter"
           >
             <i class="el-icon-scissors"></i>
-            <span>添加过滤规则</span>
+            <span>高级替换</span>
           </div>
         </div>
       </transition>
@@ -717,6 +726,117 @@
         @changeBookSource="changeBookSource()"
         @close="showManualSourceDialog = false"
       />
+    </el-dialog>
+
+    <!-- 小白一键过滤广告弹窗 -->
+    <el-dialog
+      title="一键过滤广告"
+      :visible.sync="showAdFilterDialog"
+      :width="$store.state.miniInterface ? '92%' : '460px'"
+      custom-class="ad-filter-dialog"
+      :close-on-click-modal="false"
+      @closed="closeAdFilterDialog"
+      @keydown.ctrl.enter.native="confirmAdFilter"
+      append-to-body
+    >
+      <div class="ad-dialog-body">
+        <div class="ad-dialog-header-tip">
+          <i class="el-icon-circle-check"></i>
+          <span>选中的广告内容将永久从正文中清除，后续同类广告直接消失。</span>
+        </div>
+
+        <div class="ad-dialog-section">
+          <div class="ad-section-header">
+            <span class="ad-section-title">广告内容预览与微调：</span>
+            <el-tag
+              v-if="adFilterForm.isUrlDetected"
+              size="mini"
+              type="warning"
+              effect="plain"
+            >
+              <i class="el-icon-link"></i> 识别为网址链接
+            </el-tag>
+          </div>
+          <el-input
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            v-model="adFilterForm.text"
+            placeholder="选中的广告内容"
+            class="ad-text-input"
+            @input="onAdTextInputChange"
+          ></el-input>
+        </div>
+
+        <div class="ad-dialog-section">
+          <div class="ad-section-title">过滤方式：</div>
+          <el-radio-group
+            v-model="adFilterForm.matchType"
+            class="ad-radio-group"
+          >
+            <el-radio label="exact" border class="ad-radio-item">
+              <div class="radio-label-title">精准过滤</div>
+              <div class="radio-label-desc">仅删除完全匹配的文字或链接</div>
+            </el-radio>
+            <el-radio label="line" border class="ad-radio-item">
+              <div class="radio-label-title">整行过滤</div>
+              <div class="radio-label-desc">
+                清除包含该广告的整行整句内容（推荐整行水印语）
+              </div>
+            </el-radio>
+            <el-radio
+              v-if="adFilterForm.isUrlDetected"
+              label="domain"
+              border
+              class="ad-radio-item"
+            >
+              <div class="radio-label-title">智能链接过滤</div>
+              <div class="radio-label-desc">
+                自动屏蔽 {{ adFilterForm.detectedDomain }} 域名下所有类似链接
+              </div>
+            </el-radio>
+          </el-radio-group>
+        </div>
+
+        <div class="ad-dialog-section">
+          <div class="ad-section-title">生效范围：</div>
+          <el-radio-group
+            v-model="adFilterForm.scopeType"
+            class="ad-radio-group"
+          >
+            <el-radio label="book" border class="ad-radio-item">
+              <div class="radio-label-title">仅当前书籍</div>
+              <div class="radio-label-desc">
+                仅在《{{
+                  ($store.getters.readingBook &&
+                    $store.getters.readingBook.name) ||
+                    "当前书籍"
+                }}》中生效
+              </div>
+            </el-radio>
+            <el-radio label="all" border class="ad-radio-item">
+              <div class="radio-label-title">全部书籍生效</div>
+              <div class="radio-label-desc">
+                全局去广告，所有小说均自动生效（推荐通用域名与引流）
+              </div>
+            </el-radio>
+          </el-radio-group>
+        </div>
+      </div>
+
+      <div slot="footer" class="dialog-footer ad-dialog-footer">
+        <el-button size="medium" @click="showAdFilterDialog = false"
+          >取 消</el-button
+        >
+        <el-button
+          size="medium"
+          type="danger"
+          icon="el-icon-circle-close"
+          :loading="adFilterSaving"
+          @click="confirmAdFilter"
+        >
+          立即过滤广告
+        </el-button>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -1093,10 +1213,30 @@ export default {
     },
     filterRules() {
       if (this.isScrollRead) {
-        //
         this.computeShowChapterList();
       } else {
-        this.content = this.filterContent(this.content);
+        if (
+          this.chapterContentCache &&
+          this.chapterContentCache.chapters &&
+          this.chapterContentCache.chapters[this.chapterIndex] &&
+          this.chapterContentCache.chapters[this.chapterIndex].content
+        ) {
+          this.content = this.filterContent(
+            this.chapterContentCache.chapters[this.chapterIndex].content
+          );
+        } else {
+          this.content = this.filterContent(this.content);
+        }
+        this.title = this.filterContent(this.title);
+        this.$nextTick(() => {
+          this.computePages(() => {
+            if (this.currentParagraph) {
+              this.showParagraph(this.currentParagraph, false);
+            } else {
+              this.showPage(this.currentPage, 0);
+            }
+          });
+        });
       }
     },
     chineseFont() {
@@ -1196,6 +1336,17 @@ export default {
       },
       isTouchActive: false,
       selectionChangeTimer: null,
+
+      // 小白一键过滤广告弹窗状态
+      showAdFilterDialog: false,
+      adFilterSaving: false,
+      adFilterForm: {
+        text: "",
+        scopeType: "book",
+        matchType: "exact",
+        isUrlDetected: false,
+        detectedDomain: ""
+      },
 
       // 仿真翻页 3D 纸张翻折状态
       isSimulationFlipping: false,
@@ -2178,38 +2329,68 @@ export default {
         return content;
       }
       try {
-        this.filterRules.forEach(rule => {
-          if (
-            typeof rule.isEnabled !== "undefined" &&
-            rule.isEnabled === false
-          ) {
-            return;
-          }
-          const scope = rule.scope.split(";");
-          if (
-            scope[0] === "*" ||
-            scope[0] === this.$store.getters.readingBook.name
-          ) {
+        const readingBook = this.$store.getters.readingBook || {};
+        const bookName = readingBook.name || "";
+        const bookUrl = readingBook.bookUrl || "";
+
+        (this.filterRules || []).forEach(rule => {
+          try {
+            if (!rule) {
+              return;
+            }
             if (
-              scope.length == 1 ||
-              (scope.length > 1 &&
-                scope[1] === this.$store.getters.readingBook.bookUrl)
+              typeof rule.isEnabled !== "undefined" &&
+              rule.isEnabled === false
             ) {
-              if (rule.isRegex) {
-                content = content.replace(
-                  new RegExp(rule.pattern, "ig"),
-                  rule.replacement
-                );
-              } else {
-                content = content.replace(rule.pattern, rule.replacement);
+              return;
+            }
+            if (!rule.pattern) {
+              return;
+            }
+            const ruleScope = (rule.scope || "").trim();
+            let matchScope = true;
+            if (ruleScope && ruleScope !== "*") {
+              const scope = ruleScope.split(";");
+              if (scope[0] && scope[0] !== "*" && scope[0] !== bookName) {
+                matchScope = false;
+              } else if (scope.length > 1 && scope[1] && scope[1] !== bookUrl) {
+                matchScope = false;
               }
             }
+            if (matchScope) {
+              if (rule.isRegex) {
+                content = content.replace(
+                  new RegExp(rule.pattern, "gim"),
+                  rule.replacement || ""
+                );
+              } else {
+                if (
+                  rule.pattern.indexOf("\n") >= 0 ||
+                  rule.pattern.indexOf("\r") >= 0
+                ) {
+                  const safePat = rule.pattern
+                    .split(/\r?\n/)
+                    .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+                    .join("(?:\\r?\\n)");
+                  content = content.replace(
+                    new RegExp(safePat, "g"),
+                    rule.replacement || ""
+                  );
+                } else {
+                  content = content
+                    .split(rule.pattern)
+                    .join(rule.replacement || "");
+                }
+              }
+            }
+          } catch (ruleErr) {
+            // 单条规则解析异常不阻断其他规则生效
           }
         });
       } catch (error) {
         //
       }
-      content.replace(/\\n+/g, "\n");
+      content = content.replace(/(\r?\n){3,}/g, "$1$1");
       content = this.formatChinese(content);
       return content;
     },
@@ -3327,7 +3508,11 @@ export default {
       }
 
       // 边缘安全避让，防止超出屏幕
-      left = Math.max(135, Math.min(window.innerWidth - 135, left));
+      const halfWidth = Math.min(
+        160,
+        Math.max(120, window.innerWidth / 2 - 10)
+      );
+      left = Math.max(halfWidth, Math.min(window.innerWidth - halfWidth, left));
       top = Math.max(20, Math.min(window.innerHeight - 50, top));
 
       this.textActionMenuPos = { top, left, placeBelow };
@@ -3491,6 +3676,270 @@ export default {
         this.$message.error("复制失败，请重试");
       }
       document.body.removeChild(input);
+    },
+    detectUrlAndDomain(text) {
+      if (!text) return { isUrl: false, domain: "" };
+      const urlRegex = /(?:https?:\/\/|www\.)?([a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+)(?::\d+)?(?:\/[^\s\u4e00-\u9fa5<>"']*)?/i;
+      const match = text.match(urlRegex);
+      if (!match) return { isUrl: false, domain: "" };
+
+      const fullHost = match[1].toLowerCase();
+      const parts = fullHost.split(".");
+      if (parts.length < 2) return { isUrl: false, domain: "" };
+
+      // 验证末尾 TLD 为标准英文字母
+      const tld = parts[parts.length - 1];
+      if (!/^[a-z]{2,12}$/i.test(tld)) return { isUrl: false, domain: "" };
+
+      // 剔除常见的前缀子域
+      let baseHost = fullHost.replace(/^(?:www|m|wap)\./i, "");
+      const baseParts = baseHost.split(".");
+      if (baseParts.length < 2) baseHost = fullHost;
+
+      // 常见双后缀域名 (compound TLDs)
+      const compoundTlds = [
+        "com.cn",
+        "net.cn",
+        "org.cn",
+        "gov.cn",
+        "edu.cn",
+        "co.uk",
+        "org.uk",
+        "ac.uk",
+        "gov.uk",
+        "com.au",
+        "net.au",
+        "org.au",
+        "com.tw",
+        "org.tw",
+        "idv.tw",
+        "com.hk",
+        "org.hk"
+      ];
+      const isCompound = compoundTlds.some(
+        cTld => baseHost.endsWith("." + cTld) || baseHost === cTld
+      );
+
+      let rootDomain = baseHost;
+      const curParts = baseHost.split(".");
+      if (isCompound && curParts.length >= 3) {
+        rootDomain = curParts.slice(-3).join(".");
+      } else if (!isCompound && curParts.length >= 2) {
+        rootDomain = curParts.slice(-2).join(".");
+      }
+
+      return { isUrl: true, domain: rootDomain };
+    },
+    handleActionFilterAd() {
+      const text = this.selectedActionText;
+      if (!text) {
+        this.closeTextActionMenu(true);
+        return;
+      }
+      // 保留选中文本高亮层，方便用户核对
+      this.closeTextActionMenu(false);
+      this.openAdFilterDialog(text);
+    },
+    openAdFilterDialog(rawText) {
+      const text = (rawText || "").replace(
+        /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g,
+        ""
+      );
+      if (!text) return;
+
+      const detection = this.detectUrlAndDomain(text);
+      this.adFilterForm = {
+        text: text,
+        scopeType: "book",
+        matchType: detection.isUrl ? "domain" : "exact",
+        isUrlDetected: detection.isUrl,
+        detectedDomain: detection.domain
+      };
+      this.showAdFilterDialog = true;
+    },
+    closeAdFilterDialog() {
+      this.showAdFilterDialog = false;
+      this.selectionHighlightRects = [];
+      if (window.getSelection) {
+        try {
+          window.getSelection().removeAllRanges();
+        } catch (e) {
+          // ignore
+        }
+      }
+    },
+    onAdTextInputChange(val) {
+      const text = (val || "").replace(
+        /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g,
+        ""
+      );
+      const detection = this.detectUrlAndDomain(text);
+      this.adFilterForm.isUrlDetected = detection.isUrl;
+      this.adFilterForm.detectedDomain = detection.domain;
+      if (!detection.isUrl && this.adFilterForm.matchType === "domain") {
+        this.adFilterForm.matchType = "exact";
+      }
+    },
+    async confirmAdFilter() {
+      const text = (this.adFilterForm.text || "").replace(
+        /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g,
+        ""
+      );
+      if (!text) {
+        this.$message.warning("广告内容不能为空");
+        return;
+      }
+
+      this.adFilterSaving = true;
+      try {
+        const readingBook = this.$store.getters.readingBook || {};
+        const bookName = readingBook.name || "";
+        const bookUrl = readingBook.bookUrl || "";
+
+        // 1. 自动计算作用域 (scope)
+        let scope = "*";
+        if (this.adFilterForm.scopeType === "book") {
+          scope = bookName
+            ? bookUrl
+              ? `${bookName};${bookUrl}`
+              : bookName
+            : "*";
+        }
+
+        // 2. 根据过滤方式构建 pattern 和 isRegex
+        let pattern = "";
+        let isRegex = false;
+        const escapeRegex = str => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const safeTextPattern = text
+          .split(/\r?\n/)
+          .map(escapeRegex)
+          .join("(?:\\r?\\n)");
+
+        if (this.adFilterForm.matchType === "line") {
+          // 整行过滤：整行包含该广告的内容全部消除，不留空行残余，且严格隔离前后行 CRLF/LF 换行符
+          pattern = `[^\\r\\n]*${safeTextPattern}[^\\r\\n]*(?:\\r?\\n|$)`;
+          isRegex = true;
+        } else if (
+          this.adFilterForm.matchType === "domain" &&
+          this.adFilterForm.detectedDomain
+        ) {
+          // 智能链接过滤：匹配该顶级域名下的所有链接（支持协议头、子域、端口及任意路径）
+          const domainPattern = escapeRegex(this.adFilterForm.detectedDomain);
+          pattern = `(?:https?:\\/\\/)?(?:[a-zA-Z0-9-]+\\.)*${domainPattern}(?::\\d+)?(?:\\/[^\\s\\u4e00-\\u9fa5<>"']*)?`;
+          isRegex = true;
+        } else {
+          // 精准过滤：若包含换行符使用标准化正则，否则使用纯文本精准匹配
+          if (text.indexOf("\n") >= 0 || text.indexOf("\r") >= 0) {
+            pattern = safeTextPattern;
+            isRegex = true;
+          } else {
+            pattern = text;
+            isRegex = false;
+          }
+        }
+
+        // 3. 自动生成语义明确的规则名称
+        const summary = text.replace(/[\r\n\s]+/g, " ").slice(0, 15);
+        const timestamp = Date.now()
+          .toString()
+          .slice(-4);
+        let ruleNamePrefix = "精准过滤";
+        if (this.adFilterForm.matchType === "line") {
+          ruleNamePrefix = "整行过滤";
+        } else if (this.adFilterForm.matchType === "domain") {
+          ruleNamePrefix = `域名屏蔽(${this.adFilterForm.detectedDomain})`;
+        }
+        const ruleName = `[广告过滤] ${ruleNamePrefix}: ${summary} (${timestamp})`;
+
+        const replaceRule = {
+          id: Date.now(),
+          name: ruleName,
+          group: "广告过滤",
+          pattern: pattern,
+          replacement: "",
+          scope: scope,
+          isEnabled: true,
+          isRegex: isRegex,
+          order: 0
+        };
+
+        // 4. 持久化存储至后端服务
+        const res = await Axios.post(
+          this.api + "/saveReplaceRule",
+          replaceRule
+        );
+        if (res.data && res.data.isSuccess) {
+          this.$message.success("广告已过滤，正文已刷新");
+          this.closeAdFilterDialog();
+
+          // 5. 立即更新 store 中的替换规则
+          this.$store.commit("addFilterRule", replaceRule);
+          if (
+            this.$root.$children &&
+            this.$root.$children[0] &&
+            typeof this.$root.$children[0].loadReplaceRules === "function"
+          ) {
+            this.$root.$children[0].loadReplaceRules(true);
+          }
+
+          // 6. 立即更新当前章节与已缓存章节的正文，让广告立刻消失
+          this.applyFilterRuleImmediately(replaceRule);
+        } else {
+          const errMsg =
+            (res.data && res.data.errorMsg) || "保存广告过滤规则失败";
+          this.$message.error(errMsg);
+        }
+      } catch (err) {
+        this.$message.error("过滤广告失败：" + (err && err.toString()));
+      } finally {
+        this.adFilterSaving = false;
+      }
+    },
+    applyFilterRuleImmediately(rule) {
+      // 1. 如果缓存中存在当前章节原始内容，基于原内容执行完整净化过滤
+      if (
+        this.chapterContentCache &&
+        this.chapterContentCache.chapters &&
+        this.chapterContentCache.chapters[this.chapterIndex] &&
+        this.chapterContentCache.chapters[this.chapterIndex].content
+      ) {
+        const rawContent = this.chapterContentCache.chapters[this.chapterIndex]
+          .content;
+        this.content = this.filterContent(rawContent);
+      } else if (this.content) {
+        if (rule.isRegex) {
+          try {
+            this.content = this.content.replace(
+              new RegExp(rule.pattern, "gim"),
+              rule.replacement || ""
+            );
+          } catch (e) {
+            this.content = this.content
+              .split(rule.pattern)
+              .join(rule.replacement || "");
+          }
+        } else {
+          this.content = this.content
+            .split(rule.pattern)
+            .join(rule.replacement || "");
+        }
+      }
+      this.title = this.filterContent(this.title);
+
+      // 2. 立即重算排版与分页
+      if (this.isScrollRead) {
+        this.computeShowChapterList();
+      } else {
+        this.$nextTick(() => {
+          this.computePages(() => {
+            if (this.currentParagraph) {
+              this.showParagraph(this.currentParagraph, false);
+            } else {
+              this.showPage(this.currentPage, 0);
+            }
+          });
+        });
+      }
     },
     handleActionAddBookmark() {
       const text = this.selectedActionText;
@@ -6347,6 +6796,15 @@ export default {
       color: #409eff;
     }
 
+    &.text-action-btn-ad {
+      i {
+        color: #f56c6c;
+      }
+      &:hover {
+        background: rgba(245, 108, 108, 0.2);
+      }
+    }
+
     &:active {
       background: rgba(255, 255, 255, 0.15);
       opacity: 0.85;
@@ -6358,6 +6816,25 @@ export default {
     height: 14px;
     background: rgba(255, 255, 255, 0.2);
     margin: 0 2px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .text-action-popup {
+    height: 36px;
+    padding: 0 2px;
+    max-width: 96vw;
+
+    .text-action-btn {
+      height: 26px;
+      padding: 0 6px;
+      font-size: 12px;
+      gap: 2px;
+
+      i {
+        font-size: 13px;
+      }
+    }
   }
 }
 
@@ -6621,6 +7098,115 @@ export default {
   }
 }
 
+.ad-filter-dialog {
+  border-radius: 12px !important;
+  overflow: hidden;
+  max-width: 95vw;
+
+  .el-dialog__header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f0f2f5;
+
+    .el-dialog__title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #303133;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+  }
+
+  .el-dialog__body {
+    padding: 16px 20px 20px;
+  }
+}
+
+.ad-dialog-header-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #ecf5ff;
+  border: 1px solid #d9ecff;
+  color: #409eff;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 16px;
+
+  i {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+}
+
+.ad-dialog-section {
+  margin-bottom: 16px;
+
+  .ad-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .ad-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 8px;
+  }
+}
+
+.ad-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+
+  .ad-radio-item {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    height: auto !important;
+    padding: 10px 14px !important;
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-start;
+    transition: all 0.2s ease;
+
+    .el-radio__input {
+      margin-top: 3px;
+    }
+
+    .el-radio__label {
+      padding-left: 10px;
+      white-space: normal;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .radio-label-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #303133;
+    }
+
+    .radio-label-desc {
+      font-size: 12px;
+      color: #909399;
+      line-height: 1.3;
+    }
+  }
+}
+
+.ad-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .night-theme, .night {
   .manual-source-dialog {
     background: #21252b !important;
@@ -6693,6 +7279,68 @@ export default {
 
     .cache-footer-actions {
       border-top-color: #2c313a;
+    }
+  }
+
+  .ad-filter-dialog {
+    background: #21252b !important;
+    color: #abb2bf;
+
+    .el-dialog__header {
+      border-bottom-color: #2c313a;
+
+      .el-dialog__title {
+        color: #d7dae0;
+      }
+
+      .el-dialog__close {
+        color: #abb2bf;
+      }
+    }
+
+    .ad-dialog-header-tip {
+      background: rgba(64, 158, 255, 0.1);
+      border-color: rgba(64, 158, 255, 0.25);
+      color: #79bbff;
+    }
+
+    .ad-section-title {
+      color: #d7dae0;
+    }
+
+    .ad-text-input textarea {
+      background: #1e2227 !important;
+      border-color: #3b4048 !important;
+      color: #d7dae0 !important;
+    }
+
+    .ad-radio-item {
+      background: #1e2227;
+      border-color: #3b4048;
+
+      &.is-checked {
+        border-color: #409eff;
+        background: rgba(64, 158, 255, 0.12);
+      }
+
+      .radio-label-title {
+        color: #d7dae0;
+      }
+
+      .radio-label-desc {
+        color: #7f848e;
+      }
+    }
+
+    .el-button--default {
+      background: #282c34 !important;
+      border-color: #3b4048 !important;
+      color: #abb2bf !important;
+
+      &:hover {
+        background: #323842 !important;
+        color: #fff !important;
+      }
     }
   }
 }
