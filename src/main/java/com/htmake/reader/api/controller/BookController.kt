@@ -1059,7 +1059,18 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 || (context.queryParam("background").firstOrNull()?.toBoolean() ?: false)
         searchSize = if(searchSize > 0) searchSize else (if (isBackgroundSync) 10 else 30)
         var resultList = arrayListOf<SearchBook>()
-        var concurrentCount = if (isBackgroundSync) 2 else Math.max(searchSize * 2, 24)
+        var reqConcurrent = if (context.request().method() == HttpMethod.POST) {
+            context.bodyAsJson.getInteger("concurrentCount", 0) ?: 0
+        } else {
+            context.queryParam("concurrentCount").firstOrNull()?.toIntOrNull() ?: 0
+        }
+        var concurrentCount = if (reqConcurrent > 0) {
+            reqConcurrent
+        } else if (isBackgroundSync) {
+            2
+        } else {
+            Math.max(searchSize * 2, 24)
+        }
         logger.info("searchBookMulti from lastIndex: {} concurrentCount: {} searchSize: {} isBackground: {}", lastIndex, concurrentCount, searchSize, isBackgroundSync)
         var isEnd = false
         context.request().connection().closeHandler{

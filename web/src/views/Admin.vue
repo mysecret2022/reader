@@ -2131,15 +2131,29 @@
           style="font-size: 13px; color: #888; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"
         >
           <span>各书源封面候选项 (点击即可设为新封面)：</span>
-          <el-button
-            type="text"
-            size="mini"
-            icon="el-icon-refresh"
-            :loading="loadingCovers"
-            @click="fetchBookCovers(currentCoverBook)"
-          >
-            重新拉取
-          </el-button>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <el-button
+              type="primary"
+              plain
+              size="mini"
+              icon="el-icon-refresh-right"
+              :loading="loadingCovers"
+              @click="fetchMoreCovers"
+              :disabled="coverFinished"
+            >
+              {{ coverFinished ? "已扫完全部源" : "获取后 5 张封面" }}
+            </el-button>
+            <el-button
+              type="text"
+              size="mini"
+              icon="el-icon-refresh"
+              :loading="loadingCovers"
+              @click="fetchBookCovers(currentCoverBook)"
+              title="从第一个书源重新开始扫描"
+            >
+              重头扫描
+            </el-button>
+          </div>
         </div>
         <div class="cover-grid" v-loading="loadingCovers">
           <div
@@ -2800,6 +2814,9 @@ export default {
       customCoverInput: "",
       candidateCovers: [],
       loadingCovers: false,
+      coverLastIndex: -1,
+      coverFinished: false,
+      coverSeenUrls: null,
       noCoverImage: require("../assets/imgs/noCover.jpeg"),
       logLines: 50,
       logErrorOnly: false,
@@ -4490,11 +4507,17 @@ export default {
       this.currentCoverBook = book;
       this.customCoverInput = book.customCoverUrl || "";
       this.candidateCovers = [];
+      this.coverLastIndex = -1;
+      this.coverFinished = false;
+      this.coverSeenUrls = new Set();
       this.showCoverPicker = true;
       this.fetchBookCovers(book);
     },
-    fetchBookCovers(book) {
-      if (!book || !book.name) return;
+    stopCoverSSE() {
+      if (this.coverTimeoutTimer) {
+        clearTimeout(this.coverTimeoutTimer);
+        this.coverTimeoutTimer = null;
+      }
       if (this.coverEventSource) {
         try {
           this.coverEventSource.close();
@@ -4503,21 +4526,17 @@ export default {
         }
         this.coverEventSource = null;
       }
+      this.loadingCovers = false;
+    },
+    fetchBookCovers(book) {
+      if (!book || !book.name) return;
+      this.stopCoverSSE();
       this.loadingCovers = true;
       this.candidateCovers = [];
-      const stopSSE = () => {
-        this.loadingCovers = false;
-        if (this.coverEventSource) {
-          try {
-            this.coverEventSource.close();
-          } catch (e) {
-            // ignore
-          }
-          this.coverEventSource = null;
-        }
-      };
+      this.coverLastIndex = -1;
+      this.coverFinished = false;
+      this.coverSeenUrls = new Set();
 
-      const seen = new Set();
       const currentCover = book.customCoverUrl || book.coverUrl;
       if (currentCover) {
         this.candidateCovers.push({
@@ -4526,27 +4545,42 @@ export default {
           sourceName: "当前封面",
           originName: "当前封面"
         });
-        seen.add(currentCover);
+        this.coverSeenUrls.add(currentCover);
       }
-      if (book.coverUrl && !seen.has(book.coverUrl)) {
+      if (book.coverUrl && !this.coverSeenUrls.has(book.coverUrl)) {
         this.candidateCovers.push({
           url: book.coverUrl,
           coverUrl: book.coverUrl,
           sourceName: "原书源封面",
           originName: "原书源封面"
         });
-        seen.add(book.coverUrl);
+        this.coverSeenUrls.add(book.coverUrl);
       }
-      if (this.candidateCovers.length >= 10) {
+      if (this.candidateCovers.length >= 5) {
         this.loadingCovers = false;
         return;
       }
+
+      this.scanNextCoversBatch(book, 5);
+    },
+    fetchMoreCovers() {
+      if (!this.currentCoverBook || this.coverFinished || this.loadingCovers)
+        return;
+      this.scanNextCoversBatch(this.currentCoverBook, 5);
+    },
+    scanNextCoversBatch(book, batchTarget = 5) {
+      if (!book || !book.name) return;
+      this.stopCoverSSE();
+      this.loadingCovers = true;
+      const targetCount = this.candidateCovers.length + batchTarget;
 
       const params = {
         name: book.name,
         author: book.author || "",
         url: book.bookUrl || "",
-        searchSize: 20
+        lastIndex: this.coverLastIndex,
+        concurrentCount: 4,
+        searchSize: 15
       };
       if (this.$store.state.token) {
         params.accessToken = this.$store.state.token;
@@ -4556,16 +4590,23 @@ export default {
         const es = new EventSource(sseUrl);
         this.coverEventSource = es;
         es.addEventListener("message", e => {
+          if (!this.showCoverPicker) {
+            this.stopCoverSSE();
+            return;
+          }
           try {
             const res = JSON.parse(e.data);
+            if (res.lastIndex != null) {
+              this.coverLastIndex = res.lastIndex;
+            }
             if (res.data && Array.isArray(res.data)) {
               for (const item of res.data) {
                 if (
                   item.coverUrl &&
                   item.coverUrl.startsWith("http") &&
-                  !seen.has(item.coverUrl)
+                  !this.coverSeenUrls.has(item.coverUrl)
                 ) {
-                  seen.add(item.coverUrl);
+                  this.coverSeenUrls.add(item.coverUrl);
                   const name = item.originName || item.origin || "在线书源";
                   this.candidateCovers.push({
                     url: item.coverUrl,
@@ -4573,8 +4614,8 @@ export default {
                     sourceName: name,
                     originName: name
                   });
-                  if (this.candidateCovers.length >= 10) {
-                    stopSSE();
+                  if (this.candidateCovers.length >= targetCount) {
+                    this.stopCoverSSE();
                     break;
                   }
                 }
@@ -4584,11 +4625,19 @@ export default {
             // ignore JSON parse error
           }
         });
-        es.addEventListener("end", stopSSE);
-        es.addEventListener("error", stopSSE);
-        setTimeout(stopSSE, 10000);
+        const onEnd = () => {
+          this.coverFinished = true;
+          this.stopCoverSSE();
+        };
+        es.addEventListener("end", onEnd);
+        es.addEventListener("error", () => {
+          this.stopCoverSSE();
+        });
+        this.coverTimeoutTimer = setTimeout(() => {
+          this.stopCoverSSE();
+        }, 10000);
       } catch (err) {
-        this.loadingCovers = false;
+        this.stopCoverSSE();
       }
     },
     async applyCover(coverUrl) {
