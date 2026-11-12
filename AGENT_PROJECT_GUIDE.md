@@ -25,7 +25,8 @@
   - 在「书源设置」底包管理面板中，删除远程书源、调试书源、全选、反选、清空选择、全部启用、全部禁用等冗余按钮，保留底包导入、导出、失效排查与批量删除，与书源体检中心形成清晰边界。
 - **WebDAV 备份默认目录规范化至 `/web` (`BookController.kt` & `WebdavController.kt` & `UserController.kt` & `Admin.vue`)**：
   - Web 端触发的 WebDAV「保存备份」操作，本地压缩打包目标路径默认统一写入用户的 `webdav/web` 目录下（`userHome/web/backupYYYY-MM-DD.zip`）；
-  - `getLastBackFileFromWebdav` 探测优先级优先检索 `web` 目录，兼顾兼容 `legado` 与根目录；
+  - `getLastBackFileFromWebdav` 探测遍历 `web`、`legado` 与根目录所有合规备份包，并按修改时间降序（最新优先、同时间优先 web）精确选取，避免跨端同步时因目录固定顺序导致覆盖最新数据；
+  - `saveBookProgressToWebdav` 与 `syncFromWebdav` 全面兼容 `web/bookProgress` 进度目录探测与同步；
   - WebDAV 服务端远端存放目录默认值由 `/reader-backup` 统一调整为 `/web`。
 
 ---
