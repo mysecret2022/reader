@@ -2261,11 +2261,15 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
     suspend fun saveBookProgressToWebdav(book: Book, bookChapter: BookChapter, userNameSpace: String) {
         val userHome = getUserWebdavHome(userNameSpace)
-        var bookProgressDir = File(userHome + File.separator + "bookProgress")
+        var bookProgressDir = File(userHome + File.separator + "web" + File.separator + "bookProgress")
         if (!bookProgressDir.exists()) {
-            bookProgressDir = File(userHome + File.separator + "legado" + File.separator + "bookProgress")
+            bookProgressDir = File(userHome + File.separator + "bookProgress")
             if (!bookProgressDir.exists()) {
-                return
+                bookProgressDir = File(userHome + File.separator + "legado" + File.separator + "bookProgress")
+                if (!bookProgressDir.exists()) {
+                    bookProgressDir = File(userHome + File.separator + "web" + File.separator + "bookProgress")
+                    bookProgressDir.mkdirs()
+                }
             }
         }
         var progressFile = File(bookProgressDir.toString() + File.separator + book.name + "_" + book.author + ".json")
@@ -2333,13 +2337,16 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     bookmarkFile.renameTo(userBookmarkFile)
                 }
                 // 同步阅读进度
-                var bookProgressDir = File(userHome + File.separator + "bookProgress")
-                if (!bookProgressDir.exists()) {
-                    bookProgressDir = File(userHome + File.separator +  "legado" + File.separator +  "bookProgress")
-                }
-                if (bookProgressDir.exists() && bookProgressDir.isDirectory()) {
-                    bookProgressDir.listFiles().forEach{
-                        syncBookProgressFromWebdav(it, userNameSpace)
+                val candidateProgressDirs = listOf(
+                    File(userHome + File.separator + "web" + File.separator + "bookProgress"),
+                    File(userHome + File.separator + "bookProgress"),
+                    File(userHome + File.separator + "legado" + File.separator + "bookProgress")
+                )
+                for (dir in candidateProgressDirs) {
+                    if (dir.exists() && dir.isDirectory) {
+                        dir.listFiles()?.forEach {
+                            syncBookProgressFromWebdav(it, userNameSpace)
+                        }
                     }
                 }
                 return true
@@ -2428,18 +2435,22 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             File(userHome)
         )
         val zipFileReg = Regex("^backup[0-9-]+.zip$", RegexOption.IGNORE_CASE)    //忽略大小写
+        val allMatchingFiles = mutableListOf<File>()
         for (dir in candidateDirs) {
             if (dir.exists()) {
                 val files = dir.listFiles() ?: continue
-                files.sortByDescending { it.lastModified() }
                 for (it in files) {
                     if (zipFileReg.matches(it.name)) {
-                        return it.toString()
+                        allMatchingFiles.add(it)
                     }
                 }
             }
         }
-        return null
+        allMatchingFiles.sortWith(
+            compareByDescending<File> { it.lastModified() }
+                .thenByDescending { if (it.parentFile?.name == "web") 1 else 0 }
+        )
+        return allMatchingFiles.firstOrNull()?.toString()
     }
 
     // 从本地导入文件预览

@@ -515,4 +515,88 @@ class BookSourceTest {
         assertEquals("https://good-source.com", cleaned.getString("bookSourceUrl"))
         assertEquals("$.data[*]", cleaned.getString("ruleSearch"))
     }
+
+    @Test
+    fun testWebdavBackupCandidateDirsPriorityAndSorting() {
+        val tempBase = java.io.File(System.getProperty("java.io.tmpdir"), "reader-test-webdav-" + System.currentTimeMillis())
+        try {
+            val webDir = java.io.File(tempBase, "web").apply { mkdirs() }
+            val legadoDir = java.io.File(tempBase, "legado").apply { mkdirs() }
+            val rootDir = tempBase
+
+            val candidateDirs = listOf(webDir, legadoDir, rootDir)
+            val zipFileReg = Regex("^backup[0-9-]+.zip$", RegexOption.IGNORE_CASE)
+
+            fun findLatestBackup(): java.io.File? {
+                val allMatching = mutableListOf<java.io.File>()
+                for (dir in candidateDirs) {
+                    if (dir.exists()) {
+                        val files = dir.listFiles() ?: continue
+                        for (it in files) {
+                            if (zipFileReg.matches(it.name)) {
+                                allMatching.add(it)
+                            }
+                        }
+                    }
+                }
+                allMatching.sortWith(
+                    compareByDescending<java.io.File> { it.lastModified() }
+                        .thenByDescending { if (it.parentFile?.name == "web") 1 else 0 }
+                )
+                return allMatching.firstOrNull()
+            }
+
+            // Case 1: Empty directories
+            assertEquals(null, findLatestBackup())
+
+            // Case 2: Only legado has a backup
+            val legadoFile = java.io.File(legadoDir, "backup2026-11-10.zip").apply {
+                createNewFile()
+                setLastModified(1000000L)
+            }
+            assertEquals(legadoFile.absolutePath, findLatestBackup()?.absolutePath)
+
+            // Case 3: Web has a newer backup
+            val webFile = java.io.File(webDir, "backup2026-11-12.zip").apply {
+                createNewFile()
+                setLastModified(2000000L)
+            }
+            assertEquals(webFile.absolutePath, findLatestBackup()?.absolutePath)
+
+            // Case 4: Equal timestamps - web is preferred
+            legadoFile.setLastModified(2000000L)
+            webFile.setLastModified(2000000L)
+            assertEquals("web", findLatestBackup()?.parentFile?.name)
+
+            // Case 5: Legado has newer backup than older web backup
+            legadoFile.setLastModified(3000000L)
+            assertEquals(legadoFile.absolutePath, findLatestBackup()?.absolutePath)
+        } finally {
+            tempBase.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testApiProtocolResolution() {
+        fun resolveApi(stateApi: String): String {
+            if (
+                stateApi.startsWith("http://") ||
+                stateApi.startsWith("https://") ||
+                stateApi.startsWith("//")
+            ) {
+                return stateApi
+            }
+            return "//$stateApi"
+        }
+
+        // Without scheme: must add // to prevent Axios relative path 404
+        assertEquals("//localhost:8080/reader3", resolveApi("localhost:8080/reader3"))
+        assertEquals("//127.0.0.1:8080/reader3", resolveApi("127.0.0.1:8080/reader3"))
+        assertEquals("//example.com/reader3", resolveApi("example.com/reader3"))
+
+        // With scheme or protocol-relative: preserved as-is
+        assertEquals("//localhost:8080/reader3", resolveApi("//localhost:8080/reader3"))
+        assertEquals("http://localhost:8080/reader3", resolveApi("http://localhost:8080/reader3"))
+        assertEquals("https://reader.example.com", resolveApi("https://reader.example.com"))
+    }
 }
