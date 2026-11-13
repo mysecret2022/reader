@@ -56,7 +56,10 @@ class ReaderApplication {
         webClientOptions.isFollowRedirects = true
         webClientOptions.isTrustAll = true
 
-        val httpClient = vertx().createHttpClient(HttpClientOptions().setTrustAll(true))
+        val httpClientOptions = HttpClientOptions()
+            .setTrustAll(true)
+            .setTryUseCompression(true)
+        val httpClient = vertx().createHttpClient(httpClientOptions)
 
 //        val webClient = WebClient.wrap(HttpClient(delegateHttpClient), webClientOptions)
         val webClient = WebClient.wrap(httpClient, webClientOptions)

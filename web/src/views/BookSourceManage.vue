@@ -1138,6 +1138,7 @@ export default {
     },
     async fetchRemoteSourcesList(url) {
       let sourceList = null;
+      let backendError = null;
       try {
         const fetchRes = await Axios.post(
           this.api + "/readRemoteSourceFile",
@@ -1151,14 +1152,23 @@ export default {
           Array.isArray(fetchRes.data.data)
         ) {
           sourceList = fetchRes.data.data;
+        } else if (fetchRes && fetchRes.data && fetchRes.data.errorMsg) {
+          backendError = fetchRes.data.errorMsg;
         }
       } catch (e) {
-        // ignore
+        backendError = e && e.message;
       }
 
       if (!sourceList) {
-        const directRes = await Axios.get(url);
-        sourceList = directRes.data;
+        try {
+          const directRes = await Axios.get(url);
+          sourceList = directRes.data;
+        } catch (e) {
+          if (backendError) {
+            throw new Error(backendError);
+          }
+          throw e;
+        }
       }
       return this.extractSourceList(sourceList);
     },
@@ -1486,12 +1496,18 @@ export default {
         const success = await this.saveImportedSources(cleanList);
         if (success) {
           if (discardedCount > 0) {
-            this.$notify({
-              title: "零死源入库完成",
-              message: `已入库 ${cleanList.length} 个优质书源，其余 ${discardedCount} 个失效/未选书源已在内存中丢弃`,
-              type: "success",
-              duration: 4000
-            });
+            if (typeof this.$notify === "function") {
+              this.$notify({
+                title: "零死源入库完成",
+                message: `已入库 ${cleanList.length} 个优质书源，其余 ${discardedCount} 个失效/未选书源已在内存中丢弃`,
+                type: "success",
+                duration: 4000
+              });
+            } else {
+              this.$message.success(
+                `已入库 ${cleanList.length} 个优质书源，其余 ${discardedCount} 个失效书源已在内存中丢弃`
+              );
+            }
           } else {
             this.$message.success(`成功导入 ${cleanList.length} 个优质书源！`);
           }

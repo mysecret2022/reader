@@ -678,4 +678,19 @@ class BookSourceTest {
         assertFalse(matchScope("完美世界", "斗破苍穹", "https://source1.com/book/1"))
         assertFalse(matchScope("斗破苍穹;https://source2.com/book/2", "斗破苍穹", "https://source1.com/book/1"))
     }
+
+    @Test
+    fun testRemoteSourceFetchWithRedirect() {
+        val url = "https://www.yckceo.com/yuedu/shuyuans/json/id/1335.json"
+        val request = okhttp3.Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Accept", "application/json, text/plain, */*")
+            .build()
+        val response = io.legado.app.help.http.okHttpClient.newCall(request).execute()
+        assertTrue("Redirected remote source request should succeed", response.isSuccessful)
+        val body = response.body?.string()
+        assertTrue("Body should contain book sources array", body != null && body.trim().startsWith("["))
+        assertTrue("Body should contain actual book source definitions", body != null && body.contains("bookSourceName"))
+    }
 }

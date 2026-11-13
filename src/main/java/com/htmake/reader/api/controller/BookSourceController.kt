@@ -448,13 +448,42 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         }
 
         launch(Dispatchers.IO) {
-            webClient.getAbs(url).timeout(3000).send {
-                var body = it.result()?.bodyAsString()
-                if (body != null) {
-                    context.success(returnData.setData(arrayListOf(body)))
-                } else {
-                    context.success(returnData.setErrorMsg("远程书源链接错误"))
+            try {
+                // 优先使用内置 okHttpClient，具备自动重定向（301/302/307 等全协议重定向）、Gzip、TLS 协商与 20s 超时
+                val request = okhttp3.Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept", "application/json, text/plain, */*")
+                    .build()
+                val response = io.legado.app.help.http.okHttpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (!body.isNullOrBlank()) {
+                        context.success(returnData.setData(arrayListOf(body)))
+                        return@launch
+                    }
                 }
+            } catch (e: Exception) {
+                logger.warn("okHttpClient 读取远程书源异常，尝试使用 webClient 降级重试: ${e.message}")
+            }
+
+            // 降级使用 webClient，配置 20 秒超时与标准 User-Agent
+            try {
+                webClient.getAbs(url)
+                    .putHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .putHeader("Accept", "application/json, text/plain, */*")
+                    .timeout(20000)
+                    .send {
+                        val body = it.result()?.bodyAsString()
+                        if (body != null) {
+                            context.success(returnData.setData(arrayListOf(body)))
+                        } else {
+                            val errMsg = it.cause()?.message ?: "远程书源链接错误"
+                            context.success(returnData.setErrorMsg("远程书源链接错误: $errMsg"))
+                        }
+                    }
+            } catch (e: Exception) {
+                context.success(returnData.setErrorMsg("远程书源读取失败: ${e.message}"))
             }
         }
     }

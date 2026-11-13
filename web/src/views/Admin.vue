@@ -3801,6 +3801,7 @@ export default {
       this.importingSource = true;
       try {
         let sourceList = null;
+        let backendError = null;
         try {
           const fetchRes = await Axios.post(
             this.api + "/readRemoteSourceFile",
@@ -3814,14 +3815,23 @@ export default {
             Array.isArray(fetchRes.data.data)
           ) {
             sourceList = fetchRes.data.data;
+          } else if (fetchRes && fetchRes.data && fetchRes.data.errorMsg) {
+            backendError = fetchRes.data.errorMsg;
           }
         } catch (e) {
-          // ignore
+          backendError = e && e.message;
         }
 
         if (!sourceList) {
-          const directRes = await Axios.get(url);
-          sourceList = directRes.data;
+          try {
+            const directRes = await Axios.get(url);
+            sourceList = directRes.data;
+          } catch (e) {
+            if (backendError) {
+              throw new Error(backendError);
+            }
+            throw e;
+          }
         }
 
         const success = await this.saveImportedSources(sourceList);

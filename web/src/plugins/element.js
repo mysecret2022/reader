@@ -37,7 +37,8 @@ import {
   DropdownItem,
   DropdownMenu,
   Menu,
-  MenuItem
+  MenuItem,
+  Notification
 } from "element-ui";
 
 Vue.use(Button);
@@ -101,4 +102,5 @@ Vue.prototype.$ELEMENT = {
 Vue.prototype.$alert = MessageBox.alert;
 Vue.prototype.$confirm = MessageBox.confirm;
 Vue.prototype.$prompt = MessageBox.prompt;
+Vue.prototype.$notify = Notification;
 Vue.prototype.$loading = Loading.service;
