@@ -85,9 +85,22 @@
               <span style="font-size: 13px;">广告过滤</span>
             </div>
 
-            <span class="small-tip" style="width: 100%; margin-top: 0;"
-              >开启划词去广告；若误将正文当成广告过滤，关闭「广告过滤」即可自动清空并还原正文</span
-            >
+            <transition name="fade">
+              <span
+                class="small-tip"
+                v-if="showAutoChangeSourceTip"
+                style="width: 100%; margin-top: 4px;"
+                >{{ autoChangeSourceTipText }}</span
+              >
+            </transition>
+            <transition name="fade">
+              <span
+                class="small-tip"
+                v-if="showAdFilterTip"
+                style="width: 100%; margin-top: 4px;"
+                >{{ adFilterTipText }}</span
+              >
+            </transition>
           </div>
         </li>
         <el-divider></el-divider>
@@ -551,6 +564,12 @@ export default {
       kindleTipTimer: null,
       showEdgeTip: false,
       edgeTipTimer: null,
+      showAutoChangeSourceTip: false,
+      autoChangeSourceTipText: "",
+      autoChangeSourceTipTimer: null,
+      showAdFilterTip: false,
+      adFilterTipText: "",
+      adFilterTipTimer: null,
 
       config: this.$store.state.config,
 
@@ -626,8 +645,38 @@ export default {
       clearTimeout(this.edgeTipTimer);
       this.edgeTipTimer = null;
     }
+    if (this.autoChangeSourceTipTimer) {
+      clearTimeout(this.autoChangeSourceTipTimer);
+      this.autoChangeSourceTipTimer = null;
+    }
+    if (this.adFilterTipTimer) {
+      clearTimeout(this.adFilterTipTimer);
+      this.adFilterTipTimer = null;
+    }
   },
   methods: {
+    triggerAutoChangeSourceTip(text) {
+      this.autoChangeSourceTipText = text;
+      this.showAutoChangeSourceTip = true;
+      if (this.autoChangeSourceTipTimer) {
+        clearTimeout(this.autoChangeSourceTipTimer);
+      }
+      this.autoChangeSourceTipTimer = setTimeout(() => {
+        this.showAutoChangeSourceTip = false;
+        this.autoChangeSourceTipTimer = null;
+      }, 5000);
+    },
+    triggerAdFilterTip(text) {
+      this.adFilterTipText = text;
+      this.showAdFilterTip = true;
+      if (this.adFilterTipTimer) {
+        clearTimeout(this.adFilterTipTimer);
+      }
+      this.adFilterTipTimer = setTimeout(() => {
+        this.showAdFilterTip = false;
+        this.adFilterTipTimer = null;
+      }, 5000);
+    },
     toggleEdgeSwipeBack() {
       const nextVal = !this.config.edgeSwipeBack;
       this.$set(this.config, "edgeSwipeBack", nextVal);
@@ -671,6 +720,10 @@ export default {
         ...this.$store.state.config,
         autoChangeSource: val
       });
+      const tip = val
+        ? "🔄 已开启自动换源：当读到本章一半且下一章未就绪时，后台自动为您优选接力书源。"
+        : "⏸️ 已关闭自动换源。";
+      this.triggerAutoChangeSourceTip(tip);
     },
     async onAdFilterSwitchChange(val) {
       this.$set(this.config, "adFilterEnabled", val);
@@ -713,15 +766,17 @@ export default {
               )
           );
           this.$store.commit("setFilterRules", remainingRules);
-          this.$message.success(
-            `已关闭广告过滤，并清空当前书籍已添加的 ${adRulesForThisBook.length} 条广告词，正文已恢复！`
+          this.triggerAdFilterTip(
+            `🛡️ 已关闭广告过滤，并清空当前书籍 ${adRulesForThisBook.length} 条广告词，被误杀正文已还原！`
           );
         } else {
-          this.$message.info("已关闭广告过滤");
+          this.triggerAdFilterTip("🛡️ 已关闭广告过滤。");
         }
         eventBus.$emit("refreshReaderContentAfterAdClear");
       } else {
-        this.$message.success("已开启广告过滤");
+        this.triggerAdFilterTip(
+          "🛡️ 已开启广告过滤：划词即可一键去广告；若误将正文当成广告过滤，关闭此开关即可一键清空还原。"
+        );
         eventBus.$emit("refreshReaderContentAfterAdClear");
       }
     },

@@ -884,6 +884,12 @@ export default {
     window.addEventListener("unload", this.saveReadingPosition);
     document.addEventListener("selectionchange", this.handleSelectionChange);
     window.addEventListener("mouseup", this.handleGlobalMouseUp);
+    window.addEventListener("touchend", this.handleGlobalTouchEnd, {
+      passive: true
+    });
+    window.addEventListener("pointerup", this.handleGlobalPointerUp, {
+      passive: true
+    });
     eventBus.$on("showSearchContent", data => {
       if (this._inactive) {
         return;
@@ -1004,6 +1010,8 @@ export default {
     }
     document.removeEventListener("selectionchange", this.handleSelectionChange);
     window.removeEventListener("mouseup", this.handleGlobalMouseUp);
+    window.removeEventListener("touchend", this.handleGlobalTouchEnd);
+    window.removeEventListener("pointerup", this.handleGlobalPointerUp);
     if (this.textActionMenuCloseHandler) {
       document.removeEventListener(
         "pointerdown",
@@ -1051,6 +1059,8 @@ export default {
     );
     document.removeEventListener("selectionchange", this.handleSelectionChange);
     window.removeEventListener("mouseup", this.handleGlobalMouseUp);
+    window.removeEventListener("touchend", this.handleGlobalTouchEnd);
+    window.removeEventListener("pointerup", this.handleGlobalPointerUp);
     if (this.textActionMenuCloseHandler) {
       document.removeEventListener(
         "pointerdown",
@@ -1342,6 +1352,7 @@ export default {
         placeBelow: false
       },
       isTouchActive: false,
+      isFingerDown: false,
       selectionChangeTimer: null,
 
       // 小白一键过滤广告弹窗状态
@@ -1387,6 +1398,19 @@ export default {
       return (
         isIOS || /Android|webOS|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)
       );
+    },
+    isIOS() {
+      if (typeof navigator === "undefined") return false;
+      const ua = navigator.userAgent || "";
+      return (
+        /iPhone|iPad|iPod/i.test(ua) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+      );
+    },
+    isAndroid() {
+      if (typeof navigator === "undefined") return false;
+      const ua = navigator.userAgent || "";
+      return /Android/i.test(ua);
     },
     cachedPercent() {
       if (!this.catalog || !this.catalog.length) return 0;
@@ -2958,6 +2982,7 @@ export default {
     },
     handleTouchStart(e) {
       this.isTouchActive = true;
+      this.isFingerDown = true;
       this.isTextSelecting = false;
       if (this.textActionMenuVisible) {
         if (
@@ -3067,20 +3092,37 @@ export default {
       }
     },
     handleTouchCancel() {
+      // 在安卓系统长按选词时，浏览器内核因手势接管会向 DOM 派发 touchcancel。
+      // 此时用户手指依然停留在屏幕上，绝不能提前触发选词弹窗，否则会中断正常的选词流程！
+      if (this.selectionChangeTimer) {
+        clearTimeout(this.selectionChangeTimer);
+        this.selectionChangeTimer = null;
+      }
+      this.isTextSelecting = true;
+      this.lastMoveX = 0;
+    },
+    handleGlobalPointerUp(e) {
+      if (e && (e.pointerType === "touch" || e.pointerType === "pen")) {
+        this.handleGlobalFingerUp();
+      }
+    },
+    handleGlobalTouchEnd() {
+      this.handleGlobalFingerUp();
+    },
+    handleGlobalFingerUp() {
+      this.isFingerDown = false;
       this.isTouchActive = false;
-      this.isTextSelecting = false;
-      if (this.isDismissingMenu) {
-        this.isDismissingMenu = false;
-        this.lastSelection = null;
-        return;
+      if (this.isMobile) {
+        if (this.selectionChangeTimer) {
+          clearTimeout(this.selectionChangeTimer);
+        }
+        this.selectionChangeTimer = setTimeout(
+          () => {
+            this.checkAndTriggerSelection();
+          },
+          this.isAndroid ? 200 : 120
+        );
       }
-      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
-        this.lastSelection = null;
-        return;
-      }
-      setTimeout(() => {
-        this.checkAndTriggerSelection();
-      }, 80);
     },
     handleContentMouseDown(e) {
       if (e.button === 0) {
@@ -3155,6 +3197,7 @@ export default {
     },
     handleTouchEnd() {
       this.isTouchActive = false;
+      this.isFingerDown = false;
       if (this.isDismissingMenu) {
         this.isDismissingMenu = false;
         this.lastSelection = null;
@@ -3508,8 +3551,9 @@ export default {
                 height: r.height
               }));
 
-            // 提取完坐标后立即清空原生选区，彻底阻断 iOS Safari / 安卓长按呼出的原生上下文菜单（拷贝/查询/翻译/搜索网页）
-            if (sel.removeAllRanges) {
+            // 仅对 iOS Safari 清空原生选区（避免系统级浮窗与自定义菜单重叠）；
+            // 安卓系统依靠 contextmenu 阻止原生菜单，必须保留原生选区与拖拽手柄，绝不可强制清空！
+            if (this.isIOS && sel.removeAllRanges) {
               sel.removeAllRanges();
             }
           } else {
@@ -3579,9 +3623,9 @@ export default {
       ) {
         return;
       }
-      // 核心防线：手指触屏拖拽或 PC 鼠标按住划选中，只标记选词状态，绝对不要提前清空选区，也不要提前弹窗打断！
-      if (this.isTouchActive || this.isMouseDown) {
-        if (this.isTouchActive) {
+      // 核心防线：手指触屏按住、拖拽或 PC 鼠标按住划选中，只标记选词状态，绝对不要提前弹窗打断！
+      if (this.isTouchActive || this.isFingerDown || this.isMouseDown) {
+        if (this.isTouchActive || this.isFingerDown) {
           this.isTextSelecting = true;
           this.lastMoveX = 0;
         }
@@ -3613,10 +3657,13 @@ export default {
       if (this.selectionChangeTimer) {
         clearTimeout(this.selectionChangeTimer);
       }
-      // 手指抬起或 PC 鼠标划选防抖
-      this.selectionChangeTimer = setTimeout(() => {
-        this.checkAndTriggerSelection();
-      }, 80);
+      // 选区变动防抖触发（针对拖拽手柄后的微调稳定）
+      this.selectionChangeTimer = setTimeout(
+        () => {
+          this.checkAndTriggerSelection();
+        },
+        this.isAndroid ? 250 : 80
+      );
     },
     checkAndTriggerSelection() {
       if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
