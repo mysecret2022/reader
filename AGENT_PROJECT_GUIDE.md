@@ -1,54 +1,62 @@
-# AGENT_PROJECT_GUIDE (v2.1.8)
+# AGENT_PROJECT_GUIDE (v2.1.9)
 
 面向后续接手智能体的架构、功能与维护指引文档。
 
 ---
 
 ## 1. 版本概述 (Version Summary)
-- **版本号**：`v2.1.8`
-- **定位**：书源导入沙箱 `$notify` 缺失弹窗报错修复，以及远程书源全协议自动重定向（302 跳转 CDN）与大文件超时拉取加固。
-- **上一主版本**：`v2.1.7`
+- **版本号**：`v2.1.9`
+- **定位**：阅读器移动端体验细节打磨，包含设置提示 5 秒自动隐退、阅读设置新增广告过滤开关与一键清空还原、彻底根除 iOS Safari 蓝框悬浮在弹窗之上、以及广告过滤弹窗单选样式升级（空心圆内加圆点）与生效范围默认收敛为当前书籍。
+- **上一主版本**：`v2.1.8`
 
 ---
 
-## 2. 核心架构与功能特性清单 (2.1.8 Features)
+## 2. 核心架构与功能特性清单 (2.1.9 Features)
 
-### 2.0 书源沙箱入库 `$notify` 异常彻底修复 (`element.js` & `BookSourceManage.vue`)
-- **根因分析**：
-  - 在 `web/src/plugins/element.js` 中按需引入 Element UI 组件时，未引入 `Notification`，也未注册 `Vue.prototype.$notify`；
-  - 当用户在书源预检沙箱中勾选优质源点击入库时，若存在丢弃的失效源，前端试图调用 `this.$notify` 显示气泡通知，抛出 `TypeError: e.$notify is not a function`，并被外层 `catch` 捕获弹出“保存书源失败”的误导性提示。
-- **加固方案**：
-  - 在 `web/src/plugins/element.js` 中完整引入 `Notification` 并绑定至 `Vue.prototype.$notify = Notification`；
-  - 在 `BookSourceManage.vue` 中对通知调用增加防御性降级判断 `typeof this.$notify === "function"`，若异常自动回退至 `this.$message.success`，彻底杜绝调用链报错。
+### 2.1 移动端设置提示 5 秒自动淡出 (`ReadSettings.vue`)
+- **需求与优化**：
+  - 在移动端阅读设置中的“正文识别”模块，点击“边缘识别”和“简洁模式”时，下方会展开提示语句（`small-tip`）；
+  - 过去提示语常驻占据屏幕空间；现改为触发后展示 5 秒，随后通过平滑淡出动画（`<transition name="fade">`）自动隐退消失；若 5 秒内用户反复切换，内置防抖重置定时器，保证交互流畅自然。
 
-### 2.1 远程书源跨域跳转与大文件拉取加固 (`BookSourceController.kt` & `BookSourceManage.vue` & `Admin.vue`)
+### 2.2 阅读设置「自动换源」同排新增「广告过滤」总开关与误杀一键恢复 (`ReadSettings.vue` & `config.js` & `Reader.vue`)
+- **需求与优化**：
+  - 在阅读设置的“自动换源”一排，并排新增“广告过滤”开关按钮；
+  - 针对用户在划词去广告时误将小说正文当成广告过滤的痛点场景：
+    - 当用户关闭「广告过滤」时，系统自动检索并清空当前书籍在后台已添加的所有广告过滤规则（匹配分组 `广告过滤` 或前缀 `[广告过滤]`），并调用 `/deleteReplaceRules` 彻底删除；
+    - 联动事件总线 `refreshReaderContentAfterAdClear`，无感刷新重载当前章节原始内容并重新排版，被误杀的正文文字瞬间还原；
+    - 在正文内容过滤器 `filterContent` 中同步增加 `config.adFilterEnabled` 防护，若用户关闭广告过滤，广告规则被完全跳过。
+
+### 2.3 根除 iOS Safari 选区蓝色高亮框悬浮在弹窗之上的系统级 Bug (`Reader.vue`)
 - **根因分析**：
-  - 像 `https://www.yckceo.com/yuedu/shuyuans/json/id/1335.json` 等远程书源采用 302 临时重定向至外部 CDN（如 `gcore.jsdelivr.net`），文件大小超 2.6MB；
-  - 后端原有 `readRemoteSourceFile` 采用 `webClient.getAbs(url).timeout(3000)`，超时时间仅 3 秒，在公网发生 TLS 握手 + 重定向握手 + 2.6MB 传输时必然超时报错；
-  - 原前端在服务端接口报错后直接回退到浏览器端发起 `Axios.get(url)`，而目标站点 302 阶段无 CORS 头，触发浏览器 CORS 跨域拦截导致最终彻底失败。
-- **加固方案**：
-  - **核心双通道网络模型 (`BookSourceController.kt`)**：
-    1. 优先通道：调用项目成熟的 `io.legado.app.help.http.okHttpClient`，内置完整的 HTTP/HTTPS 全协议重定向（`followRedirects(true)`、`followSslRedirects(true)`）、Gzip 自动解压、现代与兼容 TLS 协商、标准浏览器 User-Agent 以及 20 秒超时配置；
-    2. 降级通道：若 okHttp 异常，自动降级至 WebClient 并提供 20 秒充足超时与标准请求头；
-  - **前端智能错误透传 (`BookSourceManage.vue` & `Admin.vue`)**：
-    - 前端在直连兜底失败时，优先捕获并透传服务端返回的具体失败原因（如证书问题、超时、404 等），杜绝模糊的“Network Error”。
+  - iOS Safari 在文本长按划词时，WebKit 内核会生成系统级原生选区及手柄；
+  - 同时项目内置了用于屏蔽原生系统菜单的自定义选区高亮层 `.custom-selection-highlight`，其 `z-index` 被设为 `9998`；而 Element UI 的对话框 `<el-dialog>` 的 `z-index` 为 `2000-2100`；
+  - 在弹出“一键过滤广告”弹窗时，未彻底清空 WebKit 原生选区，且自定义高亮层层级过高，导致蓝色的选中框浮在弹窗遮罩与弹窗上方。
+- **修复方案**：
+  - 将 `.custom-selection-highlight` 的 `z-index` 调整为 `100`，严格置于弹窗和顶部栏层级之下；
+  - 在选区图层外包裹 `<template v-if="!showAdFilterDialog">`，只要一键过滤弹窗呼出，立即彻底销毁高亮层 DOM；
+  - 点击“过滤广告”进入弹窗时，新增 `clearBrowserSelection()` 方法，通过 `window.getSelection().removeAllRanges()`、`document.selection?.empty()` 与 `activeElement.blur()` 彻底清除浏览器原生选区，在 iOS Safari 与各端浏览器中均实现零杂影、零蓝框浮层。
+
+### 2.4 一键过滤广告弹窗样式升级与范围收敛 (`Reader.vue`)
+- **需求与优化**：
+  - **默认精准过滤**：弹窗打开时过滤方式默认选中为“精准过滤”（`exact`），用户亦可手动点选切换为“整行过滤”（`line`）或“智能链接过滤”（`domain`）；
+  - **空心圆中间加圆点视觉规范**：
+    - 重构原有 Element 默认单选框，定制纯 CSS 矢量圆点组件 `.ad-radio-custom-item`；
+    - 未选中时呈现精简高雅的空心圆环（`border: 2px solid; background: transparent;`）；
+    - 选中时空心圆环高亮，且在空心圆中间弹出一个实心点（`transform: scale(1);`），完美符合“选中的规则在空心圆中加一个点”的视觉要求；
+  - **生效范围默认收敛为当前书籍**：
+    - 从弹窗模板中彻底删除“全部书籍生效”相关选项与说明；
+    - 默认且强制仅在当前书籍（`bookName;bookUrl`）生效，防止全局误伤其它小说。
 
 ---
 
 ## 3. 历史版本特性追溯
 
-### 3.1 v2.1.7 特性追溯
-- **正文划词气泡一键过滤广告 (`Reader.vue` & `ReplaceRule.vue` & `vuex.js`)**：
-  - 正文选中文本气泡专属「过滤广告」入口；
-  - 零正则极简交互，支持「精准过滤」、「整行过滤」以及「智能链接过滤」；
-  - 智能顶级根域名提取（自动剥离子域并兼容 `.com.cn` 等复合顶级域名）；
-  - 跨平台换行符（CRLF/LF）隔离与安全匹配；
-  - 过滤即时生效且锁定当前阅读进度不跳页。
+### 3.1 v2.1.8 特性追溯
+- **书源沙箱入库 `$notify` 异常彻底修复** (`element.js` & `BookSourceManage.vue`)。
+- **远程书源 302 重定向至 CDN 与大文件拉取加固** (`BookSourceController.kt`)。
 
-### 3.2 v2.1.6 特性追溯
-- **书籍封面轻量并发与分批接力扫描 (`BookController.kt` & `Index.vue` & `Admin.vue` & `BookManage.vue`)**：
-  - 4 线程轻量并发后端适配，单批次抓取 5 张封面，抓满即断开 SSE 释放服务端算力；
-  - 断点记忆与「获取后 5 张封面」断点续扫机制。
+### 3.2 v2.1.7 特性追溯
+- **正文划词气泡一键过滤广告** (`Reader.vue` & `ReplaceRule.vue` & `vuex.js`)。
 
 ---
 
@@ -57,7 +65,7 @@
 1. **前端构建与同步**：
    ```bash
    cd web
-   yarn build
+   yarn lint
    yarn sync
    ```
 2. **后端编译与语法校验**：
@@ -77,30 +85,13 @@
 
 ## 5. 已修复的 Bug 与技术改进 (Fixed Bugs & Technical Enhancements)
 
-1. **书源导入预检暂存沙箱 `$notify is not a function` 修复**：
-   - `element.js` 补齐 `Notification` 组件注册，沙箱入库完成通知恢复正常并增加兜底降级。
-2. **远程书源 302 重定向至 CDN 与大文件拉取失败修复**：
-   - 解决 3 秒短超时与浏览器 CORS 冲突，后端基于 `okHttpClient` 20s 自动跳转与 Gzip 完整拉取 2.6MB+ 书源，全协议重定向测试验证通过。
-3. **低配 VPS 封面抓取 CPU 飙满 100% 痛点解决**：
-   - 降级为 4 线程安全并发，单批次抓取 5 张即断开连接释放资源，断点记忆 `lastIndex` 接力续扫。
-4. **书源缺乏批量删除与治理手段**：
-   - 表格多选与批量删除确认弹窗，以及后端 `/deleteBookSources` 批量删除能力。
-5. **跨书源换源时目录章节不一致导致的跳章串章**：
-   - 引入 `fuzzyMatchChapter` 智能对齐引擎。
-6. **快速翻页导致的自动换源误触发防范**：
-   - 限制仅在阅读驻留时间 >= 8 秒且阅读进度到达 1/2 时才触发换源。
-7. **书源置顶排序在服务端未持久化顺序的缺陷修复**：
-   - 后端重构排序保存逻辑，严格按传入顺序重建书源列表并持久化。
-8. **搜书结果页右上角幽灵「登录」按钮与误触强制登录修复**：
-   - 清理多余幽灵登录分支，搜书状态下收敛为【书架】与【加载更多】。
-9. **书源全场景支持「从本地导入」(.json / .txt / 拖拽读取)**：
-   - 「书源管理与体检中心」与「控制台 - 书源设置」同步增加本地导入与拖拽解析。
-10. **批量导入书源时的死源泛滥与数据库污染 (事前预检暂存沙箱机制落地)**：
-   - 纯内存隔离暂存沙箱与 8 并发体检测速，实现零死源零污染入库。
-
----
-
-## 6. 待讨论商定功能与路线图 (Roadmap & Discussion)
-- **控制台书源设置 vs 书源管理中心架构协同**：控制台聚焦系统默认源底包、权限配置与沙箱调试，书源运营/体检/批量操作统一引导至管理中心。
-- 离线缓存并发预加载队列防封限流。
-- 正文排版字间距微调与分栏阅读适配。
+1. **iOS Safari 划词蓝框悬浮在弹窗上方的层级穿透问题修复**：
+   - 彻底清除浏览器原生 Range 选区，降低自定义高亮层 z-index 至 100，并在弹窗展示时销毁高亮 DOM。
+2. **移动端阅读设置“边缘识别/简洁模式”提示语长期占据屏幕空间的体验问题**：
+   - 增加 5 秒自动平滑淡出与定时器防抖。
+3. **误将小说正文划词过滤为广告后的恢复困难痛点**：
+   - 在自动换源排新增广告过滤开关，关闭后一键清空当前书籍已添加的广告规则，并秒级刷新复原正文。
+4. **一键过滤广告弹窗单选视觉样式与生效范围收敛**：
+   - 默认精准过滤，单选按钮采用空心圆加内点设计，删除全局生效选项，固定保护为仅当前书籍生效。
+5. **书源导入预检暂存沙箱 `$notify is not a function` 修复**。
+6. **远程书源 302 重定向至 CDN 与大文件拉取失败修复**。
