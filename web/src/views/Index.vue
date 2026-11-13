@@ -36,9 +36,24 @@
             placeholder="搜索书籍"
             v-model="search"
             class="search-input"
+            clearable
             @keyup.enter.native="searchBook(1)"
           >
-            <i slot="prefix" class="el-input__icon el-icon-search"></i>
+            <i
+              slot="prefix"
+              class="el-input__icon el-icon-search"
+              style="cursor: pointer;"
+              @click="searchBook(1)"
+            ></i>
+            <el-button
+              slot="append"
+              type="primary"
+              size="mini"
+              class="search-btn-append"
+              @click="searchBook(1)"
+            >
+              确定
+            </el-button>
           </el-input>
         </div>
         <div class="setting-wrapper search-setting">
@@ -1534,6 +1549,28 @@ export default {
         this.$message.error("请选择书源进行搜索");
         return;
       }
+
+      // 收起软键盘
+      if (
+        document.activeElement &&
+        typeof document.activeElement.blur === "function"
+      ) {
+        try {
+          document.activeElement.blur();
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 搜索确认后，若在手机端/抽屉模式，左侧栏向左平滑滑动收起，直接展示搜索结果
+      if (this.collapseMenu || this.showNavigation) {
+        this.navigationStyle = {};
+        this.showNavigation = false;
+        this.navigationClass = "navigation-out";
+        setTimeout(() => {
+          this.navigationClass = "navigation-hidden";
+        }, 300);
+      }
       if (page) {
         this.searchPage = page;
       }
@@ -1955,6 +1992,14 @@ export default {
       }
     },
     showSearchList(data) {
+      if (this.collapseMenu || this.showNavigation) {
+        this.navigationStyle = {};
+        this.showNavigation = false;
+        this.navigationClass = "navigation-out";
+        setTimeout(() => {
+          this.navigationClass = "navigation-hidden";
+        }, 300);
+      }
       this.isSearchResult = true;
       this.isExploreResult = true;
       this.loadingMore = false;
@@ -3525,12 +3570,38 @@ export default {
 
     .search-wrapper {
       .search-input {
-        border-radius: 50%;
         margin-top: 24px;
 
         >>> .el-input__inner {
-          border-radius: 50px;
+          border-radius: 20px 0 0 20px;
           border-color: #E3E3E3;
+          height: 32px;
+          line-height: 32px;
+        }
+
+        >>> .el-input-group__append {
+          border-radius: 0 20px 20px 0;
+          border-color: #409eff;
+          background-color: #409eff;
+          color: #fff;
+          padding: 0 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+
+          &:hover {
+            background-color: #66b1ff;
+            border-color: #66b1ff;
+          }
+
+          .el-button {
+            margin: 0;
+            padding: 0;
+            border: none;
+            background: transparent;
+            color: inherit;
+            font-size: 13px;
+            font-weight: 500;
+          }
         }
       }
     }
@@ -3944,6 +4015,18 @@ export default {
     background-color: #444;
     border: 1px solid #444 !important;
     color: #aaa;
+  }
+  >>>.search-wrapper {
+    .el-input-group__append {
+      background-color: #2b5c9e;
+      border-color: #2b5c9e;
+      color: #ddd;
+
+      &:hover {
+        background-color: #3873c4;
+        border-color: #3873c4;
+      }
+    }
   }
   .book .info .name {
     color: #bbb !important;
