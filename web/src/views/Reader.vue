@@ -535,18 +535,20 @@
       </transition>
 
       <!-- 选中文本高亮图层 (彻底解决 iOS/安卓原生系统菜单弹出的问题，同时完美保留文字选区高亮) -->
-      <div
-        v-for="(rect, idx) in selectionHighlightRects"
-        :key="'selection-hl-' + idx"
-        class="custom-selection-highlight"
-        :style="{
-          position: 'fixed',
-          top: rect.top + 'px',
-          left: rect.left + 'px',
-          width: rect.width + 'px',
-          height: rect.height + 'px'
-        }"
-      ></div>
+      <template v-if="!showAdFilterDialog">
+        <div
+          v-for="(rect, idx) in selectionHighlightRects"
+          :key="'selection-hl-' + idx"
+          class="custom-selection-highlight"
+          :style="{
+            position: 'fixed',
+            top: rect.top + 'px',
+            left: rect.left + 'px',
+            width: rect.width + 'px',
+            height: rect.height + 'px'
+          }"
+        ></div>
+      </template>
 
       <!-- 选中文字快捷操作气泡弹窗 (替代系统原生菜单，支持复制、书签、过滤) -->
       <transition name="text-action-fade">
@@ -742,7 +744,7 @@
       <div class="ad-dialog-body">
         <div class="ad-dialog-header-tip">
           <i class="el-icon-circle-check"></i>
-          <span>选中的广告内容将永久从正文中清除，后续同类广告直接消失。</span>
+          <span>选中的广告内容将从本书正文中清除，后续同类广告直接消失。</span>
         </div>
 
         <div class="ad-dialog-section">
@@ -769,57 +771,54 @@
 
         <div class="ad-dialog-section">
           <div class="ad-section-title">过滤方式：</div>
-          <el-radio-group
-            v-model="adFilterForm.matchType"
-            class="ad-radio-group"
-          >
-            <el-radio label="exact" border class="ad-radio-item">
-              <div class="radio-label-title">精准过滤</div>
-              <div class="radio-label-desc">仅删除完全匹配的文字或链接</div>
-            </el-radio>
-            <el-radio label="line" border class="ad-radio-item">
-              <div class="radio-label-title">整行过滤</div>
-              <div class="radio-label-desc">
-                清除包含该广告的整行整句内容（推荐整行水印语）
-              </div>
-            </el-radio>
-            <el-radio
-              v-if="adFilterForm.isUrlDetected"
-              label="domain"
-              border
-              class="ad-radio-item"
+          <div class="ad-radio-list">
+            <div
+              class="ad-radio-custom-item"
+              :class="{ 'is-active': adFilterForm.matchType === 'exact' }"
+              @click="adFilterForm.matchType = 'exact'"
             >
-              <div class="radio-label-title">智能链接过滤</div>
-              <div class="radio-label-desc">
-                自动屏蔽 {{ adFilterForm.detectedDomain }} 域名下所有类似链接
+              <span class="ad-radio-circle">
+                <span class="ad-radio-dot"></span>
+              </span>
+              <div class="ad-radio-text-wrap">
+                <div class="radio-label-title">精准过滤</div>
+                <div class="radio-label-desc">仅删除完全匹配的文字或链接</div>
               </div>
-            </el-radio>
-          </el-radio-group>
-        </div>
+            </div>
 
-        <div class="ad-dialog-section">
-          <div class="ad-section-title">生效范围：</div>
-          <el-radio-group
-            v-model="adFilterForm.scopeType"
-            class="ad-radio-group"
-          >
-            <el-radio label="book" border class="ad-radio-item">
-              <div class="radio-label-title">仅当前书籍</div>
-              <div class="radio-label-desc">
-                仅在《{{
-                  ($store.getters.readingBook &&
-                    $store.getters.readingBook.name) ||
-                    "当前书籍"
-                }}》中生效
+            <div
+              class="ad-radio-custom-item"
+              :class="{ 'is-active': adFilterForm.matchType === 'line' }"
+              @click="adFilterForm.matchType = 'line'"
+            >
+              <span class="ad-radio-circle">
+                <span class="ad-radio-dot"></span>
+              </span>
+              <div class="ad-radio-text-wrap">
+                <div class="radio-label-title">整行过滤</div>
+                <div class="radio-label-desc">
+                  清除包含该广告的整行整句内容（推荐整行水印语）
+                </div>
               </div>
-            </el-radio>
-            <el-radio label="all" border class="ad-radio-item">
-              <div class="radio-label-title">全部书籍生效</div>
-              <div class="radio-label-desc">
-                全局去广告，所有小说均自动生效（推荐通用域名与引流）
+            </div>
+
+            <div
+              v-if="adFilterForm.isUrlDetected"
+              class="ad-radio-custom-item"
+              :class="{ 'is-active': adFilterForm.matchType === 'domain' }"
+              @click="adFilterForm.matchType = 'domain'"
+            >
+              <span class="ad-radio-circle">
+                <span class="ad-radio-dot"></span>
+              </span>
+              <div class="ad-radio-text-wrap">
+                <div class="radio-label-title">智能链接过滤</div>
+                <div class="radio-label-desc">
+                  自动屏蔽 {{ adFilterForm.detectedDomain }} 域名下所有类似链接
+                </div>
               </div>
-            </el-radio>
-          </el-radio-group>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -926,6 +925,10 @@ export default {
       });
       this.getContent(bookmark.chapterIndex);
     });
+    eventBus.$on(
+      "refreshReaderContentAfterAdClear",
+      this.refreshContentAfterAdClear
+    );
   },
   activated() {
     this.init();
@@ -1042,6 +1045,10 @@ export default {
     }
   },
   beforeDestroy() {
+    eventBus.$off(
+      "refreshReaderContentAfterAdClear",
+      this.refreshContentAfterAdClear
+    );
     document.removeEventListener("selectionchange", this.handleSelectionChange);
     window.removeEventListener("mouseup", this.handleGlobalMouseUp);
     if (this.textActionMenuCloseHandler) {
@@ -2342,6 +2349,12 @@ export default {
               typeof rule.isEnabled !== "undefined" &&
               rule.isEnabled === false
             ) {
+              return;
+            }
+            const isAdRule =
+              rule.group === "广告过滤" ||
+              (rule.name && rule.name.startsWith("[广告过滤]"));
+            if (isAdRule && this.config.adFilterEnabled === false) {
               return;
             }
             if (!rule.pattern) {
@@ -3732,13 +3745,46 @@ export default {
     },
     handleActionFilterAd() {
       const text = this.selectedActionText;
+      // 彻底清理系统原生划词选区与页面蓝色高亮框，防止 iOS Safari 下蓝色框漂在弹窗之上
+      this.clearBrowserSelection();
+      this.closeTextActionMenu(true);
       if (!text) {
-        this.closeTextActionMenu(true);
         return;
       }
-      // 保留选中文本高亮层，方便用户核对
-      this.closeTextActionMenu(false);
       this.openAdFilterDialog(text);
+    },
+    clearBrowserSelection() {
+      this.selectionHighlightRects = [];
+      if (window.getSelection) {
+        try {
+          const sel = window.getSelection();
+          if (sel) {
+            sel.removeAllRanges();
+            if (sel.empty) {
+              sel.empty();
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      if (document.selection && document.selection.empty) {
+        try {
+          document.selection.empty();
+        } catch (e) {
+          // ignore
+        }
+      }
+      if (
+        document.activeElement &&
+        typeof document.activeElement.blur === "function"
+      ) {
+        try {
+          document.activeElement.blur();
+        } catch (e) {
+          // ignore
+        }
+      }
     },
     openAdFilterDialog(rawText) {
       const text = (rawText || "").replace(
@@ -3751,7 +3797,7 @@ export default {
       this.adFilterForm = {
         text: text,
         scopeType: "book",
-        matchType: detection.isUrl ? "domain" : "exact",
+        matchType: "exact",
         isUrlDetected: detection.isUrl,
         detectedDomain: detection.domain
       };
@@ -3759,14 +3805,7 @@ export default {
     },
     closeAdFilterDialog() {
       this.showAdFilterDialog = false;
-      this.selectionHighlightRects = [];
-      if (window.getSelection) {
-        try {
-          window.getSelection().removeAllRanges();
-        } catch (e) {
-          // ignore
-        }
-      }
+      this.clearBrowserSelection();
     },
     onAdTextInputChange(val) {
       const text = (val || "").replace(
@@ -3796,15 +3835,12 @@ export default {
         const bookName = readingBook.name || "";
         const bookUrl = readingBook.bookUrl || "";
 
-        // 1. 自动计算作用域 (scope)
-        let scope = "*";
-        if (this.adFilterForm.scopeType === "book") {
-          scope = bookName
-            ? bookUrl
-              ? `${bookName};${bookUrl}`
-              : bookName
-            : "*";
-        }
+        // 1. 生效范围默认且仅为当前书籍
+        const scope = bookName
+          ? bookUrl
+            ? `${bookName};${bookUrl}`
+            : bookName
+          : "*";
 
         // 2. 根据过滤方式构建 pattern 和 isRegex
         let pattern = "";
@@ -3930,6 +3966,34 @@ export default {
       if (this.isScrollRead) {
         this.computeShowChapterList();
       } else {
+        this.$nextTick(() => {
+          this.computePages(() => {
+            if (this.currentParagraph) {
+              this.showParagraph(this.currentParagraph, false);
+            } else {
+              this.showPage(this.currentPage, 0);
+            }
+          });
+        });
+      }
+    },
+    refreshContentAfterAdClear() {
+      if (this.isScrollRead) {
+        this.computeShowChapterList(true);
+      } else {
+        if (
+          this.chapterContentCache &&
+          this.chapterContentCache.chapters &&
+          this.chapterContentCache.chapters[this.chapterIndex] &&
+          this.chapterContentCache.chapters[this.chapterIndex].content
+        ) {
+          this.content = this.filterContent(
+            this.chapterContentCache.chapters[this.chapterIndex].content
+          );
+        } else {
+          this.content = this.filterContent(this.content);
+        }
+        this.title = this.filterContent(this.title);
         this.$nextTick(() => {
           this.computePages(() => {
             if (this.currentParagraph) {
@@ -6859,7 +6923,7 @@ export default {
   background: rgba(64, 158, 255, 0.35);
   border-radius: 2px;
   pointer-events: none;
-  z-index: 9998;
+  z-index: 100;
   mix-blend-mode: multiply;
 }
 .night .custom-selection-highlight {
@@ -7159,44 +7223,92 @@ export default {
   }
 }
 
-.ad-radio-group {
+.ad-radio-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
 
-  .ad-radio-item {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    height: auto !important;
-    padding: 10px 14px !important;
-    border-radius: 8px;
+  .ad-radio-custom-item {
     display: flex;
     align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #fff;
     transition: all 0.2s ease;
+    user-select: none;
 
-    .el-radio__input {
-      margin-top: 3px;
+    &:hover {
+      border-color: #c0c4cc;
+      background: #fafafa;
     }
 
-    .el-radio__label {
-      padding-left: 10px;
-      white-space: normal;
+    &.is-active {
+      border-color: #f56c6c;
+      background: rgba(245, 108, 108, 0.04);
+
+      .ad-radio-circle {
+        border-color: #f56c6c;
+
+        .ad-radio-dot {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      .radio-label-title {
+        color: #f56c6c;
+        font-weight: 600;
+      }
+    }
+
+    .ad-radio-circle {
+      width: 18px;
+      height: 18px;
+      min-width: 18px;
+      margin-top: 2px;
+      border: 2px solid #909399;
+      border-radius: 50%;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+
+      .ad-radio-dot {
+        width: 8px;
+        height: 8px;
+        min-width: 8px;
+        border-radius: 50%;
+        background-color: #f56c6c;
+        transform: scale(0);
+        opacity: 0;
+        transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
+      }
+    }
+
+    .ad-radio-text-wrap {
       display: flex;
       flex-direction: column;
-      gap: 2px;
-    }
+      gap: 3px;
+      flex: 1;
 
-    .radio-label-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: #303133;
-    }
+      .radio-label-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #303133;
+        transition: color 0.2s ease;
+      }
 
-    .radio-label-desc {
-      font-size: 12px;
-      color: #909399;
-      line-height: 1.3;
+      .radio-label-desc {
+        font-size: 12px;
+        color: #909399;
+        line-height: 1.4;
+      }
     }
   }
 }
@@ -7314,21 +7426,49 @@ export default {
       color: #d7dae0 !important;
     }
 
-    .ad-radio-item {
+    .ad-radio-custom-item {
       background: #1e2227;
       border-color: #3b4048;
 
-      &.is-checked {
-        border-color: #409eff;
-        background: rgba(64, 158, 255, 0.12);
+      &:hover {
+        background: #282c34;
+        border-color: #4b5263;
       }
 
-      .radio-label-title {
-        color: #d7dae0;
+      &.is-active {
+        border-color: #e06c75;
+        background: rgba(224, 108, 117, 0.12);
+
+        .ad-radio-circle {
+          border-color: #e06c75;
+
+          .ad-radio-dot {
+            background-color: #e06c75;
+          }
+        }
+
+        .radio-label-title {
+          color: #e06c75;
+          font-weight: 600;
+        }
       }
 
-      .radio-label-desc {
-        color: #7f848e;
+      .ad-radio-circle {
+        border-color: #5c6370;
+
+        .ad-radio-dot {
+          background-color: #e06c75;
+        }
+      }
+
+      .ad-radio-text-wrap {
+        .radio-label-title {
+          color: #abb2bf;
+        }
+
+        .radio-label-desc {
+          color: #7f848e;
+        }
       }
     }
 

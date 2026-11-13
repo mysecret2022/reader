@@ -31,36 +31,62 @@
               @click="toggleEdgeSwipeBack"
               >边缘识别</span
             >
-            <span class="small-tip" v-if="config.pageType === 'Kindle'"
-              >❗️已开启简洁模式，将关闭复杂动画以获得极速极简体验。</span
-            >
-            <span class="small-tip" v-if="config.edgeSwipeBack"
-              >💡已开启屏幕双侧边缘滑动返回。在iOS全屏或网页中，右侧向左轻滑即可触发返回，完美避开系统自带手势冲突。</span
-            >
+            <transition name="fade">
+              <span class="small-tip" v-if="showKindleTip"
+                >❗️已开启简洁模式，将关闭复杂动画以获得极速极简体验。</span
+              >
+            </transition>
+            <transition name="fade">
+              <span class="small-tip" v-if="showEdgeTip"
+                >💡已开启屏幕双侧边缘滑动返回。在iOS全屏或网页中，右侧向左轻滑即可触发返回，完美避开系统自带手势冲突。</span
+              >
+            </transition>
           </div>
         </li>
         <li>
           <span class="setting-item-title">自动换源</span>
           <div
-            class="selection-zone"
-            style="display: flex; align-items: center; min-height: 28px;"
+            class="selection-zone auto-source-zone"
+            style="display: flex; align-items: center; min-height: 28px; flex-wrap: wrap; gap: 12px;"
           >
-            <el-tooltip
-              class="item"
-              effect="dark"
-              content="当读到本章一半且下一章未就绪时，后台自动为您优选接力书源"
-              placement="top"
-            >
-              <el-switch
-                v-model="config.autoChangeSource"
-                active-color="#13ce66"
-                inactive-color="#dcdfe6"
-                @change="onAutoChangeSourceSwitch"
+            <div style="display: inline-flex; align-items: center; gap: 6px;">
+              <el-tooltip
+                class="item"
+                effect="dark"
+                content="当读到本章一半且下一章未就绪时，后台自动为您优选接力书源"
+                placement="top"
               >
-              </el-switch>
-            </el-tooltip>
-            <span class="small-tip" style="margin-top: 0; margin-left: 10px;"
-              >当读到本章一半且下一章未就绪时，后台自动为您优选接力书源</span
+                <el-switch
+                  v-model="config.autoChangeSource"
+                  active-color="#13ce66"
+                  inactive-color="#dcdfe6"
+                  @change="onAutoChangeSourceSwitch"
+                >
+                </el-switch>
+              </el-tooltip>
+              <span style="font-size: 13px;">自动换源</span>
+            </div>
+
+            <div style="display: inline-flex; align-items: center; gap: 6px;">
+              <el-tooltip
+                class="item"
+                effect="dark"
+                content="关闭后将自动清空当前书籍已添加的广告词，恢复被误过滤的正文"
+                placement="top"
+              >
+                <el-switch
+                  v-model="config.adFilterEnabled"
+                  active-color="#13ce66"
+                  inactive-color="#dcdfe6"
+                  @change="onAdFilterSwitchChange"
+                >
+                </el-switch>
+              </el-tooltip>
+              <span style="font-size: 13px;">广告过滤</span>
+            </div>
+
+            <span class="small-tip" style="width: 100%; margin-top: 0;"
+              >开启划词去广告；若误将正文当成广告过滤，关闭「广告过滤」即可自动清空并还原正文</span
             >
           </div>
         </li>
@@ -521,6 +547,11 @@ export default {
       customFontName: "",
       customFonts: customFonts,
 
+      showKindleTip: false,
+      kindleTipTimer: null,
+      showEdgeTip: false,
+      edgeTipTimer: null,
+
       config: this.$store.state.config,
 
       configRules: {
@@ -546,6 +577,10 @@ export default {
       autoChangeSource: !!(
         this.$store.state.config && this.$store.state.config.autoChangeSource
       ),
+      adFilterEnabled:
+        typeof this.$store.state.config.adFilterEnabled === "undefined"
+          ? true
+          : !!this.$store.state.config.adFilterEnabled,
       selectionAction:
         this.$store.state.config.selectionAction === "过滤弹窗"
           ? "操作弹窗"
@@ -582,6 +617,16 @@ export default {
       }
     }
   },
+  beforeDestroy() {
+    if (this.kindleTipTimer) {
+      clearTimeout(this.kindleTipTimer);
+      this.kindleTipTimer = null;
+    }
+    if (this.edgeTipTimer) {
+      clearTimeout(this.edgeTipTimer);
+      this.edgeTipTimer = null;
+    }
+  },
   methods: {
     toggleEdgeSwipeBack() {
       const nextVal = !this.config.edgeSwipeBack;
@@ -590,6 +635,35 @@ export default {
         ...this.$store.state.config,
         edgeSwipeBack: nextVal
       });
+      if (nextVal) {
+        this.triggerEdgeTip();
+      } else {
+        this.showEdgeTip = false;
+        if (this.edgeTipTimer) {
+          clearTimeout(this.edgeTipTimer);
+          this.edgeTipTimer = null;
+        }
+      }
+    },
+    triggerEdgeTip() {
+      this.showEdgeTip = true;
+      if (this.edgeTipTimer) {
+        clearTimeout(this.edgeTipTimer);
+      }
+      this.edgeTipTimer = setTimeout(() => {
+        this.showEdgeTip = false;
+        this.edgeTipTimer = null;
+      }, 5000);
+    },
+    triggerKindleTip() {
+      this.showKindleTip = true;
+      if (this.kindleTipTimer) {
+        clearTimeout(this.kindleTipTimer);
+      }
+      this.kindleTipTimer = setTimeout(() => {
+        this.showKindleTip = false;
+        this.kindleTipTimer = null;
+      }, 5000);
     },
     onAutoChangeSourceSwitch(val) {
       this.$set(this.config, "autoChangeSource", val);
@@ -598,7 +672,69 @@ export default {
         autoChangeSource: val
       });
     },
+    async onAdFilterSwitchChange(val) {
+      this.$set(this.config, "adFilterEnabled", val);
+      this.$store.commit("setConfig", {
+        ...this.$store.state.config,
+        adFilterEnabled: val
+      });
+      if (!val) {
+        // 关闭广告过滤：清空当前书籍已加入的广告词，正文恢复
+        const readingBook = this.$store.getters.readingBook || {};
+        const bookName = readingBook.name || "";
+        const bookUrl = readingBook.bookUrl || "";
+        const allRules = this.$store.state.filterRules || [];
+        const adRulesForThisBook = allRules.filter(r => {
+          const isAd =
+            r.group === "广告过滤" ||
+            (r.name && r.name.startsWith("[广告过滤]"));
+          if (!isAd) return false;
+          const scope = (r.scope || "").trim();
+          if (!scope || scope === "*") return true;
+          const parts = scope.split(";");
+          if (parts[0] === bookName) return true;
+          if (parts.length > 1 && parts[1] === bookUrl) return true;
+          return false;
+        });
+
+        if (adRulesForThisBook.length > 0) {
+          try {
+            await Axios.post(
+              this.$store.getters.api + "/deleteReplaceRules",
+              adRulesForThisBook
+            );
+          } catch (e) {
+            // ignore
+          }
+          const remainingRules = allRules.filter(
+            r =>
+              !adRulesForThisBook.some(
+                del => del.name === r.name || (del.id && del.id === r.id)
+              )
+          );
+          this.$store.commit("setFilterRules", remainingRules);
+          this.$message.success(
+            `已关闭广告过滤，并清空当前书籍已添加的 ${adRulesForThisBook.length} 条广告词，正文已恢复！`
+          );
+        } else {
+          this.$message.info("已关闭广告过滤");
+        }
+        eventBus.$emit("refreshReaderContentAfterAdClear");
+      } else {
+        this.$message.success("已开启广告过滤");
+        eventBus.$emit("refreshReaderContentAfterAdClear");
+      }
+    },
     setPageType(type) {
+      if (type === "Kindle") {
+        this.triggerKindleTip();
+      } else {
+        this.showKindleTip = false;
+        if (this.kindleTipTimer) {
+          clearTimeout(this.kindleTipTimer);
+          this.kindleTipTimer = null;
+        }
+      }
       if (type === this.config.pageType) {
         return;
       }

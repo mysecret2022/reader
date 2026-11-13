@@ -41,7 +41,8 @@ const defaultDayConfig = {
   autoReadingLineTime: 1000,
   pageMode: "自适应",
   selectionAction: "操作弹窗",
-  autoChangeSource: false
+  autoChangeSource: false,
+  adFilterEnabled: true
 };
 const defaultNightConfig = {
   configDefaultType: "黑夜默认",
@@ -67,7 +68,8 @@ const defaultNightConfig = {
   autoReadingLineTime: 1000,
   pageMode: "自适应",
   selectionAction: "操作弹窗",
-  autoChangeSource: false
+  autoChangeSource: false,
+  adFilterEnabled: true
 };
 const settings = {
   shelfConfig: {
@@ -86,7 +88,8 @@ const settings = {
     autoTheme: true, // 自动切换主题
     pageType: "正常",
     edgeSwipeBack: false, // 屏幕两侧边缘手势识别返回
-    autoChangeSource: false
+    autoChangeSource: false,
+    adFilterEnabled: true
   },
   speechVoiceConfig: {
     voiceName: "",
@@ -199,7 +202,8 @@ export const defaultBookmark = {
 export const syncConfigFiled = Object.keys(defaultDayConfig).concat([
   "contentBGImg",
   "edgeSwipeBack",
-  "autoChangeSource"
+  "autoChangeSource",
+  "adFilterEnabled"
 ]);
 export const customFonts = [
   "custom-system",
