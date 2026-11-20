@@ -1,70 +1,63 @@
-# AGENT_PROJECT_GUIDE (v2.2.1)
+# AGENT_PROJECT_GUIDE (v2.2.2)
 
 面向后续接手智能体的架构、功能与维护指引文档。
 
 ---
 
 ## 1. 版本概述 (Version Summary)
-- **版本号**：`v2.2.1`
-- **定位**：修复安卓端长按选词立即弹出操作弹窗并清除选区的核心交互缺陷，以及阅读设置中「自动换源」与「广告过滤」提示语句 5 秒平滑自动淡出。
-- **上一主版本**：`v2.2.0`
+- **版本号**：`v2.2.2`
+- **定位**：彻底修复安卓手机划词选中文字后“可以自由拖动但操作气泡不再弹出”的 `touchcancel` 死锁缺陷，完善安卓拖动手柄时气泡自动避让与停手自动重现体验，并补全 `<keep-alive>` 生命周期全局监听一致性。
+- **上一主版本**：`v2.2.1`
 
 ---
 
-## 2. 核心架构与功能特性清单 (2.2.1 Features)
+## 2. 核心架构与功能特性清单 (2.2.2 Features)
 
-### 2.1 安卓端长按划词交互与手柄选区彻底修复 (`Reader.vue`)
-- **交互痛点与根因剖析**：
-  - 在 iOS Safari 中，长按文本时 `touchstart` 保持活跃，`touchcancel` 不会触发，系统能正确识别手指正处于按住状态，等用户手指抬起后才呼出弹窗；
-  - 但在 Android Chromium / Android WebView 中，长按正文触发系统原生选词手势时，浏览器会向 DOM 派发 `touchcancel`；
-  - 原前端代码在 `handleTouchCancel` 中直接将 `isTouchActive` 置为 `false`，并附带了 `setTimeout(80ms)` 触发选区检测；
-  - 导致用户在安卓上长按（按住）不到 0.1 秒，代码就误判手指已离开，立即弹出操作弹窗（复制/过滤广告/添加书签），并调用了 `sel.removeAllRanges()` 强制清空选区；
-  - 用户手指还贴在屏幕上，刚出来的选区和原生水滴调整手柄就被直接销毁，根本无法正常选中一段文字。
-- **解决方案与实施**：
-  1. **重构 Android 触摸生命周期追踪**：
-     - 在全局 `window` 监听 `pointerdown`、`pointerup`、`touchend`，增加 `isFingerDown` 实体触控追踪；
-     - 在 `handleTouchCancel` 中**彻底移除 80ms 提前触发选区的定时器**，明确标记用户进入选词状态（`isTextSelecting = true`），不再误置触摸结束；
-  2. **Android 原生选区与手柄完整保留**：
-     - 在呼出操作菜单 `showTextOperate` 时，区分系统平台：仅对 iOS Safari 执行 `removeAllRanges()`（阻断其强硬的原生菜单）；对安卓系统完整保留原生选区高亮与水滴拖拽把手（Android 通过 `contextmenu preventDefault` 已天然免疫原生菜单）；
-  3. **手指抬起后再优雅弹窗**：
-     - 确保在用户按住或拖动把手微调时绝不弹出弹窗打扰；
-     - 只有当用户手指真正离开屏幕（`window.touchend / pointerup`）且选区稳定后，才在选区上方弹出快捷操作条。
-
-### 2.2 阅读设置「自动换源」与「广告过滤」提示 5 秒自动隐退 (`ReadSettings.vue`)
-- **需求与优化**：
-  - 切换「自动换源」开关时，展开展示动态提示并附带平滑淡出动画（`<transition name="fade">`），展示 5 秒后自动消失；
-  - 切换「广告过滤」开关时，同样展示对应开启/关闭清空提示，5 秒后自动隐退消失；
-  - 在组件销毁 `beforeDestroy` 时妥善清理定时器防抖，完全对齐“边缘识别”与“简洁模式”的提示交互规范。
+### 2.1 安卓长按选词 `touchcancel` 死锁根治与手柄微调体验完善 (`Reader.vue`)
+- **问题根因剖析**：
+  1. **主死锁 (`handleTouchCancel`)**：在安卓 Chrome / WebView 中，长按触发系统选词后浏览器派发 `touchcancel`（按 W3C Touch Events 规范，已取消的触摸序列此后绝不会再派发 `touchend` / `pointerup`，而后续拖动蓝色水滴手柄也仅产生 `selectionchange`，不再派发 DOM 触摸事件）。`v2.2.1` 中在 `handleTouchCancel` 未解除 `isTouchActive` / `isFingerDown`，导致这两个标记长期锁死为 `true`，使 `handleSelectionChange` 永久提前返回，操作气泡完全不弹出。
+  2. **`<keep-alive>` 监听与状态不对称**：`mounted()` 绑定了全局 `touchend` / `pointerup`，`deactivated()` 卸载了它们，但 `activated()` 未重新绑定；且 `deactivated()` 与 `beforeDestroy()` 也未复位 `isTouchActive`、`isFingerDown`、`isTextSelecting`、`isDismissingMenu`。
+  3. **其他交互细节**：`handleTouchCancel` 未清理残留的 `isDismissingMenu`；`isAndroid` 未覆盖 HarmonyOS/OpenHarmony；二次拖动手柄微调选区时未临时隐退气泡避免遮挡文字；`suppress-callout` 与 `handleContextMenu` 对 `"过滤弹窗"` 兼容不全；跨段落选区的 `commonAncestorContainer` 容器判定可能误拒。
+- **修复与优化方案**：
+  1. **解除 `touchcancel` 状态锁死并引入统一防抖调度 (`scheduleSelectionMenu`)**：
+     - 在 `handleTouchCancel()` 中立即复位 `isTouchActive = false`、`isFingerDown = false`、`lastMoveX = 0`、`lastTouch = false`、清理滑动位移与残留 `isDismissingMenu`；
+     - 检测到选区（或处于安卓设备）时，统一通过 `scheduleSelectionMenu(420)` 延迟触发弹窗；用户在选词后继续拖动水滴手柄调整范围时，每次 `selectionchange` 都会顺滑重置定时器，停手稳定 380ms 后再弹出气泡，完全不打断划词。
+  2. **拖动手柄时气泡自动退让与重现，保留安卓原生选区**：
+     - 仅在 `this.isIOS` 时提取 `.custom-selection-highlight` 并调用 `sel.removeAllRanges()`；安卓/鸿蒙与 PC 端保持 `selectionHighlightRects = []`，完整保留原生蓝色选区与水滴拖拽手柄；
+     - 在安卓/PC 上，若气泡已显示时用户再次拖动手柄修改选区，`handleSelectionChange` 仅将 `textActionMenuVisible = false` 临时隐退（不调用 `closeTextActionMenu`、不清空选区、不触发 `dismissCooldown`），选区稳定后自动在最新选区位置重新弹出；若选区折叠/清空则顺滑关闭气泡；
+     - `showTextOperate()` 中当靠顶向下展示气泡时，安卓端加大下移偏移量（`+34px`）避开下方水滴手柄，且容器判定 `isSelectionInReaderContent(range)` 同时检查 `commonAncestorContainer`、`startContainer` 与 `endContainer`。
+  3. **`<keep-alive>` 与兼容细节补齐**：
+     - `activated()` 补齐全局 `touchend` / `pointerup` 监听重绑；`deactivated()` 与 `beforeDestroy()` 同步复位触控与菜单关闭状态标记；
+     - `.text-action-popup` 增加 `@touchstart.stop` 防止触摸冒泡误触发页面点击；`suppress-callout` 与 `handleContextMenu` 同时兼容 `"操作弹窗"` 与 `"过滤弹窗"`；`isAndroid` 兼容 `Android|HarmonyOS|OpenHarmony`。
 
 ---
 
 ## 3. 历史版本特性追溯
 
-### 3.1 v2.2.0 特性追溯
-- **主页左侧栏搜索确定后自动向左滑出隐退** (`Index.vue`)。
-- **搜索框集成显式「确定」操作按钮与夜间模式适配** (`Index.vue`)。
+### 3.1 v2.2.1 特性追溯
+- 安卓长按划词原生水滴手柄保留，以及阅读设置「自动换源」「广告过滤」提示 5 秒自动淡出 (`Reader.vue` & `ReadSettings.vue`)。
 
-### 3.2 v2.1.9 特性追溯
-- **移动端阅读提示 5 秒自动淡出** (`ReadSettings.vue`)。
-- **阅读设置「自动换源」同排新增「广告过滤」总开关与误杀一键恢复** (`ReadSettings.vue` & `config.js` & `Reader.vue`)。
-- **根除 iOS Safari 选区蓝色高亮框悬浮在弹窗之上的系统级 Bug** (`Reader.vue`)。
-- **一键过滤广告弹窗单选样式升级（空心圆内加圆点）与生效范围收敛** (`Reader.vue`)。
+### 3.2 v2.2.0 特性追溯
+- 主页左侧栏搜索确定后自动向左滑出隐退，搜索框集成显式「确定」按钮与夜间模式适配 (`Index.vue`)。
+
+### 3.3 v2.1.9 特性追溯
+- iOS Safari 蓝框浮层根除、一键过滤弹窗空心圆点单选样式与当前书籍范围收敛 (`Reader.vue` & `ReadSettings.vue` & `config.js`)。
 
 ---
 
 ## 4. 运行、构建与测试指引
 
-1. **前端构建与同步**：
+1. **前端代码检查**：
    ```bash
    cd web
    yarn lint
+   ```
+2. **前端生产打包与静态资源同步**：
+   ```bash
+   cd web
    yarn sync
    ```
-2. **后端编译与语法校验**：
-   ```bash
-   ./gradlew compileKotlin
-   ```
-3. **单元与集成测试**：
+3. **后端单元与集成测试**：
    ```bash
    ./gradlew test
    ```
@@ -77,9 +70,9 @@
 
 ## 5. 已修复的 Bug 与技术改进 (Fixed Bugs & Technical Enhancements)
 
-1. **安卓端长按正文直接弹出操作弹窗且无法正常选词的缺陷修复**：
-   - 阻断 `touchcancel` 引发的误判提前弹窗，保留安卓原生选区与拖拽手柄，调整为抬手稳定后优雅呈现。
-2. **阅读设置提示语占屏问题收敛**：
-   - 自动换源与广告过滤提示语统一改为 5 秒后自动淡出消失。
-3. **主页移动端左侧栏搜索后抽屉常驻遮挡搜索结果的交互缺陷修复**。
-4. **iOS Safari 划词蓝框悬浮在弹窗上方的层级穿透问题修复**。
+1. **安卓/鸿蒙端长按选词后“能自由拖动选择但操作气泡不再弹出”的 `touchcancel` 死锁修复**：
+   - 在 `handleTouchCancel` 中正确解除触控锁定，由 `selectionchange` 统一防抖触发气泡，彻底兼顾自由划词拖动与稳定后弹出操作气泡。
+2. **安卓二次拖动手柄微调选区体验优化**：
+   - 拖动调整选区期间气泡自动临时隐藏让位（不销毁原生选区与水滴手柄），停手后在新位置重新显现，靠顶向下弹出时自动避开底部水滴手柄。
+3. **`<keep-alive>` 页面切换后全局触摸监听与状态一致性修复**：
+   - 在 `activated()` 补齐监听器恢复，在 `deactivated()` / `beforeDestroy()` 统一清理状态标记。

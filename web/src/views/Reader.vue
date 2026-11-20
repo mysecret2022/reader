@@ -8,7 +8,8 @@
       'mini-interface': $store.state.miniInterface,
       'suppress-callout':
         $store.getters.config &&
-        $store.getters.config.selectionAction === '操作弹窗'
+        ($store.getters.config.selectionAction === '操作弹窗' ||
+          $store.getters.config.selectionAction === '过滤弹窗')
     }"
     ref="chapterWrapperRef"
   >
@@ -563,6 +564,7 @@
           }"
           @click.stop
           @mousedown.stop
+          @touchstart.stop
         >
           <div
             class="text-action-btn"
@@ -941,6 +943,12 @@ export default {
     window.addEventListener("keydown", this.keydownHandler);
     document.addEventListener("selectionchange", this.handleSelectionChange);
     window.addEventListener("mouseup", this.handleGlobalMouseUp);
+    window.addEventListener("touchend", this.handleGlobalTouchEnd, {
+      passive: true
+    });
+    window.addEventListener("pointerup", this.handleGlobalPointerUp, {
+      passive: true
+    });
     if (this.title) {
       document.title =
         this.$store.getters.readingBook.name + " - " + this.title;
@@ -1033,6 +1041,10 @@ export default {
       this.ignoreNextClickTimer = null;
     }
     this.isMouseDown = false;
+    this.isTouchActive = false;
+    this.isFingerDown = false;
+    this.isTextSelecting = false;
+    this.isDismissingMenu = false;
     this.justSelectedOnPC = false;
     this.ignoreNextClick = false;
     if (this.selectionChangeTimer) {
@@ -1082,6 +1094,10 @@ export default {
       this.ignoreNextClickTimer = null;
     }
     this.isMouseDown = false;
+    this.isTouchActive = false;
+    this.isFingerDown = false;
+    this.isTextSelecting = false;
+    this.isDismissingMenu = false;
     this.justSelectedOnPC = false;
     this.ignoreNextClick = false;
     if (this.selectionChangeTimer) {
@@ -1410,7 +1426,7 @@ export default {
     isAndroid() {
       if (typeof navigator === "undefined") return false;
       const ua = navigator.userAgent || "";
-      return /Android/i.test(ua);
+      return /Android|HarmonyOS|OpenHarmony/i.test(ua);
     },
     cachedPercent() {
       if (!this.catalog || !this.catalog.length) return 0;
@@ -2975,12 +2991,14 @@ export default {
     handleContextMenu(e) {
       if (
         this.$store.getters.config &&
-        this.$store.getters.config.selectionAction === "操作弹窗"
+        (this.$store.getters.config.selectionAction === "操作弹窗" ||
+          this.$store.getters.config.selectionAction === "过滤弹窗")
       ) {
         e.preventDefault();
       }
     },
     handleTouchStart(e) {
+      this.isDismissingMenu = false;
       this.isTouchActive = true;
       this.isFingerDown = true;
       this.isTextSelecting = false;
@@ -3091,15 +3109,46 @@ export default {
         }
       }
     },
-    handleTouchCancel() {
-      // 在安卓系统长按选词时，浏览器内核因手势接管会向 DOM 派发 touchcancel。
-      // 此时用户手指依然停留在屏幕上，绝不能提前触发选词弹窗，否则会中断正常的选词流程！
+    scheduleSelectionMenu(delay = 80) {
       if (this.selectionChangeTimer) {
         clearTimeout(this.selectionChangeTimer);
         this.selectionChangeTimer = null;
       }
-      this.isTextSelecting = true;
+      this.selectionChangeTimer = setTimeout(() => {
+        this.selectionChangeTimer = null;
+        this.checkAndTriggerSelection();
+      }, delay);
+    },
+    handleTouchCancel() {
+      // 安卓长按选词时浏览器手势接管会派发 touchcancel，此后规范保证不会再派发 touchend/pointerup。
+      // 必须立即解除 isTouchActive/isFingerDown 锁定，避免后续 selectionchange 被永久拦截；
+      // 同时使用统一防抖定时器延迟展示气泡，用户拖动水滴手柄时会由 selectionchange 持续重置定时器不打断选词。
+      this.isTouchActive = false;
+      this.isFingerDown = false;
       this.lastMoveX = 0;
+      this.lastTouch = false;
+      if (this.isSlideRead && !this.isSimulationRead) {
+        this.contentStyle = {
+          transform: `translateX(${this.transformX}px)`
+        };
+      }
+      if (this.isDismissingMenu) {
+        this.isDismissingMenu = false;
+        this.lastSelection = null;
+        this.isTextSelecting = false;
+        return;
+      }
+      if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
+        this.lastSelection = null;
+        this.isTextSelecting = false;
+        return;
+      }
+      const sel = window.getSelection ? window.getSelection() : null;
+      const hasSel = !!(sel && !sel.isCollapsed && sel.toString().trim());
+      this.isTextSelecting = hasSel;
+      if (hasSel || this.isAndroid) {
+        this.scheduleSelectionMenu(420);
+      }
     },
     handleGlobalPointerUp(e) {
       if (e && (e.pointerType === "touch" || e.pointerType === "pen")) {
@@ -3110,18 +3159,16 @@ export default {
       this.handleGlobalFingerUp();
     },
     handleGlobalFingerUp() {
+      if (!this.isTouchActive && !this.isFingerDown) {
+        return;
+      }
       this.isFingerDown = false;
       this.isTouchActive = false;
-      if (this.isMobile) {
-        if (this.selectionChangeTimer) {
-          clearTimeout(this.selectionChangeTimer);
+      if (this.isMobile && !this.isDismissingMenu) {
+        const sel = window.getSelection ? window.getSelection() : null;
+        if (sel && !sel.isCollapsed && sel.toString().trim()) {
+          this.scheduleSelectionMenu(this.isAndroid ? 320 : 120);
         }
-        this.selectionChangeTimer = setTimeout(
-          () => {
-            this.checkAndTriggerSelection();
-          },
-          this.isAndroid ? 200 : 120
-        );
       }
     },
     handleContentMouseDown(e) {
@@ -3229,9 +3276,7 @@ export default {
             transform: `translateX(${this.transformX}px)`
           };
         }
-        setTimeout(() => {
-          this.checkAndTriggerSelection();
-        }, 80);
+        this.scheduleSelectionMenu(this.isAndroid ? 280 : 80);
         return;
       }
 
@@ -3525,35 +3570,42 @@ export default {
       if (sel && sel.rangeCount > 0) {
         try {
           const range = sel.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          if (rect && rect.width) {
+          let rect = range.getBoundingClientRect();
+          if (
+            (!rect || (!rect.width && !rect.height)) &&
+            range.getClientRects
+          ) {
+            const fallbackRects = range.getClientRects();
+            if (fallbackRects && fallbackRects.length > 0) {
+              rect = fallbackRects[0];
+            }
+          }
+          if (rect && (rect.width || rect.height)) {
             left = rect.left + rect.width / 2;
-            // 尽量放置在选中文本上方 10px，如果太靠顶则放在选区下方 10px
-            if (rect.top >= 55) {
-              top = rect.top - 10;
+            // 尽量放置在选中文本上方 12px，若靠顶则放到选区下方（安卓避开水滴拖拽手柄）
+            if (rect.top >= 65) {
+              top = rect.top - 12;
               placeBelow = false;
             } else {
-              top = rect.bottom + 10;
+              top = rect.bottom + (this.isAndroid ? 34 : 12);
               placeBelow = true;
             }
           }
-          if (this.isMobile || this.isTouchActive) {
-            // 提取选区的所有行选框矩形，作为高亮层展示在正文上方
+          if (this.isIOS) {
+            // 仅对 iOS Safari 提取自定义高亮矩形并清空原生选区（避免系统级菜单与自定义菜单重叠）；
+            // 安卓系统依靠 contextmenu 阻止原生菜单，必须保留原生选区与拖拽手柄，绝不可强制清空！
             const clientRects = Array.from(
               range.getClientRects ? range.getClientRects() : [rect]
             );
             this.selectionHighlightRects = clientRects
-              .filter(r => r.width > 0 && r.height > 0)
+              .filter(r => r && r.width > 0 && r.height > 0)
               .map(r => ({
                 top: r.top,
                 left: r.left,
                 width: r.width,
                 height: r.height
               }));
-
-            // 仅对 iOS Safari 清空原生选区（避免系统级浮窗与自定义菜单重叠）；
-            // 安卓系统依靠 contextmenu 阻止原生菜单，必须保留原生选区与拖拽手柄，绝不可强制清空！
-            if (this.isIOS && sel.removeAllRanges) {
+            if (sel.removeAllRanges) {
               sel.removeAllRanges();
             }
           } else {
@@ -3570,7 +3622,11 @@ export default {
         Math.max(120, window.innerWidth / 2 - 10)
       );
       left = Math.max(halfWidth, Math.min(window.innerWidth - halfWidth, left));
-      top = Math.max(20, Math.min(window.innerHeight - 50, top));
+      if (placeBelow) {
+        top = Math.max(20, Math.min(window.innerHeight - 54, top));
+      } else {
+        top = Math.max(52, Math.min(window.innerHeight - 20, top));
+      }
 
       this.textActionMenuPos = { top, left, placeBelow };
       this.textActionMenuVisible = true;
@@ -3609,6 +3665,23 @@ export default {
       }
       this.dismissCooldown = Date.now() + 450;
     },
+    isSelectionInReaderContent(range) {
+      if (!range) return false;
+      const container =
+        this.$refs.contentRef ||
+        (this.$el && this.$el.querySelector(".content"));
+      if (!container) return true;
+      const nodes = [
+        range.commonAncestorContainer,
+        range.startContainer,
+        range.endContainer
+      ];
+      return nodes.some(node => {
+        if (!node) return false;
+        const elem = node.nodeType === 1 ? node : node.parentNode;
+        return elem && container.contains(elem);
+      });
+    },
     handleSelectionChange() {
       if (this.dismissCooldown && Date.now() < this.dismissCooldown) {
         return;
@@ -3633,36 +3706,35 @@ export default {
       }
 
       const sel = window.getSelection ? window.getSelection() : null;
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-        return;
-      }
-      const text = sel.toString().trim();
+      const text =
+        sel && !sel.isCollapsed && sel.rangeCount > 0
+          ? sel.toString().trim()
+          : "";
       if (!text) {
+        if (!this.isIOS && this.textActionMenuVisible) {
+          if (this.selectionChangeTimer) {
+            clearTimeout(this.selectionChangeTimer);
+            this.selectionChangeTimer = null;
+          }
+          this.textActionMenuVisible = false;
+        }
         return;
       }
 
       // 校验选区是否属于阅读正文区域，避免设置、目录、搜索等外部选区误触发
       const range = sel.getRangeAt(0);
-      const container =
-        this.$refs.contentRef ||
-        (this.$el && this.$el.querySelector(".content"));
-      if (container && range.commonAncestorContainer) {
-        const node = range.commonAncestorContainer;
-        const elem = node.nodeType === 1 ? node : node.parentNode;
-        if (elem && !container.contains(elem)) {
-          return;
-        }
+      if (!this.isSelectionInReaderContent(range)) {
+        return;
       }
 
-      if (this.selectionChangeTimer) {
-        clearTimeout(this.selectionChangeTimer);
+      // 用户在安卓端二次拖动手柄微调选区时，先临时隐藏气泡避免遮挡文字，待停手后再重新定位弹出（不销毁原生选区）
+      if (!this.isIOS && this.textActionMenuVisible) {
+        this.textActionMenuVisible = false;
       }
+
       // 选区变动防抖触发（针对拖拽手柄后的微调稳定）
-      this.selectionChangeTimer = setTimeout(
-        () => {
-          this.checkAndTriggerSelection();
-        },
-        this.isAndroid ? 250 : 80
+      this.scheduleSelectionMenu(
+        this.isAndroid ? 380 : this.isMobile ? 280 : 80
       );
     },
     checkAndTriggerSelection() {
@@ -3670,6 +3742,9 @@ export default {
         return;
       }
       if (this.isDismissingMenu) {
+        return;
+      }
+      if (this.isTouchActive || this.isFingerDown || this.isMouseDown) {
         return;
       }
       if (
@@ -3688,15 +3763,8 @@ export default {
         return;
       }
       const range = sel.getRangeAt(0);
-      const container =
-        this.$refs.contentRef ||
-        (this.$el && this.$el.querySelector(".content"));
-      if (container && range.commonAncestorContainer) {
-        const node = range.commonAncestorContainer;
-        const elem = node.nodeType === 1 ? node : node.parentNode;
-        if (elem && !container.contains(elem)) {
-          return;
-        }
+      if (!this.isSelectionInReaderContent(range)) {
+        return;
       }
       this.showTextOperate(text, sel);
     },
