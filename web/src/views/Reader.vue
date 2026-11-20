@@ -2400,21 +2400,38 @@ export default {
             if (!rule.pattern) {
               return;
             }
+            const replacement =
+              typeof rule.replacement === "string" ? rule.replacement : "";
+            // 跳过 Legado 安卓端的 Rhino 脚本替换规则 (@js:...)
+            if (/^\s*@js:/i.test(replacement)) {
+              return;
+            }
             const ruleScope = (rule.scope || "").trim();
-            let matchScope = true;
-            if (ruleScope && ruleScope !== "*") {
+            if (!ruleScope) {
+              return;
+            }
+            let matchScope = false;
+            if (ruleScope === "*") {
+              matchScope = true;
+            } else {
               const scope = ruleScope.split(";");
-              if (scope[0] && scope[0] !== "*" && scope[0] !== bookName) {
-                matchScope = false;
-              } else if (scope.length > 1 && scope[1] && scope[1] !== bookUrl) {
-                matchScope = false;
+              if (scope[0] === "*" || (bookName && scope[0] === bookName)) {
+                if (
+                  scope.length === 1 ||
+                  !scope[1] ||
+                  (bookUrl && scope[1] === bookUrl)
+                ) {
+                  matchScope = true;
+                }
               }
             }
             if (matchScope) {
+              const beforeContent = content;
+              let nextContent = content;
               if (rule.isRegex) {
-                content = content.replace(
-                  new RegExp(rule.pattern, "gim"),
-                  rule.replacement || ""
+                nextContent = content.replace(
+                  new RegExp(rule.pattern, "ig"),
+                  replacement
                 );
               } else {
                 if (
@@ -2425,16 +2442,24 @@ export default {
                     .split(/\r?\n/)
                     .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
                     .join("(?:\\r?\\n)");
-                  content = content.replace(
+                  nextContent = content.replace(
                     new RegExp(safePat, "g"),
-                    rule.replacement || ""
+                    replacement
                   );
                 } else {
-                  content = content
-                    .split(rule.pattern)
-                    .join(rule.replacement || "");
+                  nextContent = content.split(rule.pattern).join(replacement);
                 }
               }
+              // 灾难性误删熔断：第三方普通正则若单次清空超过 60% 正文则拦截跳过
+              if (
+                !isAdRule &&
+                rule.isRegex &&
+                beforeContent.length >= 200 &&
+                nextContent.length < beforeContent.length * 0.4
+              ) {
+                return;
+              }
+              content = nextContent;
             }
           } catch (ruleErr) {
             // 单条规则解析异常不阻断其他规则生效
@@ -4061,7 +4086,7 @@ export default {
         if (rule.isRegex) {
           try {
             this.content = this.content.replace(
-              new RegExp(rule.pattern, "gim"),
+              new RegExp(rule.pattern, "ig"),
               rule.replacement || ""
             );
           } catch (e) {

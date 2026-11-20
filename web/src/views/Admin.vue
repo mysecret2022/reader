@@ -2843,7 +2843,7 @@ export default {
         cacheChapterContent: false,
         defaultVoice: "zh-CN-XiaoxiaoNeural",
         concurrentSearchCount: 24,
-        version: this.$store ? this.$store.state.version || "2.1.0" : "2.1.0"
+        version: this.$store ? this.$store.state.version || "2.2.3" : "2.2.3"
       },
       savingCloudSync: false,
       triggeringSync: false,
