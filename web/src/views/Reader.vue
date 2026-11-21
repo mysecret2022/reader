@@ -4293,7 +4293,8 @@ export default {
       }
     },
     fetchVoiceList() {
-      let localVoices = [];
+      let localZhYueVoices = [];
+      let localEnVoices = [];
       if (window.speechSynthesis && window.speechSynthesis.getVoices) {
         // 本地系统语音仅保留：中文普通话、粤语、英语各精选语音，其他外语一概过滤
         const allVoices = window.speechSynthesis.getVoices();
@@ -4372,9 +4373,8 @@ export default {
         const yueList = Array.from(yueMap.values());
         const enList = Array.from(enMap.values());
 
-        // 合并精选本地语音 (英语只保留前1~2个代表语音，避免英文语音占满)
-        const selectedLocal = [...zhList, ...yueList, ...enList.slice(0, 2)];
-        localVoices = selectedLocal.map(v => {
+        // 合并精选本地语音 (中文与粤语放最前，本地英语统一放语音库最后)
+        const mapLocalVoice = v => {
           let label = v.name;
           const l = (v.lang || "").toLowerCase();
           if (
@@ -4395,7 +4395,9 @@ export default {
             isEdge: false,
             lang: v.lang
           };
-        });
+        };
+        localZhYueVoices = [...zhList, ...yueList].map(mapLocalVoice);
+        localEnVoices = enList.slice(0, 2).map(mapLocalVoice);
       }
 
       const defaultEdgeVoices = [
@@ -4440,8 +4442,8 @@ export default {
         ? this.edgeVoiceList
         : defaultEdgeVoices;
 
-      // 优先保留本地系统语音作为默认（零网络依赖），同时提供支持锁屏与后台续播的在线音频流语音供按需选用
-      this.voiceList = [...localVoices, ...edgeVoices];
+      // 优先保留本地中文/粤语系统语音作为默认（零网络依赖），中间为锁屏后台在线语音，本地英语放在最后
+      this.voiceList = [...localZhYueVoices, ...edgeVoices, ...localEnVoices];
       if (!this.voiceName && this.voiceList.length) {
         this.voiceName = this.voiceList[0].name;
       }
@@ -4462,7 +4464,11 @@ export default {
                 isEdge: true,
                 lang: v.locale || "zh-CN"
               }));
-              this.voiceList = [...localVoices, ...this.edgeVoiceList];
+              this.voiceList = [
+                ...localZhYueVoices,
+                ...this.edgeVoiceList,
+                ...localEnVoices
+              ];
             }
           })
           .catch(() => {
@@ -4714,6 +4720,7 @@ export default {
     prefetchEdgeTts(paragraphs, startIdx, voice) {
       if (!paragraphs || !voice || !voice.id) return;
       let cursor = startIdx;
+      let stepsDone = 0;
       for (let step = 0; step < 2; step++) {
         if (cursor >= paragraphs.length) break;
         const chunk = this.buildEdgeSpeechChunk(paragraphs, cursor, 350);
@@ -4721,6 +4728,70 @@ export default {
         const url = this.buildEdgeTtsUrl(chunk.text, voice.id);
         this.fetchEdgeBlobUrl(url);
         cursor = chunk.nextIdx;
+        stepsDone++;
+      }
+      // 如果本章已接近末尾（剩余不足 2 组音频块），提前预加载下一章正文并预合成下一章首段音频，实现跨章零等待
+      if (stepsDone < 2 || cursor >= paragraphs.length) {
+        this.prefetchNextChapterEdgeTts(voice);
+      }
+    },
+    prefetchNextChapterEdgeTts(voice) {
+      if (!voice || !voice.id) return;
+      const book = this.$store.getters.readingBook;
+      if (!book || !book.bookUrl || !book.catalog) return;
+      const nextChapterIdx = (this.chapterIndex || 0) + 1;
+      if (typeof book.catalog[nextChapterIdx] === "undefined") return;
+
+      const doPrefetchAudio = () => {
+        const cache = this.chapterContentCache;
+        if (
+          !cache ||
+          cache.bookUrl !== book.bookUrl ||
+          !cache.chapters ||
+          !cache.chapters[nextChapterIdx] ||
+          cache.chapters[nextChapterIdx].error
+        ) {
+          return;
+        }
+        const ch = cache.chapters[nextChapterIdx];
+        const rawTitle = this.filterContent(ch.title || "");
+        const rawBody = this.filterContent(ch.content || "");
+        const lines = [rawTitle, ...rawBody.split(/\r?\n/)]
+          .map(s => (s || "").trim())
+          .filter(Boolean);
+        if (!lines.length) return;
+        const parts = [];
+        let totalLen = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (parts.length > 0 && totalLen + line.length > 350) {
+            break;
+          }
+          parts.push(line);
+          totalLen += line.length;
+          if (totalLen >= 350) break;
+        }
+        if (parts.length) {
+          const url = this.buildEdgeTtsUrl(parts.join("\n"), voice.id);
+          this.fetchEdgeBlobUrl(url);
+        }
+      };
+
+      const cache = this.chapterContentCache;
+      if (
+        cache &&
+        cache.bookUrl === book.bookUrl &&
+        cache.chapters &&
+        cache.chapters[nextChapterIdx] &&
+        !cache.chapters[nextChapterIdx].error
+      ) {
+        doPrefetchAudio();
+      } else {
+        this.loadShowChapter(nextChapterIdx)
+          .then(() => {
+            doPrefetchAudio();
+          })
+          .catch(() => {});
       }
     },
     updateMediaSession(isPlaying) {
@@ -4879,10 +4950,13 @@ export default {
         this.startSpeech(this.speechParagraphIndex);
       } else {
         this.$once("showContent", () => {
-          setTimeout(() => {
-            this.speechParagraphIndex = 0;
-            this.startSpeech(0);
-          }, 300);
+          setTimeout(
+            () => {
+              this.speechParagraphIndex = 0;
+              this.startSpeech(0);
+            },
+            keepAudioSession ? 50 : 300
+          );
         });
         this.toNextChapter();
       }
