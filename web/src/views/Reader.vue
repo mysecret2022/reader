@@ -1062,6 +1062,7 @@ export default {
       }
       this.ttsAudio = null;
     }
+    this.clearTtsBlobCache();
     if (this.chapterHalfCheckTimer) {
       clearTimeout(this.chapterHalfCheckTimer);
       this.chapterHalfCheckTimer = null;
@@ -1126,6 +1127,7 @@ export default {
       }
       this.ttsAudio = null;
     }
+    this.clearTtsBlobCache();
     if (this.chapterHalfCheckTimer) {
       clearTimeout(this.chapterHalfCheckTimer);
       this.chapterHalfCheckTimer = null;
@@ -1327,7 +1329,9 @@ export default {
       voiceList: [],
       edgeVoiceList: [],
       ttsAudio: null,
-      ttsPrefetchMap: {},
+      ttsBlobCache: {},
+      ttsBlobPending: {},
+      ttsChunkEndIdx: -1,
       speechSpeaking: false,
       showSpeechConfig: true,
       speechParagraphIndex: -1,
@@ -4436,10 +4440,8 @@ export default {
         ? this.edgeVoiceList
         : defaultEdgeVoices;
 
-      // iOS 设备优先展示支持锁屏与后台续播的在线音频流语音；PC/安卓保留原有本地语音优先顺序
-      this.voiceList = this.isIOS
-        ? [...edgeVoices, ...localVoices]
-        : [...localVoices, ...edgeVoices];
+      // 优先保留本地系统语音作为默认（零网络依赖），同时提供支持锁屏与后台续播的在线音频流语音供按需选用
+      this.voiceList = [...localVoices, ...edgeVoices];
       if (!this.voiceName && this.voiceList.length) {
         this.voiceName = this.voiceList[0].name;
       }
@@ -4460,9 +4462,7 @@ export default {
                 isEdge: true,
                 lang: v.locale || "zh-CN"
               }));
-              this.voiceList = this.isIOS
-                ? [...this.edgeVoiceList, ...localVoices]
-                : [...localVoices, ...this.edgeVoiceList];
+              this.voiceList = [...localVoices, ...this.edgeVoiceList];
             }
           })
           .catch(() => {
@@ -4615,21 +4615,112 @@ export default {
       }
       return this.ttsAudio;
     },
+    buildEdgeSpeechChunk(paragraphs, startIdx, maxChars = 350) {
+      if (!paragraphs || startIdx < 0 || startIdx >= paragraphs.length) {
+        return null;
+      }
+      const parts = [];
+      const groupParagraphs = [];
+      let totalLen = 0;
+      let endIdx = startIdx;
+      for (let i = startIdx; i < paragraphs.length; i++) {
+        const el = paragraphs[i];
+        const t = el && el.innerText ? el.innerText.trim() : "";
+        if (!t) {
+          endIdx = i;
+          continue;
+        }
+        if (parts.length > 0 && totalLen + t.length > maxChars) {
+          break;
+        }
+        parts.push(t);
+        groupParagraphs.push(el);
+        totalLen += t.length;
+        endIdx = i;
+        if (totalLen >= maxChars) {
+          break;
+        }
+      }
+      return {
+        text: parts.join("\n"),
+        startIdx,
+        endIdx,
+        nextIdx: endIdx + 1,
+        groupParagraphs
+      };
+    },
+    clearTtsBlobCache() {
+      const cache = this.ttsBlobCache || {};
+      Object.keys(cache).forEach(key => {
+        try {
+          if (cache[key] && typeof URL !== "undefined" && URL.revokeObjectURL) {
+            URL.revokeObjectURL(cache[key]);
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      this.ttsBlobCache = {};
+      this.ttsBlobPending = {};
+    },
+    fetchEdgeBlobUrl(url) {
+      if (!url) return Promise.resolve("");
+      if (this.ttsBlobCache[url]) {
+        return Promise.resolve(this.ttsBlobCache[url]);
+      }
+      if (this.ttsBlobPending[url]) {
+        return this.ttsBlobPending[url];
+      }
+      if (
+        typeof fetch !== "function" ||
+        typeof URL === "undefined" ||
+        !URL.createObjectURL
+      ) {
+        return Promise.resolve(url);
+      }
+      const p = fetch(url, { credentials: "same-origin" })
+        .then(res => {
+          if (!res.ok) {
+            throw new Error("TTS HTTP " + res.status);
+          }
+          return res.blob();
+        })
+        .then(blob => {
+          if (!blob || !blob.size) {
+            throw new Error("Empty TTS blob");
+          }
+          const blobUrl = URL.createObjectURL(blob);
+          const keys = Object.keys(this.ttsBlobCache);
+          if (keys.length >= 12) {
+            const oldestKey = keys[0];
+            try {
+              URL.revokeObjectURL(this.ttsBlobCache[oldestKey]);
+            } catch (e) {
+              // ignore
+            }
+            delete this.ttsBlobCache[oldestKey];
+          }
+          this.ttsBlobCache[url] = blobUrl;
+          delete this.ttsBlobPending[url];
+          return blobUrl;
+        })
+        .catch(() => {
+          delete this.ttsBlobPending[url];
+          return url;
+        });
+      this.ttsBlobPending[url] = p;
+      return p;
+    },
     prefetchEdgeTts(paragraphs, startIdx, voice) {
       if (!paragraphs || !voice || !voice.id) return;
-      for (let offset = 1; offset <= 2; offset++) {
-        const target = paragraphs[startIdx + offset];
-        if (!target || !target.innerText) continue;
-        const text = target.innerText.trim();
-        if (!text) continue;
-        const url = this.buildEdgeTtsUrl(text, voice.id);
-        if (this.ttsPrefetchMap[url]) continue;
-        this.ttsPrefetchMap[url] = true;
-        if (typeof fetch === "function") {
-          fetch(url, { credentials: "same-origin" }).catch(() => {
-            delete this.ttsPrefetchMap[url];
-          });
-        }
+      let cursor = startIdx;
+      for (let step = 0; step < 2; step++) {
+        if (cursor >= paragraphs.length) break;
+        const chunk = this.buildEdgeSpeechChunk(paragraphs, cursor, 350);
+        if (!chunk || !chunk.text) break;
+        const url = this.buildEdgeTtsUrl(chunk.text, voice.id);
+        this.fetchEdgeBlobUrl(url);
+        cursor = chunk.nextIdx;
       }
     },
     updateMediaSession(isPlaying) {
@@ -4675,13 +4766,22 @@ export default {
       }
     },
     startEdgeAudioSpeech(paragraph, idx, paragraphs, voice) {
-      const text = (paragraph.innerText || "").trim();
-      if (!text) {
+      const chunk = this.buildEdgeSpeechChunk(paragraphs, idx, 350);
+      if (!chunk || !chunk.text) {
+        this.ttsChunkEndIdx = -1;
         this.speechNext();
         return;
       }
+      this.ttsChunkEndIdx = chunk.endIdx;
+      chunk.groupParagraphs.forEach(p => {
+        if (!p.className.includes("reading")) {
+          p.className = (p.className ? p.className + " " : "") + "reading";
+        }
+      });
+
       const audio = this.ensureTtsAudio();
-      const url = this.buildEdgeTtsUrl(text, voice.id);
+      const url = this.buildEdgeTtsUrl(chunk.text, voice.id);
+      const playSrc = this.ttsBlobCache[url] || url;
       audio.onended = () => {
         if (!this.skipAutoNext) {
           this.speechNext(true);
@@ -4697,14 +4797,14 @@ export default {
         this.$message &&
           this.$message.error("在线语音播放失败，请检查网络或切换本地语音");
       };
-      audio.src = url;
+      audio.src = playSrc;
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.then === "function") {
         playPromise
           .then(() => {
             this.speechSpeaking = true;
             this.updateMediaSession(true);
-            this.prefetchEdgeTts(paragraphs, idx, voice);
+            this.prefetchEdgeTts(paragraphs, chunk.nextIdx, voice);
           })
           .catch(() => {
             this.speechSpeaking = false;
@@ -4713,13 +4813,16 @@ export default {
       } else {
         this.speechSpeaking = true;
         this.updateMediaSession(true);
-        this.prefetchEdgeTts(paragraphs, idx, voice);
+        this.prefetchEdgeTts(paragraphs, chunk.nextIdx, voice);
       }
     },
     stopSpeech(keepAudioSession = false) {
       try {
         this.skipAutoNext = true;
         this.speechSpeaking = false;
+        if (!keepAudioSession) {
+          this.ttsChunkEndIdx = -1;
+        }
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }
@@ -4748,6 +4851,7 @@ export default {
     },
     speechPrev() {
       this.stopSpeech(true);
+      this.ttsChunkEndIdx = -1;
       if (this.speechParagraphIndex > 0) {
         this.speechParagraphIndex--;
         this.startSpeech(this.speechParagraphIndex);
@@ -4763,10 +4867,15 @@ export default {
       }
     },
     speechNext(keepAudioSession = false) {
+      const nextIndex =
+        this.ttsChunkEndIdx >= this.speechParagraphIndex
+          ? this.ttsChunkEndIdx + 1
+          : this.speechParagraphIndex + 1;
       this.stopSpeech(keepAudioSession);
+      this.ttsChunkEndIdx = -1;
       const list = this.getAllParagraphs();
-      if (this.speechParagraphIndex + 1 < list.length) {
-        this.speechParagraphIndex++;
+      if (nextIndex < list.length) {
+        this.speechParagraphIndex = nextIndex;
         this.startSpeech(this.speechParagraphIndex);
       } else {
         this.$once("showContent", () => {

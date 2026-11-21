@@ -24,10 +24,11 @@
 ### 2.2 前端在线音频流播放与 iOS 锁屏控制中心 (`Reader.vue`)
 - **双轨并行，零冲突隔离**：
   - 在 `fetchVoiceList()` 中拉取 `/tts/voices` 并合并展示 `🔊 ... (锁屏后台)` 在线神经语音选项；
-  - **iOS 自动优选**：iOS 设备默认优先选中在线音频流语音（开箱即支持锁屏后台听书）；PC 与安卓端保持原有本地系统语音优先顺序，互不干扰。
-- **iOS 后台防断流核心机制 (`startEdgeAudioSpeech`)**：
-  - 全生命周期复用单一 `this.ttsAudio` HTML5 `<audio>` 实例（`playsInline = true`、`preload = "auto"`），在用户首次点击朗读时解锁 iOS `AVAudioSession`，切段与自动切章时保持音频会话不断开；
-  - 播放当前段落时自动通过 `fetch` 预加载下 2 段 MP3 音频至浏览器与服务端缓存，消除锁屏状态下的切段空白等待。
+  - **本地语音优先默认**：全平台（含 iOS、安卓、PC）均默认优先选中零网络依赖的本地系统语音，保证基础朗读稳定性；需要使用 iOS 锁屏与后台持续听书时，可在语音库中按需切换至任意 `🔊 ... (锁屏后台)` 在线音频流语音。
+- **短段合并与 Blob 内存无缝接力 (`buildEdgeSpeechChunk` & `fetchEdgeBlobUrl`)**：
+  - 通过 `buildEdgeSpeechChunk(paragraphs, startIdx, 350)` 将连续短段落自动打包合并为约 350 字的长音频块（连续播放 1~2 分钟），彻底消除小说短对话频频停顿的割裂感，同时高亮组内所有对应段落；
+  - 通过 `fetchEdgeBlobUrl()` 提前将下 2 个合并音频块完整下载为浏览器内存 `Blob` 本地地址（`URL.createObjectURL`，最多保留 12 个并自动释放旧句柄），消灭 iOS Safari `<audio>` 切段二次网络握手延迟；
+  - 全生命周期复用单一 `this.ttsAudio` HTML5 `<audio>` 实例（`playsInline = true`、`preload = "auto"`），在用户首次点击朗读时解锁 iOS `AVAudioSession`，切段与自动切章时保持音频会话不断开。
 - **锁屏媒体控制中心 (`updateMediaSession`)**：
   - 集成 `navigator.mediaSession` 元数据与控制回调（书名、章节名、作者、封面图、播放/暂停、上一段/下一段），支持在 iPhone 锁屏界面或蓝牙耳机上直接控制听书。
 
