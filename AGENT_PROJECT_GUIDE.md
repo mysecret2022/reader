@@ -1,79 +1,55 @@
-# AGENT_PROJECT_GUIDE (v2.2.3)
+# AGENT_PROJECT_GUIDE (v2.2.4)
 
 面向后续接手智能体的架构、功能与维护指引文档。
 
 ---
 
 ## 1. 版本概述 (Version Summary)
-- **版本号**：`v2.2.3`
-- **定位**：紧急修复自 `v2.1.7` 起引入的 `filterContent()` 正文净化过滤严重回归缺陷（因兼容空 `scope` 并叠加多行 `m` 标志，导致用户账号同步自手机端 Legado 的「乌云净化」安卓正则/`@js:` 规则在网页端 JS 引擎下误删 97% 以上的正常中文小说正文），并同步将界面显示版本号从 `v2.1.0` 更新至 `v2.2.3`。
-- **上一主版本**：`v2.2.2`
+- **版本号**：`v2.2.4`
+- **定位**：实现 **iOS Safari 独立桌面模式（添加到主屏幕）锁屏与后台持续听书（TTS）功能**，内嵌微软 Edge 神经语音合成服务与 HTML5 `<audio>` 音频流播放引擎，接入 iOS 锁屏 Media Session 控制中心与段落预加载接力，同时完整保留安卓与 PC 端原有本地语音设置、互不冲突。
+- **上一主版本**：`v2.2.3`
 
 ---
 
-## 2. 核心架构与功能特性清单 (2.2.3 Features)
+## 2. 核心架构与功能特性清单 (2.2.4 Features)
 
-### 2.1 正文净化规则防误杀与跨引擎安全隔离 (`Reader.vue`)
-- **故障根因剖析 (`《谁让他修仙的！》` 章节仅剩百余字问题)**：
-  1. 服务端 `/getBookContent` 对原站多分页抓取完全正常（如《谁让他修仙的！》第 1 章完整返回 4,447 字，第 3 章完整返回 2,633 字）；
-  2. 用户账号中同步了来自安卓版 Legado WebDAV 备份的 57 条替换规则（如「乌云净化」`#01`–`#20`），其中大量安卓端导入规则 `scope` 为 `null` / 空字符串；
-  3. 在 `v2.1.7` 修改 `filterContent()` 前，原版 `Reader.vue` 会严格忽略空 `scope` 且仅使用 `"ig"` 正则标志；`v2.1.7` 为兜底将空 `scope` 放开为全书生效并改为 `"gim"` 多行模式，同时将每条规则包裹在 `try/catch` 中：
-     - 安卓规则 `#14 净化标点`（`scope: null`）末尾为 `(?<=\n)[^\w「」…●]+$`：在安卓 Java/ICU 正则里 `\w` 匹配中文，而在浏览器 JS 正则里 `\w` 仅匹配 ASCII 字母数字下划线，且 `[^\w「」…●]` 会匹配 `\n`，结果将几乎所有正常中文段落全部删空（4,447 字被误删到仅剩 115 字）；
-     - 带有 `@js:` 前缀的 Legado Rhino 脚本规则（如 `#01 数字标题#JS`、`#02 全角字符#JS`）亦无法在浏览器直接运行。
-- **修复与防护加固 (`filterContent` & `applyFilterRuleImmediately`)**：
-  1. **跳过 `@js:` 脚本规则**：拦截并跳过 `replacement` 以 `@js:`（忽略前导空白及大小写）开头的 Legado 安卓脚本规则；
-  2. **恢复严格的作用域匹配 (`scope`)**：必须显式配置非空 `ruleScope`（如全局 `"*"` 或 `"书名;bookUrl"`）才会执行，彻底隔离来自安卓备份中 `scope` 为空/null 的非网页规则；
-  3. **恢复安全正则标志 (`"ig"`)**：在 `filterContent` 与 `applyFilterRuleImmediately` 中恢复使用 `"ig"`，消除多行 `"m"` 标志对第三方规则带来的行首尾扩展误匹配；
-  4. **灾难性误删熔断器**：针对非一键「广告过滤」组的普通正则规则，在替换前先试算结果 `nextContent`；若原章节长度 `>= 200` 且单条规则清空超过 `60%` 正文内容（`nextContent.length < beforeContent.length * 0.4`），直接触发熔断跳过，兜底保护正文绝不被第三方规则删空；
-  5. **一键「广告过滤」能力完整保留**：网页端通过划词弹窗新增的精准过滤、整行过滤（自带 `(?:\r?\n|$)` 换行安全边界）与智能链接过滤全部保留 100% 正常工作。
+### 2.1 服务端内置 Edge TTS 神经语音合成服务 (`EdgeTtsService.kt` & `YueduApi.kt`)
+- **直连合成，零外部依赖**：
+  - 新增 `src/main/java/com/htmake/reader/utils/EdgeTtsService.kt`，通过 `OkHttpClient` WebSocket 直连微软 `wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1`，内置 `Sec-MS-GEC`（v1-143.0.3650.75）时间窗令牌校验与 SSML XML 安全转义，无需外部 `8089` 端口容器代理；
+  - 将生成后的 MP3 音频流原子写入 `storage/cache/tts/<sha256>.mp3` 磁盘缓存，并限制最大缓存文件数（300 个 LRU 淘汰），确保在 512M 内存受限容器下稳定运行。
+- **iOS Safari 音频分片协议适配 (`YueduApi.kt`)**：
+  - `/reader3/tts`、`/tts` 接口在 `Dispatchers.IO` 协程上下文执行合成，不阻塞 Vert.x 事件循环；
+  - 完整支持 HTTP `Range` 请求头（返回 `206 Partial Content`、`Content-Range` 与 `Accept-Ranges: bytes`），满足 iOS Safari `<audio>` 对 MP3 音频流预检与播放的严格要求。
 
-### 2.2 界面显示版本号同步 (`web/package.json` & `Admin.vue`)
-- **细节统一**：
-  - 将 `web/package.json` 中的 `"version"` 由 `"2.1.0"` 升级为 `"2.2.3"`；
-  - 将 `Admin.vue` 中的版本兜底默认值同步更新为 `"2.2.3"`，使阅读页标题旁及管理后台展示的版本号与当前发版完全一致。
+### 2.2 前端在线音频流播放与 iOS 锁屏控制中心 (`Reader.vue`)
+- **双轨并行，零冲突隔离**：
+  - 在 `fetchVoiceList()` 中拉取 `/tts/voices` 并合并展示 `🔊 ... (锁屏后台)` 在线神经语音选项；
+  - **iOS 自动优选**：iOS 设备默认优先选中在线音频流语音（开箱即支持锁屏后台听书）；PC 与安卓端保持原有本地系统语音优先顺序，互不干扰。
+- **iOS 后台防断流核心机制 (`startEdgeAudioSpeech`)**：
+  - 全生命周期复用单一 `this.ttsAudio` HTML5 `<audio>` 实例（`playsInline = true`、`preload = "auto"`），在用户首次点击朗读时解锁 iOS `AVAudioSession`，切段与自动切章时保持音频会话不断开；
+  - 播放当前段落时自动通过 `fetch` 预加载下 2 段 MP3 音频至浏览器与服务端缓存，消除锁屏状态下的切段空白等待。
+- **锁屏媒体控制中心 (`updateMediaSession`)**：
+  - 集成 `navigator.mediaSession` 元数据与控制回调（书名、章节名、作者、封面图、播放/暂停、上一段/下一段），支持在 iPhone 锁屏界面或蓝牙耳机上直接控制听书。
+
+### 2.3 界面版本号更新 (`web/package.json` & `Admin.vue`)
+- 将 `web/package.json` 与 `Admin.vue` 兜底版本号更新至 `2.2.4`。
 
 ---
 
 ## 3. 历史版本特性追溯
 
-### 3.1 v2.2.2 特性追溯
-- 彻底修复安卓/鸿蒙端长按选词后“能自由拖动选择但操作气泡不再弹出”的 `touchcancel` 死锁缺陷，优化手柄微调时的气泡自动退让与重现，并补齐 `<keep-alive>` 全局监听生命周期 (`Reader.vue`)。
+### 3.1 v2.2.3 特性追溯
+- 修复 `filterContent()` 正文净化规则因空 `scope` 与 `"gim"` 多行标志导致安卓 Legado 规则在网页端误删中文小说正文的问题，加入 `@js:` 过滤与 60% 灾难性误删熔断器。
 
-### 3.2 v2.2.1 特性追溯
-- 安卓长按划词原生水滴手柄保留，以及阅读设置「自动换源」「广告过滤」提示 5 秒自动淡出 (`Reader.vue` & `ReadSettings.vue`)。
+### 3.2 v2.2.2 特性追溯
+- 彻底修复安卓/鸿蒙端长按选词后“能自由拖动选择但操作气泡不再弹出”的 `touchcancel` 死锁缺陷。
 
-### 3.3 v2.2.0 特性追溯
-- 主页左侧栏搜索确定后自动向左滑出隐退，搜索框集成显式「确定」按钮与夜间模式适配 (`Index.vue`)。
+### 3.3 v2.2.1 / v2.2.0 特性追溯
+- 安卓长按划词原生水滴手柄保留、设置提示 5 秒淡出，以及主页左侧栏搜索确认后平滑自动收起。
 
 ---
 
 ## 4. 运行、构建与测试指引
-
-1. **前端代码检查**：
-   ```bash
-   cd web
-   yarn lint
-   ```
-2. **前端生产打包与静态资源同步**：
-   ```bash
-   cd web
-   yarn sync
-   ```
-3. **后端单元与集成测试**：
-   ```bash
-   ./gradlew test
-   ```
-4. **本地服务启动**：
-   ```bash
-   ./build.sh serve
-   ```
-
----
-
-## 5. 已修复的 Bug 与技术改进 (Fixed Bugs & Technical Enhancements)
-
-1. **Legado 安卓端同步替换规则（`scope: null` / Java 正则 `\w` / `@js:` 脚本）误删整章中文正文问题彻底修复 (`v2.2.3`)**：
-   - `《谁让他修仙的！》` 实测第 1 章 4,447 字、第 3 章 2,633 字完整还原，一键「广告过滤」所有模式继续正常生效。
-2. **页面展示版本号同步更新为 `v2.2.3`**。
-3. **安卓/鸿蒙端长按选词后“能自由拖动选择但操作气泡不再弹出”的 `touchcancel` 死锁修复 (`v2.2.2`)**。
-4. **阅读设置「自动换源」「广告过滤」提示 5 秒自动淡出 (`v2.2.1`)**。
+1. **前端构建与同步**：`cd web && yarn lint && yarn sync`（同步至 `src/main/resources/web/`）。
+2. **后端编译与测试**：`./gradlew test`（包含 `EdgeTtsServiceTest` 实时语音合成与缓存验证）。
+3. **版本归档目录**：`v2.2.4/source/` 与 `v2.2.4/AGENT_PROJECT_GUIDE.md`。

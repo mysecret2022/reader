@@ -1051,6 +1051,17 @@ export default {
       clearTimeout(this.selectionChangeTimer);
       this.selectionChangeTimer = null;
     }
+    if (this.ttsAudio) {
+      try {
+        this.ttsAudio.pause();
+        this.ttsAudio.onended = null;
+        this.ttsAudio.onerror = null;
+        this.ttsAudio.src = "";
+      } catch (e) {
+        // ignore
+      }
+      this.ttsAudio = null;
+    }
     if (this.chapterHalfCheckTimer) {
       clearTimeout(this.chapterHalfCheckTimer);
       this.chapterHalfCheckTimer = null;
@@ -1103,6 +1114,17 @@ export default {
     if (this.selectionChangeTimer) {
       clearTimeout(this.selectionChangeTimer);
       this.selectionChangeTimer = null;
+    }
+    if (this.ttsAudio) {
+      try {
+        this.ttsAudio.pause();
+        this.ttsAudio.onended = null;
+        this.ttsAudio.onerror = null;
+        this.ttsAudio.src = "";
+      } catch (e) {
+        // ignore
+      }
+      this.ttsAudio = null;
     }
     if (this.chapterHalfCheckTimer) {
       clearTimeout(this.chapterHalfCheckTimer);
@@ -1303,6 +1325,9 @@ export default {
       speechAvalable: false,
       showReadBar: false,
       voiceList: [],
+      edgeVoiceList: [],
+      ttsAudio: null,
+      ttsPrefetchMap: {},
       speechSpeaking: false,
       showSpeechConfig: true,
       speechParagraphIndex: -1,
@@ -4369,10 +4394,80 @@ export default {
         });
       }
 
-      // 本地高质量系统语音
-      this.voiceList = localVoices;
+      const defaultEdgeVoices = [
+        {
+          id: "zh-CN-XiaoxiaoNeural",
+          name: "🔊 晓晓·小说优选 (锁屏后台)",
+          isEdge: true,
+          lang: "zh-CN"
+        },
+        {
+          id: "zh-CN-YunxiNeural",
+          name: "🔊 云希·生动男声 (锁屏后台)",
+          isEdge: true,
+          lang: "zh-CN"
+        },
+        {
+          id: "zh-CN-YunjianNeural",
+          name: "🔊 云健·沉稳男声 (锁屏后台)",
+          isEdge: true,
+          lang: "zh-CN"
+        },
+        {
+          id: "zh-CN-XiaoyiNeural",
+          name: "🔊 晓伊·甜美女声 (锁屏后台)",
+          isEdge: true,
+          lang: "zh-CN"
+        },
+        {
+          id: "zh-CN-YunyangNeural",
+          name: "🔊 云扬·专业播音 (锁屏后台)",
+          isEdge: true,
+          lang: "zh-CN"
+        },
+        {
+          id: "zh-HK-HiuMaanNeural",
+          name: "🔊 晓曼·粤语女声 (锁屏后台)",
+          isEdge: true,
+          lang: "zh-HK"
+        }
+      ];
+      const edgeVoices = this.edgeVoiceList.length
+        ? this.edgeVoiceList
+        : defaultEdgeVoices;
+
+      // iOS 设备优先展示支持锁屏与后台续播的在线音频流语音；PC/安卓保留原有本地语音优先顺序
+      this.voiceList = this.isIOS
+        ? [...edgeVoices, ...localVoices]
+        : [...localVoices, ...edgeVoices];
       if (!this.voiceName && this.voiceList.length) {
         this.voiceName = this.voiceList[0].name;
+      }
+
+      if (!this.edgeVoiceList.length && this.api) {
+        Axios.get(this.api + "/tts/voices", { silent: true })
+          .then(res => {
+            if (
+              res &&
+              res.data &&
+              res.data.isSuccess &&
+              Array.isArray(res.data.data) &&
+              res.data.data.length
+            ) {
+              this.edgeVoiceList = res.data.data.map(v => ({
+                id: v.id,
+                name: "🔊 " + v.name + " (锁屏后台)",
+                isEdge: true,
+                lang: v.locale || "zh-CN"
+              }));
+              this.voiceList = this.isIOS
+                ? [...this.edgeVoiceList, ...localVoices]
+                : [...localVoices, ...this.edgeVoiceList];
+            }
+          })
+          .catch(() => {
+            // 使用内置默认在线语音列表兜底
+          });
       }
     },
     changeSpeechRate(rate) {
@@ -4461,6 +4556,17 @@ export default {
       if (window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
+      if (voice.isEdge) {
+        this.startEdgeAudioSpeech(paragraph, idx, paragraphs, voice);
+        return;
+      }
+      if (this.ttsAudio && !this.ttsAudio.paused) {
+        try {
+          this.ttsAudio.pause();
+        } catch (e) {
+          // ignore
+        }
+      }
       this.utterance = new SpeechSynthesisUtterance(paragraph.innerText);
 
       this.utterance.onstart = () => {
@@ -4485,12 +4591,141 @@ export default {
       this.utterance.rate = this.speechRate;
       window.speechSynthesis.speak(this.utterance);
     },
-    stopSpeech() {
+    buildEdgeTtsUrl(text, voiceId) {
+      const base = this.api || "";
+      const params = [
+        "text=" + encodeURIComponent(text),
+        "voice=" + encodeURIComponent(voiceId || "zh-CN-XiaoxiaoNeural"),
+        "rate=" + encodeURIComponent(this.speechRate || 1),
+        "pitch=" + encodeURIComponent(this.speechPitch || 1)
+      ];
+      if (this.$store && this.$store.state && this.$store.state.token) {
+        params.push(
+          "accessToken=" + encodeURIComponent(this.$store.state.token)
+        );
+      }
+      return base + "/tts?" + params.join("&");
+    },
+    ensureTtsAudio() {
+      if (!this.ttsAudio) {
+        const audio = new Audio();
+        audio.playsInline = true;
+        audio.preload = "auto";
+        this.ttsAudio = audio;
+      }
+      return this.ttsAudio;
+    },
+    prefetchEdgeTts(paragraphs, startIdx, voice) {
+      if (!paragraphs || !voice || !voice.id) return;
+      for (let offset = 1; offset <= 2; offset++) {
+        const target = paragraphs[startIdx + offset];
+        if (!target || !target.innerText) continue;
+        const text = target.innerText.trim();
+        if (!text) continue;
+        const url = this.buildEdgeTtsUrl(text, voice.id);
+        if (this.ttsPrefetchMap[url]) continue;
+        this.ttsPrefetchMap[url] = true;
+        if (typeof fetch === "function") {
+          fetch(url, { credentials: "same-origin" }).catch(() => {
+            delete this.ttsPrefetchMap[url];
+          });
+        }
+      }
+    },
+    updateMediaSession(isPlaying) {
+      if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+        return;
+      }
+      try {
+        const book = this.$store.getters.readingBook || {};
+        if (typeof window.MediaMetadata === "function") {
+          const artwork = book.coverUrl
+            ? [
+                {
+                  src: this.getCover
+                    ? this.getCover(book.coverUrl, true)
+                    : book.coverUrl
+                }
+              ]
+            : [];
+          navigator.mediaSession.metadata = new window.MediaMetadata({
+            title: this.title || "正在听书",
+            artist: book.name || "阅读",
+            album: book.author || "",
+            artwork
+          });
+        }
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+        navigator.mediaSession.setActionHandler("play", () => {
+          if (!this.speechSpeaking) {
+            this.startSpeech(this.speechParagraphIndex);
+          }
+        });
+        navigator.mediaSession.setActionHandler("pause", () => {
+          this.stopSpeech();
+        });
+        navigator.mediaSession.setActionHandler("previoustrack", () => {
+          this.speechPrev();
+        });
+        navigator.mediaSession.setActionHandler("nexttrack", () => {
+          this.speechNext();
+        });
+      } catch (e) {
+        // ignore unsupported MediaSession properties
+      }
+    },
+    startEdgeAudioSpeech(paragraph, idx, paragraphs, voice) {
+      const text = (paragraph.innerText || "").trim();
+      if (!text) {
+        this.speechNext();
+        return;
+      }
+      const audio = this.ensureTtsAudio();
+      const url = this.buildEdgeTtsUrl(text, voice.id);
+      audio.onended = () => {
+        if (!this.skipAutoNext) {
+          this.speechNext(true);
+        } else {
+          this.skipAutoNext = false;
+          this.speechSpeaking = false;
+          this.updateMediaSession(false);
+        }
+      };
+      audio.onerror = () => {
+        this.speechSpeaking = false;
+        this.updateMediaSession(false);
+        this.$message &&
+          this.$message.error("在线语音播放失败，请检查网络或切换本地语音");
+      };
+      audio.src = url;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === "function") {
+        playPromise
+          .then(() => {
+            this.speechSpeaking = true;
+            this.updateMediaSession(true);
+            this.prefetchEdgeTts(paragraphs, idx, voice);
+          })
+          .catch(() => {
+            this.speechSpeaking = false;
+            this.updateMediaSession(false);
+          });
+      } else {
+        this.speechSpeaking = true;
+        this.updateMediaSession(true);
+        this.prefetchEdgeTts(paragraphs, idx, voice);
+      }
+    },
+    stopSpeech(keepAudioSession = false) {
       try {
         this.skipAutoNext = true;
         this.speechSpeaking = false;
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
+        }
+        if (this.ttsAudio && !keepAudioSession) {
+          this.ttsAudio.pause();
+          this.updateMediaSession(false);
         }
         const paragraphs = this.getAllParagraphs();
         paragraphs.forEach(p => {
@@ -4512,7 +4747,7 @@ export default {
       this.speechSpeaking ? this.stopSpeech() : this.startSpeech();
     },
     speechPrev() {
-      this.stopSpeech();
+      this.stopSpeech(true);
       if (this.speechParagraphIndex > 0) {
         this.speechParagraphIndex--;
         this.startSpeech(this.speechParagraphIndex);
@@ -4527,8 +4762,8 @@ export default {
         this.toLastChapter();
       }
     },
-    speechNext() {
-      this.stopSpeech();
+    speechNext(keepAudioSession = false) {
+      this.stopSpeech(keepAudioSession);
       const list = this.getAllParagraphs();
       if (this.speechParagraphIndex + 1 < list.length) {
         this.speechParagraphIndex++;

@@ -42,7 +42,9 @@ import com.htmake.reader.utils.unzip
 import com.htmake.reader.utils.zip
 import com.htmake.reader.utils.jsonEncode
 import com.htmake.reader.utils.getRelativePath
+import com.htmake.reader.utils.EdgeTtsService
 import com.htmake.reader.verticle.RestVerticle
+import kotlinx.coroutines.withContext
 import com.htmake.reader.SpringEvent
 import org.springframework.stereotype.Component
 import io.vertx.core.json.JsonObject
@@ -326,27 +328,49 @@ class YueduApi : RestVerticle() {
         router.get("/tts/voices").coroutineHandler(voicesHandler)
 
         val ttsHandler: suspend (io.vertx.ext.web.RoutingContext) -> Unit = { context ->
-            val query = context.request().query() ?: ""
-            try {
-                val url = java.net.URL("http://127.0.0.1:8089/tts?" + query)
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 15000
-                conn.readTimeout = 40000
-                conn.requestMethod = "GET"
-                val responseCode = conn.responseCode
-                if (responseCode == 200) {
-                    val response = context.response()
-                    response.putHeader("Content-Type", "audio/mpeg")
-                    response.putHeader("Cache-Control", "public, max-age=604800")
-                    val buffer = io.vertx.core.buffer.Buffer.buffer(conn.inputStream.readBytes())
-                    response.end(buffer)
-                } else {
-                    val errBytes = conn.errorStream?.readBytes() ?: conn.inputStream?.readBytes() ?: ByteArray(0)
-                    context.response().setStatusCode(responseCode).end(String(errBytes))
+            val text = context.request().getParam("text") ?: ""
+            val voice = context.request().getParam("voice") ?: "zh-CN-XiaoxiaoNeural"
+            val rate = context.request().getParam("rate")?.toDoubleOrNull() ?: 1.0
+            val pitch = context.request().getParam("pitch")?.toDoubleOrNull() ?: 1.0
+            if (text.trim().isEmpty()) {
+                context.response().setStatusCode(400).end("Missing text parameter")
+            } else {
+                try {
+                    val audioBytes = withContext(Dispatchers.IO) {
+                        EdgeTtsService.synthesize(text, voice, rate, pitch, ttsCacheDir)
+                    }
+                    if (audioBytes.isEmpty()) {
+                        context.response().setStatusCode(502).end("Empty TTS audio")
+                    } else {
+                        val response = context.response()
+                        val total = audioBytes.size
+                        val rangeHeader = context.request().getHeader("Range")
+                        response.putHeader("Content-Type", "audio/mpeg")
+                        response.putHeader("Accept-Ranges", "bytes")
+                        response.putHeader("Cache-Control", "public, max-age=604800")
+                        if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                            val rangeSpec = rangeHeader.removePrefix("bytes=").split(",")[0].trim()
+                            val parts = rangeSpec.split("-")
+                            val start = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, total - 1) ?: 0
+                            val end = if (parts.size > 1 && parts[1].isNotEmpty()) {
+                                parts[1].toIntOrNull()?.coerceIn(start, total - 1) ?: (total - 1)
+                            } else {
+                                total - 1
+                            }
+                            val length = end - start + 1
+                            response.setStatusCode(206)
+                            response.putHeader("Content-Range", "bytes $start-$end/$total")
+                            response.putHeader("Content-Length", length.toString())
+                            response.end(io.vertx.core.buffer.Buffer.buffer(audioBytes.copyOfRange(start, end + 1)))
+                        } else {
+                            response.putHeader("Content-Length", total.toString())
+                            response.end(io.vertx.core.buffer.Buffer.buffer(audioBytes))
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.error("TTS synthesis error: ${e.message}")
+                    context.response().setStatusCode(503).end("TTS service unavailable: ${e.message}")
                 }
-            } catch (e: Exception) {
-                logger.error("TTS proxy error: ${e.message}")
-                context.response().setStatusCode(503).end("TTS service unavailable: ${e.message}")
             }
         }
         router.get("/reader3/tts").coroutineHandlerWithoutRes(ttsHandler)
